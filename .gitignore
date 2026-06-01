@@ -1,0 +1,23 @@
+# Root.
+/.cache
+/.local
+/.turbo
+/node_modules
+/npm-debug.log
+/tmp
+
+# OS and Cache.
+.DS_Store
+Thumbs.db
+
+# Packages.
+/_*/*/.cache
+/_*/*/.turbo
+/_*/*/dist
+/_*/*/dist-*
+/_*/*/node_modules
+/_*/*/npm-debug.log
+/_*/*/.local
+/_*/*/generated
+/_*/*/.env.*
+!/_*/*/.env.local.template

@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@v5
+        with:
+          path: |
+            .turbo
+            _*/*/.turbo
+          key: turbo-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.ref_name }}-
+            turbo-main-
+      - run: pnpm turbo run build
+      - run: pnpm turbo run test

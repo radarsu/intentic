@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "composite": true,
+        "customConditions": ["@puristic/src"],
+        "declaration": true,
+        "declarationMap": true,
+        "exactOptionalPropertyTypes": true,
+        "forceConsistentCasingInFileNames": true,
+        "importHelpers": true,
+        "incremental": true,
+        "isolatedModules": true,
+        "module": "NodeNext",
+        "moduleResolution": "nodenext",
+        "newLine": "lf",
+        "noEmitOnError": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUncheckedIndexedAccess": true,
+        "removeComments": true,
+        "sourceMap": true,
+        "strict": true,
+        "target": "ES2024",
+        "useDefineForClassFields": true
+    }
+}

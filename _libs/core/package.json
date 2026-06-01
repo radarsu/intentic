@@ -1,0 +1,46 @@
+{
+    "name": "@puristic/deploy",
+    "version": "0.0.0",
+    "description": "",
+    "license": "MIT",
+    "type": "module",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/radarsu/puristic-deploy.git",
+        "directory": "_libs/core"
+    },
+    "files": [
+        "dist"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "exports": {
+        "./index.js": {
+            "types": "./dist/index.d.ts",
+            "import": {
+                "@puristic/src": "./src/index.ts",
+                "default": "./dist/index.js"
+            },
+            "require": {
+                "@puristic/src": "./src/index.ts",
+                "default": "./dist/index.js"
+            }
+        }
+    },
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --build --watch",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "tslib": "catalog:"
+    },
+    "devDependencies": {
+        "@puristic/tsconfig": "workspace:*",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    }
+}

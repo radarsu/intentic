@@ -1,0 +1,11 @@
+{
+    "autorun": false,
+    "terminals": [
+        {
+            "name": "libs",
+            "focus": true,
+            "commands": ["pnpm libs:watch"],
+            "color": "terminal.ansiGreen"
+        }
+    ]
+}

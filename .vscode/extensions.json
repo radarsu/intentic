@@ -1,0 +1,23 @@
+{
+    "recommendations": [
+        // Visuals.
+        "aaron-bond.better-comments",
+        "pkief.material-icon-theme",
+
+        // Formatters and linters.
+        "biomejs.biome",
+        "foxundermoon.shell-format",
+
+        // Quality of Life.
+        "britesnow.vscode-toggle-quotes",
+        "fabiospampinato.vscode-terminals",
+        "usernamehw.errorlens",
+
+        // Git.
+        "mhutchie.git-graph",
+
+        // TypeScript.
+        "mikestead.dotenv",
+        "yoavbls.pretty-ts-errors"
+    ]
+}
