@@ -9,9 +9,11 @@ import { defineStack } from "./index.js";
 
 // The Ref<string> output props on a handle are the author-facing source of truth; OUTPUTS is the runtime
 // mirror the engine reads. Walk one real handle of every author-facing type and assert the two agree.
+// Output props carry an `output` (id.output refs); bare resource refs nested on a handle (app.repo, the
+// deployments under app.environments) point at a resource, not an output, so they are excluded.
 const outputPropsOf = (handle: object): string[] =>
     Object.entries(handle)
-        .filter(([, value]) => isRef(value))
+        .filter(([, value]) => isRef(value) && value.output !== undefined)
         .map(([key]) => key)
         .sort();
 
@@ -25,10 +27,11 @@ test("public handles' output refs match OUTPUTS exactly", () => {
         handles["cloudflare"] = cf;
         const app = i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
         handles["app"] = app;
+        handles["repo"] = app.repo;
         handles["deployment"] = app.environments["prod"];
     });
 
-    for (const type of ["host", "cloudflare", "app", "deployment"] as const) {
+    for (const type of ["host", "cloudflare", "app", "deployment", "repo"] as const) {
         const handle = handles[type];
         expect(handle, `no handle captured for type "${type}"`).toBeDefined();
         expect(outputPropsOf(handle as object)).toEqual([...OUTPUTS[type]].sort());

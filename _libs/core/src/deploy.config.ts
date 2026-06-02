@@ -30,3 +30,5 @@ export const graph = defineStack((i) => {
         },
     });
 });
+
+console.log(graph);

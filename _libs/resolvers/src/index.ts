@@ -1,5 +1,5 @@
 export { resolveApp } from "./app.js";
-export { deploymentId } from "./ids.js";
+export { deploymentId, repoId } from "./ids.js";
 export type { CloudflareInput, EnvironmentInput, HostInput } from "./inputs.js";
 export type { AppIntent, CloudflareIntent, HostIntent, IntentSet } from "./intent.js";
 export { OUTPUTS } from "./outputs.js";

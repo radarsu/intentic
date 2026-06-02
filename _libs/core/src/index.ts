@@ -15,4 +15,4 @@ export const build = (declare: (stack: Stack) => void): IntentSet => {
 // One-shot: build (have + want) -> resolve (what that requires) -> compile (the desired-state graph).
 export const defineStack = (declare: (stack: Stack) => void): DesiredStateGraph => compile(toNodeMap(resolve(build(declare))));
 
-export type { App, Cloudflare, Deployment, Have, Host, Stack, Want, WantAppInput } from "./handles.js";
+export type { App, Cloudflare, Deployment, Have, Host, Repo, Stack, Want, WantAppInput } from "./handles.js";

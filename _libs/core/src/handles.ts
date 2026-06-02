@@ -16,7 +16,12 @@ export interface Cloudflare extends Ref<"cloudflare"> {
     readonly zoneId: Ref<string>;
 }
 
-// --- The app and its environments (the only handles i.want.app hands back) ---
+// --- The app, its source repo, and its environments (the handles i.want.app hands back) ---
+
+export interface Repo extends Ref<"repo"> {
+    readonly cloneUrl: Ref<string>;
+    readonly sshUrl: Ref<string>;
+}
 
 export interface Deployment extends Ref<"deployment"> {
     readonly internalUrl: Ref<string>;
@@ -24,6 +29,7 @@ export interface Deployment extends Ref<"deployment"> {
 }
 
 export interface App<Names extends string = string> extends Ref<"app"> {
+    readonly repo: Repo;
     readonly environments: Readonly<Record<Names, Deployment>>;
 }
 
