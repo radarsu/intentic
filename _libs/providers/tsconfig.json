@@ -7,6 +7,6 @@
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],
-    "references": [{ "path": "../engine" }],
+    "references": [{ "path": "../protocol" }, { "path": "../engine" }],
     "extends": "@puristic/tsconfig/tsconfig.base.json"
 }

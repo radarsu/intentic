@@ -16,6 +16,7 @@ const RESOURCE_TYPES: readonly ResourceType[] = [
     "host",
     "cloudflare",
     "cf-route",
+    "tunnel",
     "forgejo",
     "repo",
     "forgejo-runner",

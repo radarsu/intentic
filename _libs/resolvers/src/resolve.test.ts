@@ -38,6 +38,7 @@ test("resolve derives the full support stack for a two-environment app", () => {
         "cf-staging-example-com",
         "app.production",
         "cf-app-example-com",
+        "host-tunnel",
     ]);
 });
 
@@ -54,6 +55,8 @@ test("apps on the same host share one derived platform", () => {
     const types = resolve(intent).map((node) => node.type);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
+    // One tunnel per host, shared across all apps on that host.
+    expect(types.filter((type) => type === "tunnel")).toHaveLength(1);
 });
 
 test("an app exposed through a cloudflare with no zone throws", () => {

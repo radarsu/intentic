@@ -1,0 +1,87 @@
+import { expect, test } from "vitest";
+
+import { createCfRouteProvider } from "./cf-route.js";
+import type { CloudflareApi } from "./cloudflare-api.js";
+
+const NOT_USED = async (): Promise<never> => {
+    throw new Error("unused by the cf-route provider");
+};
+const api = (overrides: Partial<CloudflareApi>): CloudflareApi => ({
+    getZone: NOT_USED,
+    findTunnel: NOT_USED,
+    createTunnel: NOT_USED,
+    getTunnelToken: NOT_USED,
+    getTunnelIngress: NOT_USED,
+    putTunnelIngress: NOT_USED,
+    findDnsRecord: NOT_USED,
+    createDnsRecord: NOT_USED,
+    updateDnsRecord: NOT_USED,
+    ...overrides,
+});
+
+const ctx = () => ({
+    env: {},
+    log: () => {},
+    id: "cf-app-example-com",
+    output: () => {
+        throw new Error("unused in cf-route provider");
+    },
+});
+
+const inputs = { hostname: "app.example.com", zoneId: "zone-1", apiToken: "tok", cname: "tunnel-abc.cfargotunnel.com" };
+
+test("read returns undefined when no record exists", async () => {
+    const provider = createCfRouteProvider(api({ findDnsRecord: async () => undefined }));
+    expect(await provider.read(inputs, ctx())).toBeUndefined();
+});
+
+test("read returns the route url plus the record's current target", async () => {
+    const provider = createCfRouteProvider(api({ findDnsRecord: async () => ({ id: "rec-1", content: "tunnel-abc.cfargotunnel.com" }) }));
+    expect(await provider.read(inputs, ctx())).toEqual({
+        outputs: { url: "https://app.example.com" },
+        detail: { content: "tunnel-abc.cfargotunnel.com" },
+    });
+});
+
+test("diff is noop when the CNAME already targets the tunnel", () => {
+    const provider = createCfRouteProvider(api({}));
+    expect(provider.diff(inputs, { outputs: {}, detail: { content: "tunnel-abc.cfargotunnel.com" } })).toEqual({ action: "noop" });
+});
+
+test("diff is update when the CNAME target drifts", () => {
+    const provider = createCfRouteProvider(api({}));
+    expect(provider.diff(inputs, { outputs: {}, detail: { content: "stale.cfargotunnel.com" } }).action).toBe("update");
+});
+
+test("apply creates a proxied CNAME stamped with the resource id when absent", async () => {
+    let created: { name: string; content: string; comment: string } | undefined;
+    const provider = createCfRouteProvider(
+        api({
+            findDnsRecord: async () => undefined,
+            createDnsRecord: async (args) => {
+                created = { name: args.name, content: args.content, comment: args.comment };
+            },
+        }),
+    );
+    expect(await provider.apply(inputs, undefined, ctx())).toEqual({ url: "https://app.example.com" });
+    expect(created).toEqual({ name: "app.example.com", content: "tunnel-abc.cfargotunnel.com", comment: "puristic.id=cf-app-example-com" });
+});
+
+test("apply updates the existing record by id", async () => {
+    let updatedId: string | undefined;
+    const provider = createCfRouteProvider(
+        api({
+            findDnsRecord: async () => ({ id: "rec-9", content: "stale.cfargotunnel.com" }),
+            updateDnsRecord: async (args) => {
+                updatedId = args.recordId;
+            },
+        }),
+    );
+    await provider.apply(inputs, undefined, ctx());
+    expect(updatedId).toBe("rec-9");
+});
+
+test("malformed inputs are rejected", async () => {
+    const provider = createCfRouteProvider(api({}));
+    await expect(provider.read({ hostname: "h", zoneId: "z" }, ctx())).rejects.toThrow(/hostname\/zoneId\/apiToken\/cname must be strings/);
+});

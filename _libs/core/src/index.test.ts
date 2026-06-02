@@ -39,13 +39,13 @@ test("duplicate resource id throws", () => {
     ).toThrow('duplicate resource id: "dup"');
 });
 
-test("reference to an unknown resource throws", () => {
+test("an app targeting an undeclared host throws", () => {
     expect(() =>
         defineStack((i) => {
             const cf = i.have.cloudflare("cf", { accountId: "a", apiToken: env("T"), zone: "example.com" });
             i.want.app("app", { on: ghostHost("nope"), expose: cf, environments: { prod: { domain: "x.example.com", branch: "main" } } });
         }),
-    ).toThrow('references unknown resource "nope"');
+    ).toThrow('app "app" targets unknown host "nope"');
 });
 
 test("a dependency cycle throws", () => {

@@ -39,7 +39,7 @@ test("apply creates every resource in dependency order, then is idempotent", asy
     const { providers } = createFakeProviders();
 
     const first = await apply(graph, { providers, env: fullEnv, probe: trueProbe, log: silent });
-    expect(first.steps).toHaveLength(13);
+    expect(first.steps).toHaveLength(14);
     expect(first.steps.every((step) => step.action === "create")).toBe(true);
     expect(first.steps.map((step) => step.id)).toEqual(linearize(graph));
     expect(Object.keys(first.outputs).sort()).toEqual(Object.keys(graph.resources).sort());

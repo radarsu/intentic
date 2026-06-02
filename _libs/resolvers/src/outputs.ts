@@ -9,6 +9,7 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     host: ["internalIp", "publicIp"],
     cloudflare: ["zoneId"],
     "cf-route": ["url"],
+    tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken"],
     repo: ["cloneUrl", "sshUrl"],
     "forgejo-runner": [],

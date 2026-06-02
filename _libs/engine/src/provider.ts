@@ -4,6 +4,10 @@ import type { ResolvedInputs } from "./types.js";
 // A resource that exists in actual infrastructure, recovered statelessly by its ownership stamp/id.
 export interface Observed {
     readonly outputs: Readonly<Record<string, unknown>>;
+    // Provider-private introspection the engine never validates against OUTPUTS and never stores as refs
+    // — only diff reads it. Lets a provider surface actual config (e.g. a tunnel's current ingress) so a
+    // pure diff can detect drift, which outputs cannot carry (validateOutputs rejects undeclared keys).
+    readonly detail?: Readonly<Record<string, unknown>>;
 }
 
 // A pure diff decision: noop, or update with a human-readable reason (surfaced in plan output).

@@ -56,14 +56,24 @@ export const expectedGraph: DesiredStateGraph = {
         "cf-git-example-com": {
             id: "cf-git-example-com",
             type: "cf-route",
-            inputs: { hostname: "git.example.com", target: { $ref: "host-git.internalUrl" } },
-            dependsOn: ["cf", "host-git"],
+            inputs: {
+                hostname: "git.example.com",
+                zoneId: { $ref: "cf.zoneId" },
+                apiToken: { $secret: { source: "env", key: "CLOUDFLARE_API_TOKEN" } },
+                cname: { $ref: "host-tunnel.cname" },
+            },
+            dependsOn: ["cf", "host-tunnel"],
         },
         "cf-komodo-example-com": {
             id: "cf-komodo-example-com",
             type: "cf-route",
-            inputs: { hostname: "komodo.example.com", target: { $ref: "host-deploy.internalUrl" } },
-            dependsOn: ["cf", "host-deploy"],
+            inputs: {
+                hostname: "komodo.example.com",
+                zoneId: { $ref: "cf.zoneId" },
+                apiToken: { $secret: { source: "env", key: "CLOUDFLARE_API_TOKEN" } },
+                cname: { $ref: "host-tunnel.cname" },
+            },
+            dependsOn: ["cf", "host-tunnel"],
         },
         "my-app-repo": {
             id: "my-app-repo",
@@ -108,14 +118,43 @@ export const expectedGraph: DesiredStateGraph = {
         "cf-staging-example-com": {
             id: "cf-staging-example-com",
             type: "cf-route",
-            inputs: { hostname: "staging.example.com", target: { $ref: "my-app.staging.internalUrl" } },
-            dependsOn: ["cf", "my-app.staging"],
+            inputs: {
+                hostname: "staging.example.com",
+                zoneId: { $ref: "cf.zoneId" },
+                apiToken: { $secret: { source: "env", key: "CLOUDFLARE_API_TOKEN" } },
+                cname: { $ref: "host-tunnel.cname" },
+            },
+            dependsOn: ["cf", "host-tunnel"],
         },
         "cf-app-example-com": {
             id: "cf-app-example-com",
             type: "cf-route",
-            inputs: { hostname: "app.example.com", target: { $ref: "my-app.production.internalUrl" } },
-            dependsOn: ["cf", "my-app.production"],
+            inputs: {
+                hostname: "app.example.com",
+                zoneId: { $ref: "cf.zoneId" },
+                apiToken: { $secret: { source: "env", key: "CLOUDFLARE_API_TOKEN" } },
+                cname: { $ref: "host-tunnel.cname" },
+            },
+            dependsOn: ["cf", "host-tunnel"],
+        },
+        "host-tunnel": {
+            id: "host-tunnel",
+            type: "tunnel",
+            inputs: {
+                name: "puristic-host",
+                accountId: "acc_123",
+                apiToken: { $secret: { source: "env", key: "CLOUDFLARE_API_TOKEN" } },
+                address: "203.0.113.10",
+                user: "deploy",
+                sshKey: { $secret: { source: "env", key: "HOST_SSH_KEY" } },
+                ingress: [
+                    { hostname: "git.example.com", service: { $ref: "host-git.internalUrl" } },
+                    { hostname: "komodo.example.com", service: { $ref: "host-deploy.internalUrl" } },
+                    { hostname: "staging.example.com", service: { $ref: "my-app.staging.internalUrl" } },
+                    { hostname: "app.example.com", service: { $ref: "my-app.production.internalUrl" } },
+                ],
+            },
+            dependsOn: ["cf", "host", "host-git", "host-deploy", "my-app.staging", "my-app.production"],
         },
     },
 };

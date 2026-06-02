@@ -37,12 +37,12 @@
     },
     "dependencies": {
         "@puristic/deploy-engine": "workspace:*",
+        "@puristic/deploy-protocol": "workspace:*",
         "ssh2": "1.17.0",
         "tslib": "catalog:"
     },
     "devDependencies": {
         "@puristic/deploy-core": "workspace:*",
-        "@puristic/deploy-protocol": "workspace:*",
         "@puristic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
         "@types/ssh2": "1.15.5",
