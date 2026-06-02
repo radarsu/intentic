@@ -16,4 +16,6 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     komodo: ["url", "internalUrl", "passkey"],
     app: [],
     deployment: ["internalUrl", "url"],
+    "forgejo-notify": [],
+    "komodo-notify": [],
 });

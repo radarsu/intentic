@@ -10,5 +10,8 @@ export const tunnelId = (hostId: string): string => `${hostId}-tunnel`;
 export const tunnelName = (hostId: string): string => `puristic-${hostId}`;
 export const repoId = (appId: string): string => `${appId}-repo`;
 export const deploymentId = (appId: string, environment: string): string => `${appId}.${environment}`;
+// CI/CD notification sinks, app-scoped: a Forgejo repo webhook and a Komodo alerter targeting Discord.
+export const forgejoNotifyId = (appId: string): string => `${repoId(appId)}-notify`;
+export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
 export const gitDomain = (zone: string): string => `git.${zone}`;
 export const komodoDomain = (zone: string): string => `komodo.${zone}`;

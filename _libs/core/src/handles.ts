@@ -1,5 +1,5 @@
 import type { Ref } from "@puristic/deploy-protocol";
-import type { CloudflareInput, EnvironmentInput, HostInput } from "@puristic/deploy-resolvers";
+import type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput } from "@puristic/deploy-resolvers";
 
 // The authoring surface. A developer declares inventory ("what you have" — i.have.*) and the one thing
 // they want ("what you want" — i.want.app); the support stack each app requires is derived by the
@@ -38,6 +38,7 @@ export interface App<Names extends string = string> extends Ref<"app"> {
 export interface WantAppInput {
     on: Host;
     expose: Cloudflare;
+    notify?: NotifyInput;
     environments: Record<string, EnvironmentInput>;
 }
 

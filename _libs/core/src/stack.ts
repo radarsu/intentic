@@ -36,7 +36,13 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
         claim(id);
-        apps.push({ id, on: input.on.resourceId, expose: input.expose.resourceId, environments: input.environments });
+        apps.push({
+            id,
+            on: input.on.resourceId,
+            expose: input.expose.resourceId,
+            ...(input.notify !== undefined ? { notify: input.notify } : {}),
+            environments: input.environments,
+        });
 
         const environments: Record<string, Deployment> = {};
         for (const name of Object.keys(input.environments)) {

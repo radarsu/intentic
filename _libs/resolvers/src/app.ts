@@ -1,6 +1,6 @@
 import type { Ref, SecretRef } from "@puristic/deploy-protocol";
 import { httpOk, makeRef } from "@puristic/deploy-protocol";
-import { deploymentId, repoId } from "./ids.js";
+import { deploymentId, forgejoNotifyId, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
 import type { PlatformRefs } from "./platform.js";
 import type { ResolvedNode } from "./resource-types.js";
@@ -40,6 +40,24 @@ export const resolveApp = (intent: AppIntent, platform: PlatformRefs, apiToken: 
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, ref(id, "internalUrl"), apiToken);
         nodes.push(exposure.route);
         ingress.push(exposure.ingress);
+    }
+
+    // CI/CD notifications: when the author asks for them, derive the two native Discord sinks — a Forgejo
+    // repo webhook on build results (CI) and a Komodo alerter on deploy results (CD). Pure sinks: no
+    // outputs, leaf nodes. The webhook secret flows through unresolved; the engine resolves it per apply.
+    if (intent.notify !== undefined) {
+        nodes.push({
+            id: forgejoNotifyId(intent.id),
+            type: "forgejo-notify",
+            inputs: { forgejo: makeRef(platform.forgejo), repo: makeRef(repo), webhook: intent.notify.discord, events: ["build"] },
+            explicitDependsOn: [platform.forgejo, repo],
+        });
+        nodes.push({
+            id: komodoNotifyId(intent.id),
+            type: "komodo-notify",
+            inputs: { komodo: makeRef(platform.deploy), app: makeRef(intent.id), webhook: intent.notify.discord, events: ["deploy"] },
+            explicitDependsOn: [platform.deploy, intent.id],
+        });
     }
 
     return { nodes, ingress };

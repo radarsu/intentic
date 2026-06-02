@@ -22,3 +22,9 @@ export interface EnvironmentInput {
     env?: Record<string, Input<string>>;
     readyWhen?: Readiness;
 }
+
+// Author-supplied CI/CD notification sinks. A write-only webhook secret; the resolver derives the
+// Forgejo repo webhook (CI) and Komodo alerter (CD) that target it. Absent = no notifications.
+export interface NotifyInput {
+    discord: SecretRef;
+}
