@@ -1,5 +1,8 @@
-// Core authoring-layer types for @puristic/deploy.
-// These describe what a developer declares and what it compiles to. Pure data, no runtime.
+// Core authoring-layer types for @puristic/deploy-core.
+// INTENT-FIRST surface: a developer declares inventory ("what you have" — i.have.*) and the one thing they
+// want ("what you want" — i.want.app). The resolver derives the app's whole support stack (Git+CI, deploy
+// orchestrator, routing) at author time into concrete RawNodes, so defineStack still returns a
+// DesiredStateGraph. Pure data, no runtime.
 
 export interface Ref<T> {
     readonly kind: "ref";
@@ -24,41 +27,18 @@ export interface Readiness {
 
 export type Input<T> = T | Ref<T> | (T extends string ? SecretRef : never);
 
-// --- Resource handles (returned by the builder; their output properties are inert refs) ---
+// --- Inventory handles ("what you have"); their output properties are inert refs ---
 
-export interface Server extends Ref<"server"> {
+export interface Host extends Ref<"host"> {
     readonly internalIp: Ref<string>;
     readonly publicIp: Ref<string>;
 }
 
 export interface Cloudflare extends Ref<"cloudflare"> {
     readonly zoneId: Ref<string>;
-    route(routeId: string, input: RouteInput): Route;
 }
 
-export interface Route extends Ref<"cf-route"> {
-    readonly url: Ref<string>;
-}
-
-export interface Forgejo extends Ref<"forgejo"> {
-    readonly url: Ref<string>;
-    readonly internalUrl: Ref<string>;
-    readonly runnerToken: Ref<string>;
-    repo(repoId: string, input: RepoInput): Repo;
-}
-
-export interface Repo extends Ref<"repo"> {
-    readonly cloneUrl: Ref<string>;
-    readonly sshUrl: Ref<string>;
-}
-
-export type ForgejoRunner = Ref<"forgejo-runner">;
-
-export interface Komodo extends Ref<"komodo"> {
-    readonly url: Ref<string>;
-    readonly internalUrl: Ref<string>;
-    readonly passkey: Ref<string>;
-}
+// --- The app and its environments (the only handles i.want.app hands back) ---
 
 export interface Deployment extends Ref<"deployment"> {
     readonly internalUrl: Ref<string>;
@@ -69,12 +49,11 @@ export interface App<Names extends string = string> extends Ref<"app"> {
     readonly environments: Readonly<Record<Names, Deployment>>;
 }
 
-export type ResourceHandle = Server | Cloudflare | Route | Forgejo | Repo | ForgejoRunner | Komodo | App | Deployment;
+// --- Inputs (what the developer passes). "Wants require haves" is enforced structurally: on: Host,
+// expose: Cloudflare. The app's Git+CI, deploy orchestrator, and routes are derived, never declared. ---
 
-// --- Inputs (what the developer passes to each constructor) ---
-
-export interface ServerInput {
-    host: string;
+export interface HostInput {
+    address: string;
     user: string;
     sshKey: SecretRef;
     port?: number;
@@ -86,62 +65,32 @@ export interface CloudflareInput {
     zone: string;
 }
 
-export interface RouteInput {
-    hostname: string;
-    target: Ref<string>;
-}
-
-export interface ForgejoInput {
-    server: Server;
-    domain: string;
-    adminUser: string;
-    adminPassword: SecretRef;
-    readyWhen?: Readiness;
-    dependsOn?: ResourceHandle[];
-}
-
-export interface RepoInput {
-    name: string;
-    private?: boolean;
-}
-
-export interface ForgejoRunnerInput {
-    server: Server;
-    instanceUrl: Ref<string>;
-    token: Ref<string>;
-}
-
-export interface KomodoInput {
-    server: Server;
-    domain: string;
-    forgejoUrl: Ref<string>;
-    runnerToken: Ref<string>;
-    adminPassword: SecretRef;
-    readyWhen?: Readiness;
-}
-
 export interface EnvironmentInput {
-    name: string;
-    branch: string;
     domain: string;
-    server: Server;
+    branch: string;
     env?: Record<string, Input<string>>;
     readyWhen?: Readiness;
 }
 
-export interface AppInput<E extends readonly EnvironmentInput[] = readonly EnvironmentInput[]> {
-    source: Ref<string>;
-    deployer: Komodo;
-    environments: E;
+export interface WantAppInput {
+    on: Host;
+    expose: Cloudflare;
+    environments: Record<string, EnvironmentInput>;
+}
+
+export interface Have {
+    host(id: string, input: HostInput): Host;
+    cloudflare(id: string, input: CloudflareInput): Cloudflare;
+}
+
+export interface Want {
+    // `const` so environment names come from the object keys, e.g. App<"staging" | "production">.
+    app<const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string>;
 }
 
 export interface Stack {
-    server(id: string, input: ServerInput): Server;
-    cloudflare(id: string, input: CloudflareInput): Cloudflare;
-    forgejo(id: string, input: ForgejoInput): Forgejo;
-    forgejoRunner(id: string, input: ForgejoRunnerInput): ForgejoRunner;
-    komodo(id: string, input: KomodoInput): Komodo;
-    app<const E extends readonly EnvironmentInput[]>(id: string, input: AppInput<E>): App<E[number]["name"]>;
+    readonly have: Have;
+    readonly want: Want;
 }
 
 // --- Internal pre-compilation node (built by the builder, consumed by the compiler) ---
@@ -156,16 +105,7 @@ export interface RawNode {
 
 // --- Compiled desired-state graph (the serializable output) ---
 
-export type ResourceType =
-    | "server"
-    | "cloudflare"
-    | "cf-route"
-    | "forgejo"
-    | "repo"
-    | "forgejo-runner"
-    | "komodo"
-    | "app"
-    | "deployment";
+export type ResourceType = "host" | "cloudflare" | "cf-route" | "forgejo" | "repo" | "forgejo-runner" | "komodo" | "app" | "deployment";
 
 export type SerializedValue =
     | string

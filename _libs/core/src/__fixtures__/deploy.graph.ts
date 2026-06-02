@@ -3,6 +3,8 @@
 // Typed against DesiredStateGraph so it cannot structurally drift from the API.
 // Note: this captures desired state only — resources + their dependsOn edges. Execution
 // order is derived on demand via linearize(graph) and asserted as an invariant, not frozen here.
+// The forgejo/forgejo-runner/komodo/repo/cf-route nodes are DERIVED by i.want.app — the author never
+// declares them; the resolver picks the implementations and places + exposes them on the inventory.
 import type { DesiredStateGraph } from "../index.js";
 
 export const expectedGraph: DesiredStateGraph = {
@@ -10,8 +12,8 @@ export const expectedGraph: DesiredStateGraph = {
     resources: {
         host: {
             id: "host",
-            type: "server",
-            inputs: { host: "203.0.113.10", user: "deploy", sshKey: { $secret: { source: "env", key: "HOST_SSH_KEY" } } },
+            type: "host",
+            inputs: { address: "203.0.113.10", user: "deploy", sshKey: { $secret: { source: "env", key: "HOST_SSH_KEY" } } },
             dependsOn: [],
         },
         cf: {
@@ -20,8 +22,8 @@ export const expectedGraph: DesiredStateGraph = {
             inputs: { accountId: "acc_123", apiToken: { $secret: { source: "env", key: "CLOUDFLARE_API_TOKEN" } }, zone: "example.com" },
             dependsOn: [],
         },
-        forgejo: {
-            id: "forgejo",
+        "host-git": {
+            id: "host-git",
             type: "forgejo",
             inputs: {
                 server: { $ref: "host" },
@@ -32,36 +34,48 @@ export const expectedGraph: DesiredStateGraph = {
             dependsOn: ["host"],
             readyWhen: { check: "httpOk", url: "https://git.example.com/api/healthz", timeout: "120s" },
         },
-        "app-repo": {
-            id: "app-repo",
-            type: "repo",
-            inputs: { name: "app", private: true },
-            dependsOn: ["forgejo"],
-        },
-        "forgejo-runner": {
-            id: "forgejo-runner",
+        "host-git-runner": {
+            id: "host-git-runner",
             type: "forgejo-runner",
-            inputs: { server: { $ref: "host" }, instanceUrl: { $ref: "forgejo.url" }, token: { $ref: "forgejo.runnerToken" } },
-            dependsOn: ["host", "forgejo"],
+            inputs: { server: { $ref: "host" }, instanceUrl: { $ref: "host-git.url" }, token: { $ref: "host-git.runnerToken" } },
+            dependsOn: ["host", "host-git"],
         },
-        komodo: {
-            id: "komodo",
+        "host-deploy": {
+            id: "host-deploy",
             type: "komodo",
             inputs: {
                 server: { $ref: "host" },
                 domain: "komodo.example.com",
-                forgejoUrl: { $ref: "forgejo.internalUrl" },
-                runnerToken: { $ref: "forgejo.runnerToken" },
+                forgejoUrl: { $ref: "host-git.internalUrl" },
+                runnerToken: { $ref: "host-git.runnerToken" },
                 adminPassword: { $secret: { source: "env", key: "KOMODO_ADMIN_PASSWORD" } },
             },
-            dependsOn: ["host", "forgejo"],
+            dependsOn: ["host", "host-git"],
             readyWhen: { check: "httpOk", url: "https://komodo.example.com/api/health", timeout: "90s" },
+        },
+        "cf-git-example-com": {
+            id: "cf-git-example-com",
+            type: "cf-route",
+            inputs: { hostname: "git.example.com", target: { $ref: "host-git.internalUrl" } },
+            dependsOn: ["cf", "host-git"],
+        },
+        "cf-komodo-example-com": {
+            id: "cf-komodo-example-com",
+            type: "cf-route",
+            inputs: { hostname: "komodo.example.com", target: { $ref: "host-deploy.internalUrl" } },
+            dependsOn: ["cf", "host-deploy"],
+        },
+        "my-app-repo": {
+            id: "my-app-repo",
+            type: "repo",
+            inputs: { name: "my-app", private: true },
+            dependsOn: ["host-git"],
         },
         "my-app": {
             id: "my-app",
             type: "app",
-            inputs: { source: { $ref: "app-repo.cloneUrl" }, deployer: { $ref: "komodo" } },
-            dependsOn: ["app-repo", "komodo"],
+            inputs: { source: { $ref: "my-app-repo.cloneUrl" }, deployer: { $ref: "host-deploy" } },
+            dependsOn: ["my-app-repo", "host-deploy"],
         },
         "my-app.staging": {
             id: "my-app.staging",
@@ -91,26 +105,14 @@ export const expectedGraph: DesiredStateGraph = {
             dependsOn: ["my-app", "host"],
             readyWhen: { check: "httpOk", url: "https://app.example.com/healthz", timeout: "60s" },
         },
-        "route-git": {
-            id: "route-git",
-            type: "cf-route",
-            inputs: { hostname: "git.example.com", target: { $ref: "forgejo.internalUrl" } },
-            dependsOn: ["cf", "forgejo"],
-        },
-        "route-komodo": {
-            id: "route-komodo",
-            type: "cf-route",
-            inputs: { hostname: "komodo.example.com", target: { $ref: "komodo.internalUrl" } },
-            dependsOn: ["cf", "komodo"],
-        },
-        "route-staging": {
-            id: "route-staging",
+        "cf-staging-example-com": {
+            id: "cf-staging-example-com",
             type: "cf-route",
             inputs: { hostname: "staging.example.com", target: { $ref: "my-app.staging.internalUrl" } },
             dependsOn: ["cf", "my-app.staging"],
         },
-        "route-production": {
-            id: "route-production",
+        "cf-app-example-com": {
+            id: "cf-app-example-com",
             type: "cf-route",
             inputs: { hostname: "app.example.com", target: { $ref: "my-app.production.internalUrl" } },
             dependsOn: ["cf", "my-app.production"],

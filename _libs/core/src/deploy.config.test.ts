@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 
+import { expectedGraph } from "./__fixtures__/deploy.graph.js";
 import { graph } from "./deploy.config.js";
 import { linearize } from "./index.js";
-import { expectedGraph } from "./__fixtures__/deploy.graph.js";
 
 test("declaration compiles to the expected desired-state graph", () => {
     expect(graph).toEqual(expectedGraph);
@@ -22,15 +22,15 @@ test("derived order is a valid topological linearization of the bootstrap", () =
     // It is a permutation of the resource ids (nothing dropped or duplicated).
     expect([...order].sort()).toEqual(Object.keys(graph.resources).sort());
 
-    // Sanity on the headline phases: host -> forgejo -> app -> route.
-    expect(at("host")).toBeLessThan(at("forgejo"));
-    expect(at("forgejo")).toBeLessThan(at("my-app"));
-    expect(at("my-app.staging")).toBeLessThan(at("route-staging"));
+    // Sanity on the headline phases: host -> git -> app -> route.
+    expect(at("host")).toBeLessThan(at("host-git"));
+    expect(at("host-git")).toBeLessThan(at("my-app"));
+    expect(at("my-app.staging")).toBeLessThan(at("cf-staging-example-com"));
 });
 
 test("a ref edge serializes correctly", () => {
-    expect(graph.resources["forgejo-runner"]?.inputs["token"]).toEqual({ $ref: "forgejo.runnerToken" });
-    expect(graph.resources["forgejo-runner"]?.dependsOn).toContain("forgejo");
+    expect(graph.resources["host-git-runner"]?.inputs["token"]).toEqual({ $ref: "host-git.runnerToken" });
+    expect(graph.resources["host-git-runner"]?.dependsOn).toContain("host-git");
 });
 
 test("secrets serialize and are never literals", () => {

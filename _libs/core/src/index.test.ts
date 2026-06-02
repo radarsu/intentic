@@ -1,10 +1,11 @@
 import { expect, test } from "vitest";
 
+import { compile } from "./compile.js";
+import type { Host } from "./index.js";
 import { defineStack, env, httpOk, linearize } from "./index.js";
-import type { Ref, Server } from "./index.js";
+import type { RawNode } from "./types.js";
 
-const ghostServer = (id: string): Server => ({ kind: "ref", resourceId: id }) as unknown as Server;
-const ghostRef = (id: string): Ref<string> => ({ kind: "ref", resourceId: id }) as unknown as Ref<string>;
+const ghostHost = (id: string): Host => ({ kind: "ref", resourceId: id }) as unknown as Host;
 
 test("env builds an env-sourced secret ref", () => {
     expect(env("TOKEN")).toEqual({ kind: "secret", source: "env", key: "TOKEN" });
@@ -15,55 +16,72 @@ test("httpOk omits timeout unless provided", () => {
     expect(httpOk("https://x/health", { timeout: "30s" })).toEqual({ kind: "readiness", check: "httpOk", url: "https://x/health", timeout: "30s" });
 });
 
-test("refs and secrets serialize, and readyWhen stays separate from dependsOn", () => {
-    const graph = defineStack((s) => {
-        const host = s.server("host", { host: "1.2.3.4", user: "deploy", sshKey: env("HOST_SSH_KEY") });
-        s.forgejo("forgejo", {
-            server: host,
-            domain: "git.example.com",
-            adminUser: "admin",
-            adminPassword: env("FORGEJO_ADMIN_PASSWORD"),
-            readyWhen: httpOk("https://git.example.com/api/healthz", { timeout: "120s" }),
-        });
+test("want.app derives its support stack: refs/secrets serialize and the resolver supplies a default readyWhen", () => {
+    const graph = defineStack((i) => {
+        const host = i.have.host("host", { address: "1.2.3.4", user: "deploy", sshKey: env("HOST_SSH_KEY") });
+        const cf = i.have.cloudflare("cf", { accountId: "a", apiToken: env("T"), zone: "example.com" });
+        i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
     });
 
-    expect(graph.resources["forgejo"]?.inputs["server"]).toEqual({ $ref: "host" });
+    // The forgejo node is derived from want.app, wired to the host, with a zone-derived domain + default health gate.
+    expect(graph.resources["host-git"]?.inputs["server"]).toEqual({ $ref: "host" });
     expect(graph.resources["host"]?.inputs["sshKey"]).toEqual({ $secret: { source: "env", key: "HOST_SSH_KEY" } });
-    expect(graph.resources["forgejo"]?.dependsOn).toEqual(["host"]);
-    expect(graph.resources["forgejo"]?.readyWhen).toEqual({ check: "httpOk", url: "https://git.example.com/api/healthz", timeout: "120s" });
+    expect(graph.resources["host-git"]?.dependsOn).toEqual(["host"]);
+    expect(graph.resources["host-git"]?.readyWhen).toEqual({ check: "httpOk", url: "https://git.example.com/api/healthz", timeout: "120s" });
 });
 
 test("duplicate resource id throws", () => {
     expect(() =>
-        defineStack((s) => {
-            s.server("dup", { host: "1.2.3.4", user: "deploy", sshKey: env("K") });
-            s.server("dup", { host: "5.6.7.8", user: "deploy", sshKey: env("K") });
+        defineStack((i) => {
+            i.have.host("dup", { address: "1.2.3.4", user: "deploy", sshKey: env("K") });
+            i.have.host("dup", { address: "5.6.7.8", user: "deploy", sshKey: env("K") });
         }),
     ).toThrow('duplicate resource id: "dup"');
 });
 
 test("reference to an unknown resource throws", () => {
     expect(() =>
-        defineStack((s) => {
-            s.forgejoRunner("runner", { server: ghostServer("nope"), instanceUrl: ghostRef("nope"), token: ghostRef("nope") });
+        defineStack((i) => {
+            const cf = i.have.cloudflare("cf", { accountId: "a", apiToken: env("T"), zone: "example.com" });
+            i.want.app("app", { on: ghostHost("nope"), expose: cf, environments: { prod: { domain: "x.example.com", branch: "main" } } });
         }),
     ).toThrow('references unknown resource "nope"');
 });
 
 test("a dependency cycle throws", () => {
-    expect(() =>
-        defineStack((s) => {
-            s.forgejoRunner("a", { server: ghostServer("b"), instanceUrl: ghostRef("b"), token: ghostRef("b") });
-            s.forgejoRunner("b", { server: ghostServer("a"), instanceUrl: ghostRef("a"), token: ghostRef("a") });
-        }),
-    ).toThrow(/dependency cycle/);
+    // Auto-derived ids cannot form an authored cycle, so exercise the compile-layer guard directly.
+    const nodes = new Map<string, RawNode>([
+        ["a", { id: "a", type: "host", inputs: { peer: { kind: "ref", resourceId: "b" } }, explicitDependsOn: [] }],
+        ["b", { id: "b", type: "host", inputs: { peer: { kind: "ref", resourceId: "a" } }, explicitDependsOn: [] }],
+    ]);
+    expect(() => compile(nodes)).toThrow(/dependency cycle/);
 });
 
 test("linearize derives a topological order (dependency before dependent)", () => {
-    const graph = defineStack((s) => {
-        const host = s.server("host", { host: "1.2.3.4", user: "deploy", sshKey: env("K") });
-        s.forgejo("forgejo", { server: host, domain: "git.example.com", adminUser: "admin", adminPassword: env("P") });
+    const graph = defineStack((i) => {
+        const host = i.have.host("host", { address: "1.2.3.4", user: "deploy", sshKey: env("K") });
+        const cf = i.have.cloudflare("cf", { accountId: "a", apiToken: env("T"), zone: "example.com" });
+        i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
     });
 
-    expect(linearize(graph)).toEqual(["host", "forgejo"]);
+    const order = linearize(graph);
+    expect(order[0]).toBe("host");
+    expect([...order].sort()).toEqual(Object.keys(graph.resources).sort());
+});
+
+test("apps on the same host share one derived platform", () => {
+    const graph = defineStack((i) => {
+        const host = i.have.host("host", { address: "1.2.3.4", user: "deploy", sshKey: env("K") });
+        const cf = i.have.cloudflare("cf", { accountId: "a", apiToken: env("T"), zone: "example.com" });
+        i.want.app("app-one", { on: host, expose: cf, environments: { prod: { domain: "one.example.com", branch: "main" } } });
+        i.want.app("app-two", { on: host, expose: cf, environments: { prod: { domain: "two.example.com", branch: "main" } } });
+    });
+
+    // One shared Forgejo + Komodo for the host, not one per app.
+    const types = Object.values(graph.resources).map((node) => node.type);
+    expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
+    expect(types.filter((type) => type === "komodo")).toHaveLength(1);
+    // Both apps deploy through the same orchestrator.
+    expect(graph.resources["app-one"]?.inputs["deployer"]).toEqual({ $ref: "host-deploy" });
+    expect(graph.resources["app-two"]?.inputs["deployer"]).toEqual({ $ref: "host-deploy" });
 });

@@ -1,12 +1,10 @@
+import { refKey } from "./ref.js";
 import { collectRefs, serializeValue } from "./serialize.js";
 import { topoSort } from "./topo.js";
 import type { DesiredStateGraph, RawNode, Readiness, ResourceNode, SerializedReadiness, SerializedValue } from "./types.js";
 
 const serializeReadiness = (readiness: Readiness): SerializedReadiness => {
-    const url =
-        typeof readiness.url === "string"
-            ? readiness.url
-            : { $ref: readiness.url.output === undefined ? readiness.url.resourceId : `${readiness.url.resourceId}.${readiness.url.output}` };
+    const url = typeof readiness.url === "string" ? readiness.url : { $ref: refKey(readiness.url.resourceId, readiness.url.output) };
     return {
         check: readiness.check,
         url,

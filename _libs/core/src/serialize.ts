@@ -1,9 +1,9 @@
-import { isRef, isSecret } from "./ref.js";
+import { isRef, isSecret, refKey } from "./ref.js";
 import type { SerializedValue } from "./types.js";
 
 export const serializeValue = (value: unknown): SerializedValue => {
     if (isRef(value)) {
-        return { $ref: value.output === undefined ? value.resourceId : `${value.resourceId}.${value.output}` };
+        return { $ref: refKey(value.resourceId, value.output) };
     }
     if (isSecret(value)) {
         return { $secret: { source: value.source, key: value.key } };

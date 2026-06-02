@@ -1,5 +1,5 @@
 {
-    "name": "@puristic/deploy",
+    "name": "@puristic/deploy-core",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
@@ -17,7 +17,7 @@
         "registry": "https://registry.npmjs.org/"
     },
     "exports": {
-        "./index.js": {
+        ".": {
             "types": "./dist/index.d.ts",
             "import": {
                 "@puristic/src": "./src/index.ts",

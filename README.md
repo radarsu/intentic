@@ -6,7 +6,7 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 
 | Package | Description |
 | --- | --- |
-| [`@puristic/deploy`](_libs/core) | TODO. |
+| [`@puristic/deploy-core`](_libs/core) | TODO. |
 
 ## Getting started
 

@@ -1,3 +1,3 @@
-# @puristic/deploy
+# @puristic/deploy-core
 
 TODO.
