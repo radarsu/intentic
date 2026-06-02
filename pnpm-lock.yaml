@@ -92,6 +92,34 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/node@25.5.2)(jiti@2.7.0)(yaml@2.9.0)
 
+  _libs/engine:
+    dependencies:
+      '@puristic/deploy-protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@puristic/deploy-resolvers':
+        specifier: workspace:*
+        version: link:../resolvers
+      tslib:
+        specifier: 'catalog:'
+        version: 2.8.1
+    devDependencies:
+      '@puristic/deploy-core':
+        specifier: workspace:*
+        version: link:../core
+      '@puristic/tsconfig':
+        specifier: workspace:*
+        version: link:../../_tools/tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.5.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@25.5.2)(jiti@2.7.0)(yaml@2.9.0)
+
   _libs/protocol:
     dependencies:
       tslib:

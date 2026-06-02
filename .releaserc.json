@@ -7,8 +7,8 @@
         [
             "@semantic-release/exec",
             {
-                "prepareCmd": "pnpm --dir _libs/protocol version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm --dir _libs/resolvers version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm --dir _libs/core version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm turbo run build",
-                "publishCmd": "pnpm --dir _libs/protocol publish --access public --no-git-checks && pnpm --dir _libs/resolvers publish --access public --no-git-checks && pnpm --dir _libs/core publish --access public --no-git-checks"
+                "prepareCmd": "pnpm --dir _libs/protocol version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm --dir _libs/resolvers version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm --dir _libs/core version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm --dir _libs/engine version ${nextRelease.version} --no-git-tag-version --no-git-checks --allow-same-version && pnpm turbo run build",
+                "publishCmd": "pnpm --dir _libs/protocol publish --access public --no-git-checks && pnpm --dir _libs/resolvers publish --access public --no-git-checks && pnpm --dir _libs/core publish --access public --no-git-checks && pnpm --dir _libs/engine publish --access public --no-git-checks"
             }
         ],
         ["@semantic-release/github", { "successComment": false, "failComment": false }]
