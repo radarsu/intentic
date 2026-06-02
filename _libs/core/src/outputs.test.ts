@@ -1,9 +1,11 @@
-import { expect, test } from "vitest";
+import type { SerializedValue } from "@puristic/deploy-protocol";
 
+import { env, isRef } from "@puristic/deploy-protocol";
+import type { ResourceType } from "@puristic/deploy-resolvers";
+import { OUTPUTS } from "@puristic/deploy-resolvers";
+import { expect, test } from "vitest";
 import { graph } from "./deploy.config.js";
-import type { ResourceType, SerializedValue } from "./index.js";
-import { defineStack, env, OUTPUTS } from "./index.js";
-import { isRef } from "./ref.js";
+import { defineStack } from "./index.js";
 
 // The Ref<string> output props on a handle are the author-facing source of truth; OUTPUTS is the runtime
 // mirror the engine reads. Walk one real handle of every author-facing type and assert the two agree.
@@ -74,7 +76,7 @@ test("every graph ref resolves to an output declared in OUTPUTS", () => {
             if (target === undefined) {
                 continue;
             }
-            expect(OUTPUTS[target.type], `output "${output}" is not declared for type "${target.type}"`).toContain(output);
+            expect(OUTPUTS[target.type as ResourceType], `output "${output}" is not declared for type "${target.type}"`).toContain(output);
         }
     }
 });

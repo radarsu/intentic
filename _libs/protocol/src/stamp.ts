@@ -1,4 +1,4 @@
-// The ownership-stamp contract: defined ONCE in core, applied per-provider in its native mechanism.
+// The ownership-stamp contract: defined ONCE in the protocol, applied per-provider in its native mechanism.
 // A provider stamps every resource it creates with the resource node's id, so a later stateless
 // read (introspect) can attribute it without any local state file. The KEY is canonical here; the
 // stamp value is always the compiled ResourceNode.id.

@@ -1,4 +1,4 @@
 {
     "files": [],
-    "references": [{ "path": "_libs/core" }]
+    "references": [{ "path": "_libs/protocol" }, { "path": "_libs/resolvers" }, { "path": "_libs/core" }]
 }

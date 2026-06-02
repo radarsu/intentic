@@ -1,8 +1,7 @@
+import { linearize } from "@puristic/deploy-protocol";
 import { expect, test } from "vitest";
-
 import { expectedGraph } from "./__fixtures__/deploy.graph.js";
 import { graph } from "./deploy.config.js";
-import { linearize } from "./index.js";
 
 test("declaration compiles to the expected desired-state graph", () => {
     expect(graph).toEqual(expectedGraph);

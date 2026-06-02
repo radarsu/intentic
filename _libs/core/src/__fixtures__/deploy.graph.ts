@@ -5,7 +5,7 @@
 // order is derived on demand via linearize(graph) and asserted as an invariant, not frozen here.
 // The forgejo/forgejo-runner/komodo/repo/cf-route nodes are DERIVED by i.want.app — the author never
 // declares them; the resolver picks the implementations and places + exposes them on the inventory.
-import type { DesiredStateGraph } from "../index.js";
+import type { DesiredStateGraph } from "@puristic/deploy-protocol";
 
 export const expectedGraph: DesiredStateGraph = {
     version: 1,

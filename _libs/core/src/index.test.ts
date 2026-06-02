@@ -1,9 +1,9 @@
-import { expect, test } from "vitest";
+import type { RawNode } from "@puristic/deploy-protocol";
 
-import { compile } from "./compile.js";
+import { compile, env, httpOk, linearize } from "@puristic/deploy-protocol";
+import { expect, test } from "vitest";
 import type { Host } from "./index.js";
-import { defineStack, env, httpOk, linearize } from "./index.js";
-import type { RawNode } from "./types.js";
+import { defineStack } from "./index.js";
 
 const ghostHost = (id: string): Host => ({ kind: "ref", resourceId: id }) as unknown as Host;
 

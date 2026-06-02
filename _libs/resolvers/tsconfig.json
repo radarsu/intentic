@@ -7,6 +7,6 @@
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],
-    "references": [{ "path": "../protocol" }, { "path": "../resolvers" }],
+    "references": [{ "path": "../protocol" }],
     "extends": "@puristic/tsconfig/tsconfig.base.json"
 }

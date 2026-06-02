@@ -1,5 +1,5 @@
 {
-    "name": "@puristic/deploy-core",
+    "name": "@puristic/deploy-protocol",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
@@ -7,7 +7,7 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/radarsu/puristic-deploy.git",
-        "directory": "_libs/core"
+        "directory": "_libs/protocol"
     },
     "files": [
         "dist"
@@ -36,8 +36,6 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@puristic/deploy-protocol": "workspace:*",
-        "@puristic/deploy-resolvers": "workspace:*",
         "tslib": "catalog:"
     },
     "devDependencies": {
