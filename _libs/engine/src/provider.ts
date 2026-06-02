@@ -23,8 +23,11 @@ export interface ProviderContext {
 // The contract every provider implements. `apply` (create-or-update) is provider-owned and distinct
 // from the engine's top-level apply(); it reads as `provider.apply(...)`.
 export interface Provider {
-    // Stateless introspection: the resource stamped with `id`, or undefined if it does not exist.
-    readonly read: (id: string, ctx: ProviderContext) => Promise<Observed | undefined>;
+    // Stateless introspection of the node being reconciled (its id is on ctx.id, its inputs are passed
+    // in), returning the resource if it exists or undefined if it does not. In plan mode `inputs` may
+    // carry PENDING values for dependencies that are themselves pending creates; a provider that cannot
+    // introspect from such inputs must return undefined.
+    readonly read: (inputs: ResolvedInputs, ctx: ProviderContext) => Promise<Observed | undefined>;
     // Pure decision (no mutation). The engine calls this ONLY when `read` returned an Observed.
     readonly diff: (inputs: ResolvedInputs, observed: Observed) => DiffResult;
     // Mutating: create (observed === undefined) or update. Returns the resource's produced outputs.

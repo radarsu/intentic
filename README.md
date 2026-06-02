@@ -10,6 +10,7 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 | [`@puristic/deploy-resolvers`](_libs/resolvers) | Resolves intent into concrete resources — the app resolver derives the Forgejo/Komodo/Cloudflare support stack. |
 | [`@puristic/deploy-core`](_libs/core) | Authoring surface (`i.have` / `i.want`) and `defineStack`: build → resolve → compile. |
 | [`@puristic/deploy-engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
+| [`@puristic/deploy-providers`](_libs/providers) | Real reconcile providers over the engine SPI — a `host` provider over SSH (`ssh2`). |
 
 ## Getting started
 

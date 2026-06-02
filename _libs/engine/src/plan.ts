@@ -26,7 +26,11 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
         const type = node.type as ResourceType;
         const provider = requireProvider(config.providers, type, id);
         const ctx = makeContext(id, store, env, log);
-        const observed = await provider.read(id, ctx);
+        // Resolve leniently before read: a dependency that is itself a pending create has no real output
+        // yet, so its ref resolves to PENDING rather than throwing. read must tolerate that (and return
+        // undefined if it cannot introspect); the same inputs feed diff for an existing resource.
+        const inputs = resolveInputs(node.inputs, store, env, { lenient: true });
+        const observed = await provider.read(inputs, ctx);
 
         store.set(id, id);
         if (observed === undefined) {
@@ -37,7 +41,6 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
             continue;
         }
 
-        const inputs = resolveInputs(node.inputs, store, env, { lenient: true });
         const result = provider.diff(inputs, observed);
         steps.push(result.action === "update" ? { id, type, action: "update", reason: result.reason } : { id, type, action: "noop" });
         for (const [name, value] of Object.entries(observed.outputs)) {

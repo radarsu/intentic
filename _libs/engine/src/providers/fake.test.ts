@@ -14,7 +14,7 @@ test("read is undefined before apply and defined after, with deterministic outpu
     }
     const ctx = ctxFor("host-git");
 
-    expect(await forgejo.read("host-git", ctx)).toBeUndefined();
+    expect(await forgejo.read({}, ctx)).toBeUndefined();
 
     const produced = await forgejo.apply({}, undefined, ctx);
     expect(produced).toEqual({
@@ -22,7 +22,7 @@ test("read is undefined before apply and defined after, with deterministic outpu
         internalUrl: "https://host-git.fake.test/internalUrl",
         runnerToken: "host-git::runnerToken",
     });
-    expect(await forgejo.read("host-git", ctx)).toEqual({ outputs: produced });
+    expect(await forgejo.read({}, ctx)).toEqual({ outputs: produced });
     expect(world.has("host-git")).toBe(true);
 });
 

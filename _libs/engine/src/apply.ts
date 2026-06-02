@@ -29,7 +29,7 @@ export const apply = async (graph: DesiredStateGraph, config: EngineConfig): Pro
         const provider = requireProvider(config.providers, type, id);
         const ctx = makeContext(id, store, env, log);
         const inputs = resolveInputs(node.inputs, store, env, { lenient: false });
-        const observed = await provider.read(id, ctx);
+        const observed = await provider.read(inputs, ctx);
 
         let action: Action;
         let reason: string | undefined;

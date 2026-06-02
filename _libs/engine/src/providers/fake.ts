@@ -35,11 +35,11 @@ const fakeOutputs = (id: string, type: ResourceType): Record<string, unknown> =>
 };
 
 const fakeProvider = (type: ResourceType, world: FakeWorld): Provider => ({
-    read: async (id) => {
-        if (!world.has(id)) {
+    read: async (_inputs, ctx) => {
+        if (!world.has(ctx.id)) {
             return undefined;
         }
-        return { outputs: fakeOutputs(id, type) } satisfies Observed;
+        return { outputs: fakeOutputs(ctx.id, type) } satisfies Observed;
     },
     diff: () => ({ action: "noop" }),
     apply: async (inputs, _observed, ctx) => {
