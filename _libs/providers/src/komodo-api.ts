@@ -1,6 +1,11 @@
+import { z } from "zod";
+import { parseResponse } from "./inputs.js";
+
 // A Komodo Core resource summary (id + unique name) and the typed Alerter config the CD-notify provider
-// reconciles. Komodo's API is POST /{auth|read|write|execute}/{Operation} with a {type, params} body;
-// it returns the operation result JSON directly and signals errors with a non-2xx status + {message,...}.
+// reconciles. Komodo's API is POST /{auth|read|write|execute}/{Operation} with a {type, params} body; it
+// returns the operation result JSON directly and signals errors with a non-2xx status + {message,...}.
+// Read responses are validated against the fields we consume (extra fields dropped); write/execute ops
+// ignore the body (only the status matters).
 
 export interface KomodoResource {
     readonly id: string;
@@ -12,23 +17,24 @@ export interface KomodoDeployment extends KomodoResource {
     readonly state?: string;
 }
 
-export interface AlerterEndpoint {
-    readonly type: "Discord" | "Slack" | "Custom";
-    readonly params: { readonly url: string };
-}
+const alerterEndpointSchema = z.object({ type: z.enum(["Discord", "Slack", "Custom"]), params: z.object({ url: z.string() }) });
+const resourceTargetSchema = z.object({ type: z.string(), id: z.string() });
+const alerterConfigSchema = z.object({
+    enabled: z.boolean(),
+    endpoint: alerterEndpointSchema,
+    alert_types: z.array(z.string()).readonly(),
+    resources: z.array(resourceTargetSchema).readonly(),
+    except_resources: z.array(resourceTargetSchema).readonly(),
+});
+export type AlerterEndpoint = z.infer<typeof alerterEndpointSchema>;
+export type ResourceTarget = z.infer<typeof resourceTargetSchema>;
+export type AlerterConfig = z.infer<typeof alerterConfigSchema>;
 
-export interface ResourceTarget {
-    readonly type: string;
-    readonly id: string;
-}
-
-export interface AlerterConfig {
-    readonly enabled: boolean;
-    readonly endpoint: AlerterEndpoint;
-    readonly alert_types: readonly string[];
-    readonly resources: readonly ResourceTarget[];
-    readonly except_resources: readonly ResourceTarget[];
-}
+// ListX returns ResourceListItem<Info>[]; we validate id/name (+ deployment run state from info) and drop
+// the rest. The login result is the JwtOrTwoFactor enum's Jwt variant in either flattened or tagged form.
+const listItemSchema = z.object({ id: z.string(), name: z.string(), info: z.object({ state: z.string().optional() }).optional() });
+const jwtSchema = z.object({ jwt: z.string().optional(), Jwt: z.object({ jwt: z.string() }).optional() });
+const getAlerterSchema = z.object({ config: alerterConfigSchema });
 
 // The slice of the Komodo Core API the app/deployment/komodo-notify providers use, injected so the
 // providers are unit-testable with a fake; the default `komodoApi` below talks to a Komodo Core over
@@ -86,13 +92,17 @@ export interface KomodoApi {
 
 type Module = "auth" | "read" | "write" | "execute";
 
-const call = async <T>(args: {
+interface PostArgs {
     readonly baseUrl: string;
     readonly module: Module;
     readonly type: string;
     readonly params: Readonly<Record<string, unknown>>;
     readonly jwt?: string;
-}): Promise<T> => {
+}
+
+// POST the {type, params} envelope; throw on a non-2xx status. Write/execute ops use this directly and
+// ignore the body; read ops layer response validation on top via `read`.
+const post = async (args: PostArgs): Promise<Response> => {
     const response = await fetch(`${args.baseUrl}/${args.module}`, {
         method: "POST",
         headers: {
@@ -104,17 +114,14 @@ const call = async <T>(args: {
     if (!response.ok) {
         throw new Error(`Komodo ${args.module}/${args.type} failed (HTTP ${response.status}): ${await response.text()}`);
     }
-    return (await response.json()) as T;
+    return response;
 };
 
-// ListX returns ResourceListItem<Info>[]; we project to id/name (+ deployment run state from info).
-interface RawListItem {
-    readonly id: string;
-    readonly name: string;
-    readonly info?: { readonly state?: string };
-}
+const read = async <S extends z.ZodType>(args: PostArgs, schema: S): Promise<z.infer<S>> =>
+    parseResponse(schema, await (await post(args)).json(), `Komodo ${args.module}/${args.type}`);
 
-const project = (items: readonly RawListItem[]): readonly KomodoResource[] => items.map((item) => ({ id: item.id, name: item.name }));
+const project = (items: readonly z.infer<typeof listItemSchema>[]): readonly KomodoResource[] =>
+    items.map((item) => ({ id: item.id, name: item.name }));
 
 export const komodoApi: KomodoApi = {
     health: async ({ baseUrl }) => {
@@ -122,50 +129,42 @@ export const komodoApi: KomodoApi = {
         return response.ok;
     },
     login: async ({ baseUrl, username, password }) => {
-        // JwtOrTwoFactor -> Jwt(JwtResponse{jwt}); accept both the flattened and serde-tagged shapes.
-        const raw = await call<{ jwt?: string; Jwt?: { jwt: string } }>({
-            baseUrl,
-            module: "auth",
-            type: "LoginLocalUser",
-            params: { username, password },
-        });
-        const jwt = raw.jwt ?? raw.Jwt?.jwt;
+        const result = await read({ baseUrl, module: "auth", type: "LoginLocalUser", params: { username, password } }, jwtSchema);
+        const jwt = result.jwt ?? result.Jwt?.jwt;
         if (jwt === undefined) {
             throw new Error("Komodo auth/LoginLocalUser returned no jwt (is local auth enabled?)");
         }
         return jwt;
     },
     listBuilds: async ({ baseUrl, jwt }) =>
-        project(await call<readonly RawListItem[]>({ baseUrl, module: "read", type: "ListBuilds", params: {}, jwt })),
+        project(await read({ baseUrl, module: "read", type: "ListBuilds", params: {}, jwt }, z.array(listItemSchema))),
     createBuild: async ({ baseUrl, jwt, name, config }) => {
-        await call({ baseUrl, module: "write", type: "CreateBuild", params: { name, config }, jwt });
+        await post({ baseUrl, module: "write", type: "CreateBuild", params: { name, config }, jwt });
     },
     updateBuild: async ({ baseUrl, jwt, id, config }) => {
-        await call({ baseUrl, module: "write", type: "UpdateBuild", params: { id, config }, jwt });
+        await post({ baseUrl, module: "write", type: "UpdateBuild", params: { id, config }, jwt });
     },
     listDeployments: async ({ baseUrl, jwt }) => {
-        const items = await call<readonly RawListItem[]>({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt });
+        const items = await read({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt }, z.array(listItemSchema));
         return items.map((item) => ({ id: item.id, name: item.name, ...(item.info?.state !== undefined ? { state: item.info.state } : {}) }));
     },
     createDeployment: async ({ baseUrl, jwt, name, config }) => {
-        await call({ baseUrl, module: "write", type: "CreateDeployment", params: { name, config }, jwt });
+        await post({ baseUrl, module: "write", type: "CreateDeployment", params: { name, config }, jwt });
     },
     updateDeployment: async ({ baseUrl, jwt, id, config }) => {
-        await call({ baseUrl, module: "write", type: "UpdateDeployment", params: { id, config }, jwt });
+        await post({ baseUrl, module: "write", type: "UpdateDeployment", params: { id, config }, jwt });
     },
     deploy: async ({ baseUrl, jwt, deployment }) => {
-        await call({ baseUrl, module: "execute", type: "Deploy", params: { deployment }, jwt });
+        await post({ baseUrl, module: "execute", type: "Deploy", params: { deployment }, jwt });
     },
     listAlerters: async ({ baseUrl, jwt }) =>
-        project(await call<readonly RawListItem[]>({ baseUrl, module: "read", type: "ListAlerters", params: {}, jwt })),
-    getAlerter: async ({ baseUrl, jwt, id }) => {
-        const resource = await call<{ config: AlerterConfig }>({ baseUrl, module: "read", type: "GetAlerter", params: { alerter: id }, jwt });
-        return resource.config;
-    },
+        project(await read({ baseUrl, module: "read", type: "ListAlerters", params: {}, jwt }, z.array(listItemSchema))),
+    getAlerter: async ({ baseUrl, jwt, id }) =>
+        (await read({ baseUrl, module: "read", type: "GetAlerter", params: { alerter: id }, jwt }, getAlerterSchema)).config,
     createAlerter: async ({ baseUrl, jwt, name, config }) => {
-        await call({ baseUrl, module: "write", type: "CreateAlerter", params: { name, config }, jwt });
+        await post({ baseUrl, module: "write", type: "CreateAlerter", params: { name, config }, jwt });
     },
     updateAlerter: async ({ baseUrl, jwt, id, config }) => {
-        await call({ baseUrl, module: "write", type: "UpdateAlerter", params: { id, config }, jwt });
+        await post({ baseUrl, module: "write", type: "UpdateAlerter", params: { id, config }, jwt });
     },
 };

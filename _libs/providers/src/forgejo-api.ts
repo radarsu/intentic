@@ -1,17 +1,24 @@
-// A Forgejo repo and one of its webhooks. Forgejo's REST surface returns the resource JSON directly
-// (no success envelope); errors arrive with a non-2xx status and a text/JSON body.
+import { z } from "zod";
+import { parseResponse } from "./inputs.js";
+
+// A Forgejo repo and one of its webhooks. Forgejo's REST surface returns the resource JSON directly (no
+// success envelope); errors arrive with a non-2xx status, and otherwise the body is validated against the
+// fields we consume (extra fields like timestamps are dropped).
 export interface ForgejoRepo {
     readonly cloneUrl: string;
     readonly sshUrl: string;
 }
 
-export interface ForgejoHook {
-    readonly id: number;
-    readonly type: string;
-    readonly config: Readonly<Record<string, string>>;
-    readonly events: readonly string[];
-    readonly active: boolean;
-}
+const rawRepoSchema = z.object({ clone_url: z.string(), ssh_url: z.string() });
+
+export const forgejoHookSchema = z.object({
+    id: z.number(),
+    type: z.string(),
+    config: z.record(z.string(), z.string()),
+    events: z.array(z.string()),
+    active: z.boolean(),
+});
+export type ForgejoHook = z.infer<typeof forgejoHookSchema>;
 
 // The slice of the Forgejo v4 API the repo/notify/deploy-hook providers use, injected so the providers
 // are unit-testable with a fake; the default `forgejoApi` below talks to a Forgejo instance over native
@@ -93,12 +100,7 @@ const ok = async (response: Response, method: string, path: string): Promise<Res
     return response;
 };
 
-interface RawRepo {
-    readonly clone_url: string;
-    readonly ssh_url: string;
-}
-
-const toRepo = (raw: RawRepo): ForgejoRepo => ({ cloneUrl: raw.clone_url, sshUrl: raw.ssh_url });
+const toRepo = (raw: z.infer<typeof rawRepoSchema>): ForgejoRepo => ({ cloneUrl: raw.clone_url, sshUrl: raw.ssh_url });
 
 export const forgejoApi: ForgejoApi = {
     findRepo: async ({ baseUrl, user, password, owner, name }) => {
@@ -107,19 +109,17 @@ export const forgejoApi: ForgejoApi = {
         if (response.status === 404) {
             return undefined;
         }
-        const raw = (await (await ok(response, "GET", path)).json()) as RawRepo;
-        return toRepo(raw);
+        return toRepo(parseResponse(rawRepoSchema, await (await ok(response, "GET", path)).json(), `Forgejo API GET ${path}`));
     },
     createRepo: async ({ baseUrl, user, password, owner, name, private: isPrivate }) => {
         const path = `/admin/users/${encodeURIComponent(owner)}/repos`;
         const response = await request({ method: "POST", baseUrl, path, user, password, body: { name, private: isPrivate, auto_init: true } });
-        const raw = (await (await ok(response, "POST", path)).json()) as RawRepo;
-        return toRepo(raw);
+        return toRepo(parseResponse(rawRepoSchema, await (await ok(response, "POST", path)).json(), `Forgejo API POST ${path}`));
     },
     listHooks: async ({ baseUrl, user, password, owner, name }) => {
         const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/hooks`;
         const response = await request({ method: "GET", baseUrl, path, user, password });
-        return (await (await ok(response, "GET", path)).json()) as readonly ForgejoHook[];
+        return parseResponse(z.array(forgejoHookSchema), await (await ok(response, "GET", path)).json(), `Forgejo API GET ${path}`);
     },
     createHook: async ({ baseUrl, user, password, owner, name, type, config, events }) => {
         const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/hooks`;

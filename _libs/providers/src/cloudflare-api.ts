@@ -1,9 +1,14 @@
+import { z } from "zod";
+import { parseResponse } from "./inputs.js";
+
 // One ingress rule of a Cloudflare Tunnel: a public hostname routed to an internal service URL, or the
 // trailing catch-all (no hostname, service "http_status:404"). The provider owns the catch-all policy.
 export interface IngressRule {
     readonly hostname?: string;
     readonly service: string;
 }
+
+const ingressRuleSchema = z.object({ hostname: z.string().optional(), service: z.string() });
 
 // The Cloudflare v4 REST surface the providers use, injected so the providers are unit-testable with a
 // fake; the default `cloudflareApi` below talks to api.cloudflare.com over native fetch. Auth flows
@@ -69,13 +74,18 @@ export interface CloudflareApi {
 
 const BASE = "https://api.cloudflare.com/client/v4";
 
-interface Envelope<T> {
-    readonly success: boolean;
-    readonly errors: ReadonlyArray<{ readonly code: number; readonly message: string }>;
-    readonly result: T;
-}
+// The Cloudflare success envelope. `result` is validated per-call against the shape we consume; here it is
+// left unknown so an error envelope (success:false) still surfaces its `errors` rather than failing the
+// result schema first.
+const envelopeSchema = z.object({
+    success: z.boolean(),
+    errors: z.array(z.object({ code: z.number(), message: z.string() })),
+    result: z.unknown(),
+});
 
-const call = async <T>(apiToken: string, path: string, init?: RequestInit): Promise<T> => {
+const call = async <S extends z.ZodType>(apiToken: string, path: string, resultSchema: S, init?: RequestInit): Promise<z.infer<S>> => {
+    const method = init?.method ?? "GET";
+    const label = `Cloudflare API ${method} ${path}`;
     const response = await fetch(`${BASE}${path}`, {
         ...init,
         headers: {
@@ -83,19 +93,20 @@ const call = async <T>(apiToken: string, path: string, init?: RequestInit): Prom
             ...(init?.body !== undefined ? { "Content-Type": "application/json" } : {}),
         },
     });
-    const body = (await response.json()) as Envelope<T>;
-    if (!response.ok || !body.success) {
-        const detail = body.errors.map((error) => `${error.code} ${error.message}`).join("; ");
-        throw new Error(`Cloudflare API ${init?.method ?? "GET"} ${path} failed (HTTP ${response.status}): ${detail}`);
+    const envelope = parseResponse(envelopeSchema, await response.json(), label);
+    if (!response.ok || !envelope.success) {
+        const detail = envelope.errors.map((error) => `${error.code} ${error.message}`).join("; ");
+        throw new Error(`${label} failed (HTTP ${response.status}): ${detail}`);
     }
-    return body.result;
+    return parseResponse(resultSchema, envelope.result, label);
 };
 
 export const cloudflareApi: CloudflareApi = {
     getZone: async ({ accountId, apiToken, zone }) => {
-        const zones = await call<ReadonlyArray<{ id: string }>>(
+        const zones = await call(
             apiToken,
             `/zones?name=${encodeURIComponent(zone)}&account.id=${encodeURIComponent(accountId)}`,
+            z.array(z.object({ id: z.string() })),
         );
         const found = zones[0];
         if (found === undefined) {
@@ -104,9 +115,10 @@ export const cloudflareApi: CloudflareApi = {
         return { id: found.id };
     },
     findTunnel: async ({ accountId, apiToken, name }) => {
-        const tunnels = await call<ReadonlyArray<{ id: string }>>(
+        const tunnels = await call(
             apiToken,
             `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel?name=${encodeURIComponent(name)}&is_deleted=false`,
+            z.array(z.object({ id: z.string() })),
         );
         const found = tunnels[0];
         if (found === undefined) {
@@ -115,29 +127,32 @@ export const cloudflareApi: CloudflareApi = {
         return { id: found.id };
     },
     createTunnel: ({ accountId, apiToken, name }) =>
-        call<{ id: string }>(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel`, {
+        call(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel`, z.object({ id: z.string() }), {
             method: "POST",
             body: JSON.stringify({ name, config_src: "cloudflare" }),
         }),
     getTunnelToken: ({ accountId, apiToken, tunnelId }) =>
-        call<string>(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel/${encodeURIComponent(tunnelId)}/token`),
+        call(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel/${encodeURIComponent(tunnelId)}/token`, z.string()),
     getTunnelIngress: async ({ accountId, apiToken, tunnelId }) => {
-        const config = await call<{ config?: { ingress?: IngressRule[] } } | null>(
+        const config = await call(
             apiToken,
             `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel/${encodeURIComponent(tunnelId)}/configurations`,
+            z.object({ config: z.object({ ingress: z.array(ingressRuleSchema).optional() }).optional() }).nullable(),
         );
-        return config?.config?.ingress;
+        const ingress = config?.config?.ingress;
+        return ingress?.map((rule) => (rule.hostname === undefined ? { service: rule.service } : { hostname: rule.hostname, service: rule.service }));
     },
     putTunnelIngress: async ({ accountId, apiToken, tunnelId, ingress }) => {
-        await call(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel/${encodeURIComponent(tunnelId)}/configurations`, {
+        await call(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel/${encodeURIComponent(tunnelId)}/configurations`, z.unknown(), {
             method: "PUT",
             body: JSON.stringify({ config: { ingress } }),
         });
     },
     findDnsRecord: async ({ apiToken, zoneId, name }) => {
-        const records = await call<ReadonlyArray<{ id: string; content: string }>>(
+        const records = await call(
             apiToken,
             `/zones/${encodeURIComponent(zoneId)}/dns_records?type=CNAME&name=${encodeURIComponent(name)}`,
+            z.array(z.object({ id: z.string(), content: z.string() })),
         );
         const found = records[0];
         if (found === undefined) {
@@ -146,13 +161,13 @@ export const cloudflareApi: CloudflareApi = {
         return { id: found.id, content: found.content };
     },
     createDnsRecord: async ({ apiToken, zoneId, name, content, comment }) => {
-        await call(apiToken, `/zones/${encodeURIComponent(zoneId)}/dns_records`, {
+        await call(apiToken, `/zones/${encodeURIComponent(zoneId)}/dns_records`, z.unknown(), {
             method: "POST",
             body: JSON.stringify({ type: "CNAME", name, content, proxied: true, comment }),
         });
     },
     updateDnsRecord: async ({ apiToken, zoneId, recordId, name, content, comment }) => {
-        await call(apiToken, `/zones/${encodeURIComponent(zoneId)}/dns_records/${encodeURIComponent(recordId)}`, {
+        await call(apiToken, `/zones/${encodeURIComponent(zoneId)}/dns_records/${encodeURIComponent(recordId)}`, z.unknown(), {
             method: "PUT",
             body: JSON.stringify({ type: "CNAME", name, content, proxied: true, comment }),
         });
