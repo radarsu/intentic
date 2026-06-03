@@ -1,23 +1,51 @@
 import type { Ref, SecretRef } from "@puristic/deploy-protocol";
-import { httpOk, makeRef } from "@puristic/deploy-protocol";
-import { deploymentId, forgejoNotifyId, komodoNotifyId, repoId } from "./ids.js";
+import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
+import { deployHookId, deploymentId, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
 import type { PlatformRefs } from "./platform.js";
 import type { ResolvedNode } from "./resource-types.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
-// The app resolver: everything shipping an app from source requires beyond the shared platform — a repo,
-// the app node wired to the repo + deploy orchestrator, and one deployment + Cloudflare route per
-// environment (default health gate https://<domain>/healthz unless the author supplied readyWhen).
+// The app resolver: everything shipping an app from source beyond the shared platform — a repo, the app
+// node wired to the repo + deploy orchestrator, and per environment a deployment, its Cloudflare route, and
+// a push-to-deploy webhook. The config nodes (repo/app/deployment/notify/deploy-hook) talk to the Forgejo
+// or Komodo HTTP API, so each carries the backend `url` ref + the admin password it logs in with. The
+// deployment gates on its host-internal url so readiness passes before the tunnel + DNS routes exist.
 // Returns each environment's ingress pair so the caller can aggregate the host's tunnel ingress.
-export const resolveApp = (intent: AppIntent, platform: PlatformRefs, apiToken: SecretRef): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
+export const resolveApp = (
+    intent: AppIntent,
+    platform: PlatformRefs,
+    apiToken: SecretRef,
+    zone: string,
+): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
     const ref = (id: string, output: string): Ref<string> => makeRef(id, output) as Ref<string>;
     const repo = repoId(intent.id);
+    const forgejoUrl = ref(platform.forgejo, "url");
+    const komodoUrl = ref(platform.deploy, "url");
+    const forgejoAdmin = { adminUser: "admin", adminPassword: env("FORGEJO_ADMIN_PASSWORD") };
+    const komodoAdmin = { adminUser: "admin", adminPassword: env("KOMODO_ADMIN_PASSWORD") };
 
     const nodes: ResolvedNode[] = [
-        { id: repo, type: "repo", inputs: { name: intent.id, private: true }, explicitDependsOn: [platform.forgejo] },
-        { id: intent.id, type: "app", inputs: { source: ref(repo, "cloneUrl"), deployer: makeRef(platform.deploy) }, explicitDependsOn: [] },
+        {
+            id: repo,
+            type: "repo",
+            inputs: { name: intent.id, private: true, forgejoUrl, domain: gitDomain(zone), ...forgejoAdmin },
+            explicitDependsOn: [platform.forgejo],
+        },
+        {
+            id: intent.id,
+            type: "app",
+            inputs: {
+                source: ref(repo, "cloneUrl"),
+                repoName: intent.id,
+                deployer: makeRef(platform.deploy),
+                komodoUrl,
+                gitDomain: gitDomain(zone),
+                ...komodoAdmin,
+            },
+            explicitDependsOn: [platform.deploy, repo],
+        },
     ];
     const ingress: IngressPair[] = [];
 
@@ -32,31 +60,51 @@ export const resolveApp = (intent: AppIntent, platform: PlatformRefs, apiToken: 
                 branch: environment.branch,
                 domain: environment.domain,
                 server: makeRef(intent.on),
+                internalIp: ref(intent.on, "internalIp"),
+                komodoUrl,
+                ...komodoAdmin,
                 ...(environment.env !== undefined ? { env: environment.env } : {}),
             },
-            explicitDependsOn: [],
-            readyWhen: environment.readyWhen ?? httpOk(`https://${environment.domain}/healthz`, { timeout: "60s" }),
+            explicitDependsOn: [intent.id],
+            readyWhen: environment.readyWhen ?? httpOk(ref(id, "internalUrl"), { timeout: "60s" }),
         });
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, ref(id, "internalUrl"), apiToken);
         nodes.push(exposure.route);
         ingress.push(exposure.ingress);
+        // Push-to-deploy: a Forgejo repo webhook that calls Komodo's deploy listener for this environment
+        // when its branch is pushed; the shared secret is what Komodo validates the incoming hook against.
+        nodes.push({
+            id: deployHookId(intent.id, name),
+            type: "deploy-hook",
+            inputs: {
+                forgejoUrl,
+                ...forgejoAdmin,
+                repoName: intent.id,
+                komodoUrl,
+                deployment: id,
+                branch: environment.branch,
+                secret: env("KOMODO_WEBHOOK_SECRET"),
+            },
+            explicitDependsOn: [repo, id],
+        });
     }
 
     // CI/CD notifications: when the author asks for them, derive the two native Discord sinks — a Forgejo
-    // repo webhook on build results (CI) and a Komodo alerter on deploy results (CD). Pure sinks: no
-    // outputs, leaf nodes. The webhook secret flows through unresolved; the engine resolves it per apply.
+    // repo webhook on build results (CI) and a Komodo alerter scoped to this app's deployments on deploy
+    // results (CD). Pure sinks: no outputs. Each carries the backend admin creds it authenticates with.
     if (intent.notify !== undefined) {
         nodes.push({
             id: forgejoNotifyId(intent.id),
             type: "forgejo-notify",
-            inputs: { forgejo: makeRef(platform.forgejo), repo: makeRef(repo), webhook: intent.notify.discord, events: ["build"] },
+            inputs: { forgejoUrl, ...forgejoAdmin, repoName: intent.id, webhook: intent.notify.discord, events: ["build"] },
             explicitDependsOn: [platform.forgejo, repo],
         });
+        const targets = Object.keys(intent.environments).map((environment) => deploymentId(intent.id, environment));
         nodes.push({
             id: komodoNotifyId(intent.id),
             type: "komodo-notify",
-            inputs: { komodo: makeRef(platform.deploy), app: makeRef(intent.id), webhook: intent.notify.discord, events: ["deploy"] },
-            explicitDependsOn: [platform.deploy, intent.id],
+            inputs: { komodoUrl, ...komodoAdmin, targets, webhook: intent.notify.discord, events: ["deploy"] },
+            explicitDependsOn: [platform.deploy, intent.id, ...targets],
         });
     }
 

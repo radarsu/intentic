@@ -71,7 +71,7 @@ test("diff is always noop for an owned host", () => {
 
 test("malformed inputs are rejected", async () => {
     const provider = createHostProvider(reachable(dockerReady));
-    await expect(provider.read({ user: "deploy", sshKey: "k" }, ctx())).rejects.toThrow(/address\/user\/sshKey must be strings/);
+    await expect(provider.read({ user: "deploy", sshKey: "k" }, ctx())).rejects.toThrow(/host inputs malformed/);
     await expect(provider.read({ address: "a", user: "deploy", sshKey: "k", port: "22" }, ctx())).rejects.toThrow(/port/);
 });
 

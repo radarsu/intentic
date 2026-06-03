@@ -1,27 +1,12 @@
 import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
 import { formatStamp } from "@puristic/deploy-protocol";
+import { z } from "zod";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
+import { parseInputs } from "./inputs.js";
 
-interface CfRouteInputs {
-    readonly hostname: string;
-    readonly zoneId: string;
-    readonly apiToken: string;
-    readonly cname: string;
-}
-
-const parseCfRouteInputs = (inputs: ResolvedInputs): CfRouteInputs => {
-    const hostname = inputs["hostname"];
-    const zoneId = inputs["zoneId"];
-    const apiToken = inputs["apiToken"];
-    const cname = inputs["cname"];
-    if (typeof hostname !== "string" || typeof zoneId !== "string" || typeof apiToken !== "string" || typeof cname !== "string") {
-        throw new Error(
-            `cf-route inputs malformed: hostname/zoneId/apiToken/cname must be strings (got ${typeof hostname}/${typeof zoneId}/${typeof apiToken}/${typeof cname})`,
-        );
-    }
-    return { hostname, zoneId, apiToken, cname };
-};
+const cfRouteSchema = z.object({ hostname: z.string(), zoneId: z.string(), apiToken: z.string(), cname: z.string() });
+const parse = (inputs: ResolvedInputs): z.infer<typeof cfRouteSchema> => parseInputs(cfRouteSchema, inputs, "cf-route");
 
 // A cf-route owns one public hostname's proxied DNS CNAME pointing at the host tunnel's cfargotunnel
 // hostname (the tunnel owns the ingress mapping the hostname to the internal service). read returns the
@@ -30,7 +15,7 @@ const parseCfRouteInputs = (inputs: ResolvedInputs): CfRouteInputs => {
 // attributable. The url output is derived from the hostname.
 export const createCfRouteProvider = (api: CloudflareApi = cloudflareApi): Provider => ({
     read: async (inputs) => {
-        const { hostname, zoneId, apiToken } = parseCfRouteInputs(inputs);
+        const { hostname, zoneId, apiToken } = parse(inputs);
         const record = await api.findDnsRecord({ apiToken, zoneId, name: hostname });
         if (record === undefined) {
             return undefined;
@@ -38,7 +23,7 @@ export const createCfRouteProvider = (api: CloudflareApi = cloudflareApi): Provi
         return { outputs: { url: `https://${hostname}` }, detail: { content: record.content } };
     },
     diff: (inputs, observed) => {
-        const { cname } = parseCfRouteInputs(inputs);
+        const { cname } = parse(inputs);
         const content = observed.detail?.["content"];
         if (content === cname) {
             return { action: "noop" };
@@ -46,7 +31,7 @@ export const createCfRouteProvider = (api: CloudflareApi = cloudflareApi): Provi
         return { action: "update", reason: `CNAME target "${String(content)}" differs from "${cname}"` };
     },
     apply: async (inputs, _observed, ctx) => {
-        const { hostname, zoneId, apiToken, cname } = parseCfRouteInputs(inputs);
+        const { hostname, zoneId, apiToken, cname } = parse(inputs);
         const comment = formatStamp(ctx.id);
         const record = await api.findDnsRecord({ apiToken, zoneId, name: hostname });
         if (record === undefined) {

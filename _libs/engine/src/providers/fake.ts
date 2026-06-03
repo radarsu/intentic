@@ -23,6 +23,9 @@ const RESOURCE_TYPES: readonly ResourceType[] = [
     "komodo",
     "app",
     "deployment",
+    "forgejo-notify",
+    "komodo-notify",
+    "deploy-hook",
 ];
 
 // Deterministic outputs from id + OUTPUTS[type] so every downstream $ref resolves and readiness urls

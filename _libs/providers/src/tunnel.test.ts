@@ -144,7 +144,7 @@ test("apply reuses an existing tunnel rather than creating a new one", async () 
 test("malformed inputs are rejected", async () => {
     const provider = createTunnelProvider(api({}), fakeSsh().executor);
     await expect(provider.read({ name: "n", accountId: "a", apiToken: "t", address: "x", user: "u", ingress: [] }, ctx())).rejects.toThrow(
-        /sshKey must be strings/,
+        /tunnel inputs malformed/,
     );
     await expect(provider.read({ ...inputs, ingress: "nope" }, ctx())).rejects.toThrow(/ingress/);
 });

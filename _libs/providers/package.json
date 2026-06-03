@@ -39,7 +39,8 @@
         "@puristic/deploy-engine": "workspace:*",
         "@puristic/deploy-protocol": "workspace:*",
         "ssh2": "1.17.0",
-        "tslib": "catalog:"
+        "tslib": "catalog:",
+        "zod": "catalog:"
     },
     "devDependencies": {
         "@puristic/deploy-core": "workspace:*",

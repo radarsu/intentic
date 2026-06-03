@@ -36,8 +36,10 @@ test("resolve derives the full support stack for a two-environment app", () => {
         "app",
         "app.staging",
         "cf-staging-example-com",
+        "app.staging-deploy-hook",
         "app.production",
         "cf-app-example-com",
+        "app.production-deploy-hook",
         "host-tunnel",
     ]);
 });
@@ -90,7 +92,7 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
     expect(forgejoNotify?.type).toBe("forgejo-notify");
     expect(forgejoNotify?.explicitDependsOn).toEqual(["host-git", "app-repo"]);
     expect(komodoNotify?.type).toBe("komodo-notify");
-    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "app"]);
+    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "app", "app.prod"]);
 
     // The webhook secret passes through unresolved — the engine resolves it per apply.
     expect(forgejoNotify?.inputs["webhook"]).toEqual(env("DISCORD_WEBHOOK_URL"));
@@ -114,8 +116,20 @@ test("notification sinks are derived per app, while the platform stays shared pe
         hosts: [host],
         clouds: [cloud],
         apps: [
-            { id: "one", on: "host", expose: "cf", notify: { discord: env("WEBHOOK") }, environments: { prod: { domain: "one.example.com", branch: "main" } } },
-            { id: "two", on: "host", expose: "cf", notify: { discord: env("WEBHOOK") }, environments: { prod: { domain: "two.example.com", branch: "main" } } },
+            {
+                id: "one",
+                on: "host",
+                expose: "cf",
+                notify: { discord: env("WEBHOOK") },
+                environments: { prod: { domain: "one.example.com", branch: "main" } },
+            },
+            {
+                id: "two",
+                on: "host",
+                expose: "cf",
+                notify: { discord: env("WEBHOOK") },
+                environments: { prod: { domain: "two.example.com", branch: "main" } },
+            },
         ],
     };
 

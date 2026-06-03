@@ -1,19 +1,19 @@
 import type { Provider, ProviderContext, ResolvedInputs } from "@puristic/deploy-engine";
+import { z } from "zod";
 import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
-import type { SshExecutor, SshSession, SshTarget } from "./ssh.js";
+import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
+import type { SshExecutor, SshSession } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 
-interface TunnelInputs {
-    readonly name: string;
-    readonly accountId: string;
-    readonly apiToken: string;
-    readonly address: string;
-    readonly user: string;
-    readonly privateKey: string;
-    readonly port: number;
-    readonly ingress: IngressRule[];
-}
+const tunnelSchema = sshSchema.extend({
+    name: z.string(),
+    accountId: z.string(),
+    apiToken: z.string(),
+    ingress: z.array(z.object({ hostname: z.string(), service: z.string() })),
+});
+type TunnelInputs = z.infer<typeof tunnelSchema>;
+const parse = (inputs: ResolvedInputs): TunnelInputs => parseInputs(tunnelSchema, inputs, "tunnel");
 
 // Cloudflare requires every ingress list to end with a catch-all rule (no hostname). The provider owns
 // this policy so the API adapter stays a dumb transport.
@@ -22,56 +22,6 @@ const withCatchAll = (rules: readonly IngressRule[]): IngressRule[] => [...rules
 
 const cname = (tunnelId: string): string => `${tunnelId}.cfargotunnel.com`;
 const containerName = (tunnelId: string): string => `puristic-tunnel-${tunnelId}`;
-const sshTarget = (parsed: TunnelInputs): SshTarget => ({
-    address: parsed.address,
-    user: parsed.user,
-    privateKey: parsed.privateKey,
-    port: parsed.port,
-});
-
-const parseIngress = (value: unknown): IngressRule[] => {
-    if (!Array.isArray(value)) {
-        throw new Error(`tunnel input "ingress" must be an array (got ${typeof value})`);
-    }
-    const rules: IngressRule[] = [];
-    for (const entry of value) {
-        if (typeof entry !== "object" || entry === null) {
-            throw new Error(`tunnel ingress entry must be an object (got ${typeof entry})`);
-        }
-        const record = entry as Record<string, unknown>;
-        const hostname = record["hostname"];
-        const service = record["service"];
-        if (typeof hostname !== "string" || typeof service !== "string") {
-            throw new Error(`tunnel ingress entry must have string hostname/service (got ${typeof hostname}/${typeof service})`);
-        }
-        rules.push({ hostname, service });
-    }
-    return rules;
-};
-
-const parseTunnelInputs = (inputs: ResolvedInputs): TunnelInputs => {
-    const name = inputs["name"];
-    const accountId = inputs["accountId"];
-    const apiToken = inputs["apiToken"];
-    const address = inputs["address"];
-    const user = inputs["user"];
-    const sshKey = inputs["sshKey"];
-    const port = inputs["port"];
-    if (
-        typeof name !== "string" ||
-        typeof accountId !== "string" ||
-        typeof apiToken !== "string" ||
-        typeof address !== "string" ||
-        typeof user !== "string" ||
-        typeof sshKey !== "string"
-    ) {
-        throw new Error("tunnel inputs malformed: name/accountId/apiToken/address/user/sshKey must be strings");
-    }
-    if (port !== undefined && typeof port !== "number") {
-        throw new Error(`tunnel input "port" must be a number when present (got ${typeof port})`);
-    }
-    return { name, accountId, apiToken, address, user, privateKey: sshKey, port: port ?? 22, ingress: parseIngress(inputs["ingress"]) };
-};
 
 const ingressEqual = (a: readonly IngressRule[], b: readonly IngressRule[]): boolean => {
     if (a.length !== b.length) {
@@ -128,7 +78,7 @@ const runConnector = async (executor: SshExecutor, parsed: TunnelInputs, tunnelI
 // drift; apply ensures the tunnel exists, the connector runs, and the ingress matches.
 export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executor: SshExecutor = sshExecutor): Provider => ({
     read: async (inputs, ctx) => {
-        const parsed = parseTunnelInputs(inputs);
+        const parsed = parse(inputs);
         const tunnel = await api.findTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, name: parsed.name });
         if (tunnel === undefined) {
             return undefined;
@@ -138,7 +88,7 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
         return { outputs: { tunnelId: tunnel.id, cname: cname(tunnel.id) }, detail: { ingress: ingress ?? [], connectorRunning } };
     },
     diff: (inputs, observed) => {
-        const parsed = parseTunnelInputs(inputs);
+        const parsed = parse(inputs);
         const detail = observed.detail;
         if (detail === undefined || detail["connectorRunning"] !== true) {
             return { action: "update", reason: "cloudflared connector is not running on the host" };
@@ -151,7 +101,7 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
         return { action: "noop" };
     },
     apply: async (inputs) => {
-        const parsed = parseTunnelInputs(inputs);
+        const parsed = parse(inputs);
         const existing = await api.findTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, name: parsed.name });
         const tunnel = existing ?? (await api.createTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, name: parsed.name }));
         const token = await api.getTunnelToken({ accountId: parsed.accountId, apiToken: parsed.apiToken, tunnelId: tunnel.id });

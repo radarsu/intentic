@@ -17,6 +17,7 @@ catalog:
   turbo: 2.9.16
   typescript: 5.9.3
   vitest: 3.2.4
+  zod: 4.4.3
 
 injectWorkspacePackages: true
 

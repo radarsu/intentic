@@ -13,9 +13,10 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     forgejo: ["url", "internalUrl", "runnerToken"],
     repo: ["cloneUrl", "sshUrl"],
     "forgejo-runner": [],
-    komodo: ["url", "internalUrl", "passkey"],
+    komodo: ["url", "internalUrl"],
     app: [],
     deployment: ["internalUrl", "url"],
     "forgejo-notify": [],
     "komodo-notify": [],
+    "deploy-hook": [],
 });

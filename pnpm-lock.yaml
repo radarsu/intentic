@@ -37,6 +37,9 @@ catalogs:
     vitest:
       specifier: 3.2.4
       version: 3.2.4
+    zod:
+      specifier: 4.4.3
+      version: 4.4.3
 
 importers:
 
@@ -150,6 +153,9 @@ importers:
       tslib:
         specifier: 'catalog:'
         version: 2.8.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
     devDependencies:
       '@puristic/deploy-core':
         specifier: workspace:*

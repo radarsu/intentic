@@ -89,5 +89,5 @@ test("the account and token flow through to getZone", async () => {
 
 test("malformed inputs are rejected", async () => {
     const provider = createCloudflareProvider(api({}));
-    await expect(provider.read({ accountId: "a", zone: "z" }, ctx())).rejects.toThrow(/accountId\/apiToken\/zone must be strings/);
+    await expect(provider.read({ accountId: "a", zone: "z" }, ctx())).rejects.toThrow(/cloudflare inputs malformed/);
 });

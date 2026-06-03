@@ -1,29 +1,12 @@
 import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
-import type { SshExecutor, SshSession, SshTarget } from "./ssh.js";
+import type { z } from "zod";
+import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
+import type { SshExecutor, SshSession } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 
-interface HostInputs {
-    readonly address: string;
-    readonly user: string;
-    readonly privateKey: string;
-    readonly port: number;
-}
-
-const parseHostInputs = (inputs: ResolvedInputs): HostInputs => {
-    const address = inputs["address"];
-    const user = inputs["user"];
-    const sshKey = inputs["sshKey"];
-    const port = inputs["port"];
-    if (typeof address !== "string" || typeof user !== "string" || typeof sshKey !== "string") {
-        throw new Error(`host inputs malformed: address/user/sshKey must be strings (got ${typeof address}/${typeof user}/${typeof sshKey})`);
-    }
-    if (port !== undefined && typeof port !== "number") {
-        throw new Error(`host input "port" must be a number when present (got ${typeof port})`);
-    }
-    return { address, user, privateKey: sshKey, port: port ?? 22 };
-};
-
-const target = (parsed: HostInputs): SshTarget => ({ address: parsed.address, user: parsed.user, privateKey: parsed.privateKey, port: parsed.port });
+// The host's inputs are exactly the shared SSH-creds block.
+type HostInputs = z.infer<typeof sshSchema>;
+const parse = (inputs: ResolvedInputs): HostInputs => parseInputs(sshSchema, inputs, "host");
 
 // Gather the host's facts over an open session. The host is OWNED infra — this verifies it is reachable
 // and Docker-ready and reads its addresses; it does not provision anything. internalIp is the default
@@ -45,10 +28,10 @@ const gather = async (session: SshSession, address: string): Promise<Record<stri
 // it without aborting; apply lets a connection failure propagate as the hard error for owned infra.
 export const createHostProvider = (executor: SshExecutor = sshExecutor): Provider => ({
     read: async (inputs, ctx) => {
-        const parsed = parseHostInputs(inputs);
+        const parsed = parse(inputs);
         let session: SshSession;
         try {
-            session = await executor.connect(target(parsed));
+            session = await executor.connect(sshTarget(parsed));
         } catch (error) {
             ctx.log(`host "${ctx.id}" is not reachable over SSH, treating as not-yet-created: ${String(error)}`);
             return undefined;
@@ -61,8 +44,8 @@ export const createHostProvider = (executor: SshExecutor = sshExecutor): Provide
     },
     diff: () => ({ action: "noop" }),
     apply: async (inputs) => {
-        const parsed = parseHostInputs(inputs);
-        const session = await executor.connect(target(parsed));
+        const parsed = parse(inputs);
+        const session = await executor.connect(sshTarget(parsed));
         try {
             return await gather(session, parsed.address);
         } finally {

@@ -27,7 +27,7 @@ test("want.app derives its support stack: refs/secrets serialize and the resolve
     expect(graph.resources["host-git"]?.inputs["server"]).toEqual({ $ref: "host" });
     expect(graph.resources["host"]?.inputs["sshKey"]).toEqual({ $secret: { source: "env", key: "HOST_SSH_KEY" } });
     expect(graph.resources["host-git"]?.dependsOn).toEqual(["host"]);
-    expect(graph.resources["host-git"]?.readyWhen).toEqual({ check: "httpOk", url: "https://git.example.com/api/healthz", timeout: "120s" });
+    expect(graph.resources["host-git"]?.readyWhen).toEqual({ check: "httpOk", url: { $ref: "host-git.internalUrl" }, timeout: "120s" });
 });
 
 test("duplicate resource id throws", () => {

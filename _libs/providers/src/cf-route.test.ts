@@ -83,5 +83,5 @@ test("apply updates the existing record by id", async () => {
 
 test("malformed inputs are rejected", async () => {
     const provider = createCfRouteProvider(api({}));
-    await expect(provider.read({ hostname: "h", zoneId: "z" }, ctx())).rejects.toThrow(/hostname\/zoneId\/apiToken\/cname must be strings/);
+    await expect(provider.read({ hostname: "h", zoneId: "z" }, ctx())).rejects.toThrow(/cf-route inputs malformed/);
 });

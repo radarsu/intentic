@@ -12,6 +12,7 @@ const fullEnv = {
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
+    KOMODO_WEBHOOK_SECRET: "k",
     STAGING_DATABASE_URL: "k",
     PRODUCTION_DATABASE_URL: "k",
 };
@@ -39,7 +40,7 @@ test("apply creates every resource in dependency order, then is idempotent", asy
     const { providers } = createFakeProviders();
 
     const first = await apply(graph, { providers, env: fullEnv, probe: trueProbe, log: silent });
-    expect(first.steps).toHaveLength(14);
+    expect(first.steps).toHaveLength(16);
     expect(first.steps.every((step) => step.action === "create")).toBe(true);
     expect(first.steps.map((step) => step.id)).toEqual(linearize(graph));
     expect(Object.keys(first.outputs).sort()).toEqual(Object.keys(graph.resources).sort());
@@ -99,5 +100,6 @@ test("a referenced output that a provider failed to produce throws", async () =>
         throw new Error("expected a forgejo provider");
     }
     const broken = { ...providers, forgejo: { ...forgejo, apply: async () => ({}) } };
-    await expect(apply(graph, { providers: broken, env: fullEnv, probe: trueProbe, log: silent })).rejects.toThrow(/host-git\.url/);
+    // host-git's own readyWhen gate now references its internal url, so that is the first ref to fail.
+    await expect(apply(graph, { providers: broken, env: fullEnv, probe: trueProbe, log: silent })).rejects.toThrow(/host-git\.internalUrl/);
 });

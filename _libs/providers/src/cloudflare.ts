@@ -1,24 +1,11 @@
 import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import { z } from "zod";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
+import { parseInputs } from "./inputs.js";
 
-interface CloudflareInputs {
-    readonly accountId: string;
-    readonly apiToken: string;
-    readonly zone: string;
-}
-
-const parseCloudflareInputs = (inputs: ResolvedInputs): CloudflareInputs => {
-    const accountId = inputs["accountId"];
-    const apiToken = inputs["apiToken"];
-    const zone = inputs["zone"];
-    if (typeof accountId !== "string" || typeof apiToken !== "string" || typeof zone !== "string") {
-        throw new Error(
-            `cloudflare inputs malformed: accountId/apiToken/zone must be strings (got ${typeof accountId}/${typeof apiToken}/${typeof zone})`,
-        );
-    }
-    return { accountId, apiToken, zone };
-};
+const cloudflareSchema = z.object({ accountId: z.string(), apiToken: z.string(), zone: z.string() });
+const parse = (inputs: ResolvedInputs): z.infer<typeof cloudflareSchema> => parseInputs(cloudflareSchema, inputs, "cloudflare");
 
 // The Cloudflare account+zone are OWNED — the provider RESOLVES the zone name to its zone id over the
 // API; it never creates a zone. read returns the mapping if the zone exists, undefined (logged) if not,
@@ -27,7 +14,7 @@ const parseCloudflareInputs = (inputs: ResolvedInputs): CloudflareInputs => {
 // and raises the hard error on a persistent not-found — an owned zone is not created here.
 export const createCloudflareProvider = (api: CloudflareApi = cloudflareApi): Provider => ({
     read: async (inputs, ctx) => {
-        const { accountId, apiToken, zone } = parseCloudflareInputs(inputs);
+        const { accountId, apiToken, zone } = parse(inputs);
         const found = await api.getZone({ accountId, apiToken, zone });
         if (found === undefined) {
             ctx.log(`cloudflare "${ctx.id}": zone "${zone}" not found in account ${accountId}, treating as not-yet-resolved`);
@@ -37,7 +24,7 @@ export const createCloudflareProvider = (api: CloudflareApi = cloudflareApi): Pr
     },
     diff: () => ({ action: "noop" }),
     apply: async (inputs) => {
-        const { accountId, apiToken, zone } = parseCloudflareInputs(inputs);
+        const { accountId, apiToken, zone } = parse(inputs);
         const found = await api.getZone({ accountId, apiToken, zone });
         if (found === undefined) {
             throw new Error(`cloudflare zone "${zone}" does not exist in account ${accountId} (owned zones are not created)`);

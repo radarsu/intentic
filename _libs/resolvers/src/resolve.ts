@@ -66,7 +66,7 @@ export const resolve = (intent: IntentSet): RawNode[] => {
         if (host === undefined) {
             throw new Error(`app "${app.id}" targets unknown host "${app.on}"; declare it with i.have.host`);
         }
-        const platform = resolvePlatform(app.on, app.expose, zone, cloud.apiToken);
+        const platform = resolvePlatform(app.on, app.expose, zone, cloud.apiToken, host);
         platformByHost.set(app.on, { cloudflareId: app.expose, cloud, host, refs: platform.refs, ingress: [...platform.ingress] });
         nodes.push(...platform.nodes);
     }
@@ -80,7 +80,7 @@ export const resolve = (intent: IntentSet): RawNode[] => {
         if (cloud === undefined) {
             throw new Error(`cloudflare "${app.expose}" has no zone; declare it with i.have.cloudflare`);
         }
-        const resolved = resolveApp(app, platform.refs, cloud.apiToken);
+        const resolved = resolveApp(app, platform.refs, cloud.apiToken, cloud.zone);
         nodes.push(...resolved.nodes);
         platform.ingress.push(...resolved.ingress);
     }
