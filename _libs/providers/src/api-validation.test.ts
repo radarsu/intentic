@@ -66,3 +66,27 @@ test("komodo getAlerter throws a boundary error when the alerter config is malfo
         /returned an unexpected response/,
     );
 });
+
+test("komodo getDeployment parses the authored config slice", async () => {
+    const config = {
+        server_id: "host",
+        branch: "main",
+        image: { type: "Build", params: { build: "my-app" } },
+        environment: [{ variable: "DATABASE_URL", value: "postgres://x" }],
+        ports: ["20000:20000"],
+    };
+    stubFetch({ config });
+    expect(await komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).toEqual({
+        server_id: "host",
+        branch: "main",
+        image: { type: "Build", params: { build: "my-app" } },
+        environment: [{ variable: "DATABASE_URL", value: "postgres://x" }],
+    });
+});
+
+test("komodo getDeployment throws a boundary error when the config is malformed", async () => {
+    stubFetch({ config: { server_id: "host", branch: 7, image: { type: "Build", params: { build: "my-app" } }, environment: [] } });
+    await expect(komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).rejects.toThrow(
+        /returned an unexpected response/,
+    );
+});

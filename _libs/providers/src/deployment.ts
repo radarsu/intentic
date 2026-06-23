@@ -1,7 +1,7 @@
 import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
 import { z } from "zod";
 import { parseInputs } from "./inputs.js";
-import type { KomodoApi } from "./komodo-api.js";
+import type { DeploymentConfig, KomodoApi } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 
 const deploymentSchema = z.object({
@@ -36,10 +36,30 @@ const deploymentConfig = (parsed: DeploymentInputs, id: string): Record<string, 
     environment: Object.entries(parsed.env).map(([variable, value]) => ({ variable, value })),
 });
 
+// A stable, order-independent key over the authored fields the provisioner converges: server, branch,
+// build image, and env. Ports are derived deterministically from the node id (they never drift), so they
+// are deliberately excluded — keeping diff pure and free of ctx.id.
+const envKey = (environment: readonly { readonly variable: string; readonly value: string }[]): string =>
+    [...environment]
+        .map(({ variable, value }) => `${variable}=${value}`)
+        .sort()
+        .join("\n");
+const desiredKey = (parsed: DeploymentInputs): string =>
+    JSON.stringify([
+        parsed.server,
+        parsed.branch,
+        parsed.app,
+        envKey(Object.entries(parsed.env).map(([variable, value]) => ({ variable, value: String(value) }))),
+    ]);
+const observedKey = (config: DeploymentConfig): string =>
+    JSON.stringify([config.server_id, config.branch, config.image.params.build, envKey(config.environment)]);
+
 // One Komodo Deployment per environment (named <app>.<env> = ctx.id), built from the app's Build on the
 // environment's branch and exposed on a deterministic host port. read returns undefined until Komodo is up
-// (komodoUrl PENDING) or unreachable; diff forces a (re)deploy when the deployment is not Running. apply
-// create-or-updates and triggers the deploy.
+// (komodoUrl PENDING) or unreachable, otherwise it surfaces the deployment's current config. diff converges
+// on that config alone — runtime liveness is owned by the push->Komodo deploy loop, not the provisioner —
+// so a stopped-but-unchanged deployment is a noop. apply create-or-updates and triggers the deploy, which
+// now fires only on a genuine create or config change.
 export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider => ({
     read: async (inputs, ctx) => {
         if (typeof inputs["komodoUrl"] !== "string") {
@@ -52,15 +72,17 @@ export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider =
             if (deployment === undefined) {
                 return undefined;
             }
-            return { outputs: outputsFor(parsed, ctx.id), detail: { state: deployment.state } };
+            const config = await api.getDeployment({ baseUrl: parsed.komodoUrl, jwt, deployment: ctx.id });
+            return { outputs: outputsFor(parsed, ctx.id), detail: { config } };
         } catch (error) {
             ctx.log(`deployment "${ctx.id}": komodo not reachable yet, treating as not-yet-created: ${String(error)}`);
             return undefined;
         }
     },
-    diff: (_inputs, observed) => {
-        if (observed.detail?.["state"] !== "Running") {
-            return { action: "update", reason: `deployment is not Running (state ${String(observed.detail?.["state"])})` };
+    diff: (inputs, observed) => {
+        const config = observed.detail?.["config"] as DeploymentConfig | undefined;
+        if (config === undefined || observedKey(config) !== desiredKey(parse(inputs))) {
+            return { action: "update", reason: "deployment config differs from desired" };
         }
         return { action: "noop" };
     },

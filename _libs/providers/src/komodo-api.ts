@@ -12,10 +12,15 @@ export interface KomodoResource {
     readonly name: string;
 }
 
-// A deployment list item carries its current run state, which the deployment provider diffs against.
-export interface KomodoDeployment extends KomodoResource {
-    readonly state?: string;
-}
+// The slice of a Deployment's config the deployment provider diffs against — the authored fields it
+// converges (server, branch, build image, env). Extra fields Komodo returns are dropped by zod.
+const deploymentConfigSchema = z.object({
+    server_id: z.string(),
+    branch: z.string(),
+    image: z.object({ type: z.string(), params: z.object({ build: z.string() }) }),
+    environment: z.array(z.object({ variable: z.string(), value: z.string() })).readonly(),
+});
+export type DeploymentConfig = z.infer<typeof deploymentConfigSchema>;
 
 const alerterEndpointSchema = z.object({ type: z.enum(["Discord", "Slack", "Custom"]), params: z.object({ url: z.string() }) });
 const resourceTargetSchema = z.object({ type: z.string(), id: z.string() });
@@ -32,9 +37,10 @@ export type AlerterConfig = z.infer<typeof alerterConfigSchema>;
 
 // ListX returns ResourceListItem<Info>[]; we validate id/name (+ deployment run state from info) and drop
 // the rest. The login result is the JwtOrTwoFactor enum's Jwt variant in either flattened or tagged form.
-const listItemSchema = z.object({ id: z.string(), name: z.string(), info: z.object({ state: z.string().optional() }).optional() });
+const listItemSchema = z.object({ id: z.string(), name: z.string() });
 const jwtSchema = z.object({ jwt: z.string().optional(), Jwt: z.object({ jwt: z.string() }).optional() });
 const getAlerterSchema = z.object({ config: alerterConfigSchema });
+const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
 
 // The slice of the Komodo Core API the app/deployment/komodo-notify providers use, injected so the
 // providers are unit-testable with a fake; the default `komodoApi` below talks to a Komodo Core over
@@ -59,7 +65,9 @@ export interface KomodoApi {
         readonly id: string;
         readonly config: Readonly<Record<string, unknown>>;
     }) => Promise<void>;
-    readonly listDeployments: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoDeployment[]>;
+    readonly listDeployments: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
+    // read/GetDeployment {deployment: <id or name>} -> the authored config slice the provider diffs.
+    readonly getDeployment: (args: { readonly baseUrl: string; readonly jwt: string; readonly deployment: string }) => Promise<DeploymentConfig>;
     readonly createDeployment: (args: {
         readonly baseUrl: string;
         readonly jwt: string;
@@ -144,10 +152,10 @@ export const komodoApi: KomodoApi = {
     updateBuild: async ({ baseUrl, jwt, id, config }) => {
         await post({ baseUrl, module: "write", type: "UpdateBuild", params: { id, config }, jwt });
     },
-    listDeployments: async ({ baseUrl, jwt }) => {
-        const items = await read({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt }, z.array(listItemSchema));
-        return items.map((item) => ({ id: item.id, name: item.name, ...(item.info?.state !== undefined ? { state: item.info.state } : {}) }));
-    },
+    listDeployments: async ({ baseUrl, jwt }) =>
+        project(await read({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt }, z.array(listItemSchema))),
+    getDeployment: async ({ baseUrl, jwt, deployment }) =>
+        (await read({ baseUrl, module: "read", type: "GetDeployment", params: { deployment }, jwt }, getDeploymentSchema)).config,
     createDeployment: async ({ baseUrl, jwt, name, config }) => {
         await post({ baseUrl, module: "write", type: "CreateDeployment", params: { name, config }, jwt });
     },

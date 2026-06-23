@@ -15,7 +15,7 @@ import { createForgejoNotifyProvider } from "./forgejo-notify.js";
 import { createForgejoRunnerProvider } from "./forgejo-runner.js";
 import { createHostProvider } from "./host.js";
 import { createKomodoProvider } from "./komodo.js";
-import type { AlerterConfig, KomodoApi } from "./komodo-api.js";
+import type { AlerterConfig, DeploymentConfig, KomodoApi } from "./komodo-api.js";
 import { createKomodoNotifyProvider } from "./komodo-notify.js";
 import { createRepoProvider } from "./repo.js";
 import type { SshExecutor, SshResult } from "./ssh.js";
@@ -116,7 +116,7 @@ const fakeForgejoApi = (): ForgejoApi => {
 
 const fakeKomodoApi = (): KomodoApi => {
     const builds = new Map<string, string>();
-    const deployments = new Map<string, { id: string; state: string }>();
+    const deployments = new Map<string, { id: string; config: DeploymentConfig }>();
     const alerters = new Map<string, { id: string; config: AlerterConfig }>();
     let seq = 0;
     return {
@@ -127,17 +127,25 @@ const fakeKomodoApi = (): KomodoApi => {
             builds.set(name, `b-${seq++}`);
         },
         updateBuild: async () => {},
-        listDeployments: async () => [...deployments].map(([name, value]) => ({ id: value.id, name, state: value.state })),
-        createDeployment: async ({ name }) => {
-            deployments.set(name, { id: `d-${seq++}`, state: "Running" });
-        },
-        updateDeployment: async () => {},
-        deploy: async ({ deployment }) => {
+        listDeployments: async () => [...deployments].map(([name, value]) => ({ id: value.id, name })),
+        getDeployment: async ({ deployment }) => {
             const value = deployments.get(deployment);
-            if (value !== undefined) {
-                deployments.set(deployment, { ...value, state: "Running" });
+            if (value === undefined) {
+                throw new Error(`no deployment ${deployment}`);
+            }
+            return value.config;
+        },
+        createDeployment: async ({ name, config }) => {
+            deployments.set(name, { id: `d-${seq++}`, config: config as DeploymentConfig });
+        },
+        updateDeployment: async ({ id, config }) => {
+            for (const [name, value] of deployments) {
+                if (value.id === id) {
+                    deployments.set(name, { id, config: config as DeploymentConfig });
+                }
             }
         },
+        deploy: async () => {},
         listAlerters: async () => [...alerters].map(([name, value]) => ({ id: value.id, name })),
         getAlerter: async ({ id }) => {
             for (const value of alerters.values()) {

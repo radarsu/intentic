@@ -12,7 +12,7 @@ export { createForgejoNotifyProvider } from "./forgejo-notify.js";
 export { createForgejoRunnerProvider } from "./forgejo-runner.js";
 export { createHostProvider } from "./host.js";
 export { createKomodoProvider } from "./komodo.js";
-export type { AlerterConfig, AlerterEndpoint, KomodoApi, KomodoDeployment, KomodoResource, ResourceTarget } from "./komodo-api.js";
+export type { AlerterConfig, AlerterEndpoint, DeploymentConfig, KomodoApi, KomodoResource, ResourceTarget } from "./komodo-api.js";
 export { komodoApi } from "./komodo-api.js";
 export { createKomodoNotifyProvider } from "./komodo-notify.js";
 export { createRepoProvider } from "./repo.js";

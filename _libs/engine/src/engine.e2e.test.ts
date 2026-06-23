@@ -51,6 +51,19 @@ test("apply creates every resource in dependency order, then is idempotent", asy
     expect(second.steps.every((step) => step.action === "noop")).toBe(true);
 });
 
+test("a re-apply does not health-gate unchanged (noop) resources", async () => {
+    const graph = buildGraph();
+    const { providers } = createFakeProviders();
+
+    // First apply creates everything with a passing probe.
+    await apply(graph, { providers, env: fullEnv, probe: trueProbe, log: silent });
+
+    // Second apply finds the same world (all noop). A never-passing probe would make any readyWhen gate
+    // time out — so the only way this succeeds is if noop resources are not health-gated at all.
+    const second = await apply(graph, { providers, env: fullEnv, probe: async () => false, log: silent });
+    expect(second.steps.every((step) => step.action === "noop")).toBe(true);
+});
+
 test("plan reports all create on an empty world and all noop after apply", async () => {
     const graph = buildGraph();
 

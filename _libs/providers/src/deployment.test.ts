@@ -12,6 +12,7 @@ const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
     createBuild: NOT_USED,
     updateBuild: NOT_USED,
     listDeployments: NOT_USED,
+    getDeployment: NOT_USED,
     createDeployment: NOT_USED,
     updateDeployment: NOT_USED,
     deploy: NOT_USED,
@@ -52,18 +53,37 @@ test("read returns undefined when the deployment does not exist", async () => {
     expect(await createDeploymentProvider(api({ listDeployments: async () => [] })).read(inputs, ctx())).toBeUndefined();
 });
 
+const observedConfig = {
+    server_id: "host",
+    branch: "develop",
+    image: { type: "Build", params: { build: "my-app" } },
+    environment: [],
+} as const;
+
 test("read returns the deterministic url + an internalUrl on the host ip when the deployment exists", async () => {
     const observed = await createDeploymentProvider(
-        api({ listDeployments: async () => [{ id: "d1", name: "my-app.staging", state: "Running" }] }),
+        api({ listDeployments: async () => [{ id: "d1", name: "my-app.staging" }], getDeployment: async () => observedConfig }),
     ).read(inputs, ctx());
     expect(observed?.outputs["url"]).toBe("https://staging.example.com");
     expect(observed?.outputs["internalUrl"]).toMatch(/^http:\/\/10\.0\.0\.5:\d{5}$/);
+    expect(observed?.detail).toEqual({ config: observedConfig });
 });
 
-test("diff is noop when Running and update otherwise", () => {
+test("diff is noop when the live config matches the authored fields", () => {
+    expect(createDeploymentProvider(api({})).diff(inputs, { outputs: {}, detail: { config: observedConfig } })).toEqual({ action: "noop" });
+});
+
+test("diff is update when an authored field (branch) drifts — runtime state is never consulted", () => {
+    const drifted = { ...observedConfig, branch: "main" };
+    expect(createDeploymentProvider(api({})).diff(inputs, { outputs: {}, detail: { config: drifted } }).action).toBe("update");
+});
+
+test("diff is update when env drifts", () => {
+    const withEnv = { ...inputs, env: { DATABASE_URL: "postgres://desired" } };
     const provider = createDeploymentProvider(api({}));
-    expect(provider.diff(inputs, { outputs: {}, detail: { state: "Running" } })).toEqual({ action: "noop" });
-    expect(provider.diff(inputs, { outputs: {}, detail: { state: "Exited" } }).action).toBe("update");
+    expect(provider.diff(withEnv, { outputs: {}, detail: { config: observedConfig } }).action).toBe("update");
+    const matching = { ...observedConfig, environment: [{ variable: "DATABASE_URL", value: "postgres://desired" }] };
+    expect(provider.diff(withEnv, { outputs: {}, detail: { config: matching } })).toEqual({ action: "noop" });
 });
 
 test("apply creates the deployment then triggers a deploy", async () => {

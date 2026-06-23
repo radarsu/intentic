@@ -57,7 +57,10 @@ export const apply = async (graph: DesiredStateGraph, config: EngineConfig): Pro
         outputs[id] = produced;
         steps.push(reason !== undefined ? { id, type, action, reason } : { id, type, action });
 
-        if (node.readyWhen !== undefined) {
+        // Gate on readiness only for resources this apply actually touched. A noop resource was converged
+        // (and ready) in a prior apply; re-waiting on its live health would be runtime supervision, which
+        // the provisioner deliberately leaves to the running services and their deploy loop.
+        if (action !== "noop" && node.readyWhen !== undefined) {
             const url =
                 typeof node.readyWhen.url === "string" ? node.readyWhen.url : (store.get(node.readyWhen.url.$ref, { lenient: false }) as string);
             const options = {
