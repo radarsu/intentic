@@ -39,6 +39,8 @@ const fakeCloudflare = (): CloudflareApi => {
         updateDnsRecord: async ({ name, content, recordId }) => {
             records.set(name, { id: recordId, content });
         },
+        deleteTunnel: async () => {},
+        deleteDnsRecord: async () => {},
     };
 };
 

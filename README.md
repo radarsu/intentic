@@ -47,6 +47,38 @@ Zone → Read.
   providers land (not yet built).
 - **Host-key trust** — the SSH adapter accepts any host key (no `hostVerifier`).
 
+## Local end-to-end testing
+
+`createProviders()` ([_libs/providers/src/providers.ts](_libs/providers/src/providers.ts)) assembles the
+full `ResourceType → Provider` map — the single seam between a compiled graph and execution. Passing
+fakes drives the whole suite in-memory ([suite.engine.test.ts](_libs/providers/src/suite.engine.test.ts));
+passing nothing uses the real SSH/Cloudflare/Forgejo/Komodo implementations.
+
+[local.e2e.test.ts](_libs/providers/src/local.e2e.test.ts) is a **manual, real** run: it boots a
+Docker-in-Docker "host" ([test/host/Dockerfile](test/host/Dockerfile)) via `testcontainers`, reaches it
+over SSH with a per-run generated key, and `apply`s the derived graph against it — Forgejo, the CI
+runner, Komodo, the repo/app/deploy-hook, plus a **real Cloudflare zone/DNS/tunnel**. It asserts the
+graph converges (`create`) and a second `apply` is all-`noop` (idempotency), then deletes the Cloudflare
+resources it created. Tier 1 builds no app, so the deployment's runtime health gate is short-circuited.
+
+It is gated behind `PURISTIC_E2E` and **excluded from `pnpm test` / CI** (needs a privileged Docker
+daemon and live Cloudflare credentials). Run it with:
+
+```sh
+PURISTIC_E2E=1 \
+CLOUDFLARE_API_TOKEN=...      # Account → Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read
+CLOUDFLARE_ACCOUNT_ID=... \
+CLOUDFLARE_ZONE=example.com \ # a throwaway zone you own — DNS records + a tunnel are created and deleted
+FORGEJO_ADMIN_PASSWORD=... \
+KOMODO_ADMIN_PASSWORD=... \
+KOMODO_WEBHOOK_SECRET=... \
+pnpm --filter @puristic/deploy-providers e2e
+```
+
+> Networking: providers run nested containers with `--network host`, so the engine reaches services at
+> the host's internal IP and port. This works from a Linux/WSL2 host (routable bridge IPs); on Docker
+> Desktop (macOS/Windows) run the harness as a sibling container on the same network.
+
 ## License
 
 MIT

@@ -16,6 +16,8 @@ const api = (overrides: Partial<CloudflareApi>): CloudflareApi => ({
     findDnsRecord: NOT_USED,
     createDnsRecord: NOT_USED,
     updateDnsRecord: NOT_USED,
+    deleteTunnel: NOT_USED,
+    deleteDnsRecord: NOT_USED,
     ...overrides,
 });
 

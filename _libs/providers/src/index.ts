@@ -15,6 +15,8 @@ export { createKomodoProvider } from "./komodo.js";
 export type { AlerterConfig, AlerterEndpoint, DeploymentConfig, KomodoApi, KomodoResource, ResourceTarget } from "./komodo-api.js";
 export { komodoApi } from "./komodo-api.js";
 export { createKomodoNotifyProvider } from "./komodo-notify.js";
+export type { ProviderDeps } from "./providers.js";
+export { createProviders } from "./providers.js";
 export { createRepoProvider } from "./repo.js";
 export type { SshExecutor, SshResult, SshSession, SshTarget } from "./ssh.js";
 export { sshExecutor } from "./ssh.js";

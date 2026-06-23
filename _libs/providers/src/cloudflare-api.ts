@@ -70,6 +70,11 @@ export interface CloudflareApi {
         readonly content: string;
         readonly comment: string;
     }) => Promise<void>;
+    // Delete a tunnel by id. The engine has no destroy path; this exists so the e2e harness can purge the
+    // live Cloudflare resources it created during teardown.
+    readonly deleteTunnel: (args: { readonly accountId: string; readonly apiToken: string; readonly tunnelId: string }) => Promise<void>;
+    // Delete a DNS record by id, for the same teardown purpose.
+    readonly deleteDnsRecord: (args: { readonly apiToken: string; readonly zoneId: string; readonly recordId: string }) => Promise<void>;
 }
 
 const BASE = "https://api.cloudflare.com/client/v4";
@@ -170,6 +175,16 @@ export const cloudflareApi: CloudflareApi = {
         await call(apiToken, `/zones/${encodeURIComponent(zoneId)}/dns_records/${encodeURIComponent(recordId)}`, z.unknown(), {
             method: "PUT",
             body: JSON.stringify({ type: "CNAME", name, content, proxied: true, comment }),
+        });
+    },
+    deleteTunnel: async ({ accountId, apiToken, tunnelId }) => {
+        await call(apiToken, `/accounts/${encodeURIComponent(accountId)}/cfd_tunnel/${encodeURIComponent(tunnelId)}`, z.unknown(), {
+            method: "DELETE",
+        });
+    },
+    deleteDnsRecord: async ({ apiToken, zoneId, recordId }) => {
+        await call(apiToken, `/zones/${encodeURIComponent(zoneId)}/dns_records/${encodeURIComponent(recordId)}`, z.unknown(), {
+            method: "DELETE",
         });
     },
 };

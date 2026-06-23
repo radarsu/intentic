@@ -3,23 +3,11 @@ import { apply } from "@puristic/deploy-engine";
 import { env } from "@puristic/deploy-protocol";
 import { expect, test } from "vitest";
 
-import { createAppProvider } from "./app.js";
-import { createCfRouteProvider } from "./cf-route.js";
-import { createCloudflareProvider } from "./cloudflare.js";
 import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
-import { createDeployHookProvider } from "./deploy-hook.js";
-import { createDeploymentProvider } from "./deployment.js";
-import { createForgejoProvider } from "./forgejo.js";
 import type { ForgejoApi, ForgejoHook, ForgejoRepo } from "./forgejo-api.js";
-import { createForgejoNotifyProvider } from "./forgejo-notify.js";
-import { createForgejoRunnerProvider } from "./forgejo-runner.js";
-import { createHostProvider } from "./host.js";
-import { createKomodoProvider } from "./komodo.js";
 import type { AlerterConfig, DeploymentConfig, KomodoApi } from "./komodo-api.js";
-import { createKomodoNotifyProvider } from "./komodo-notify.js";
-import { createRepoProvider } from "./repo.js";
+import { createProviders } from "./providers.js";
 import type { SshExecutor, SshResult } from "./ssh.js";
-import { createTunnelProvider } from "./tunnel.js";
 
 // A stateful host shared by host/forgejo/forgejo-runner/komodo/tunnel: Docker-ready, default route ->
 // 10.0.0.5, and it remembers which containers have been started so a second apply reads them as running.
@@ -85,6 +73,8 @@ const fakeCloudflare = (): CloudflareApi => {
         updateDnsRecord: async ({ name, content, recordId }) => {
             records.set(name, { id: recordId, content });
         },
+        deleteTunnel: async () => {},
+        deleteDnsRecord: async () => {},
     };
 };
 
@@ -189,27 +179,9 @@ const buildGraph = () =>
         });
     });
 
-const realProviders = () => {
-    const cloudflare = fakeCloudflare();
-    const ssh = fakeSsh();
-    const forgejo = fakeForgejoApi();
-    const komodo = fakeKomodoApi();
-    return {
-        host: createHostProvider(ssh),
-        cloudflare: createCloudflareProvider(cloudflare),
-        "cf-route": createCfRouteProvider(cloudflare),
-        tunnel: createTunnelProvider(cloudflare, ssh),
-        forgejo: createForgejoProvider(ssh),
-        "forgejo-runner": createForgejoRunnerProvider(ssh),
-        komodo: createKomodoProvider(komodo, ssh),
-        repo: createRepoProvider(forgejo),
-        app: createAppProvider(komodo),
-        deployment: createDeploymentProvider(komodo),
-        "forgejo-notify": createForgejoNotifyProvider(forgejo),
-        "komodo-notify": createKomodoNotifyProvider(komodo),
-        "deploy-hook": createDeployHookProvider(forgejo),
-    };
-};
+// Drive the real registry entirely off in-memory fakes — same wiring the e2e harness uses with real deps.
+const realProviders = () =>
+    createProviders({ ssh: fakeSsh(), cloudflare: fakeCloudflare(), forgejo: fakeForgejoApi(), komodo: fakeKomodoApi() });
 
 const base = { env: fullEnv, probe: async () => true, log: () => {} };
 
