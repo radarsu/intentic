@@ -57,7 +57,7 @@ export const expectedGraph: DesiredStateGraph = {
                     $ref: "host.internalIp",
                 },
                 domain: "git.example.com",
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -123,6 +123,7 @@ export const expectedGraph: DesiredStateGraph = {
                 runnerToken: {
                     $ref: "host-git.runnerToken",
                 },
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -195,7 +196,7 @@ export const expectedGraph: DesiredStateGraph = {
                     $ref: "host-git.url",
                 },
                 domain: "git.example.com",
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -220,7 +221,7 @@ export const expectedGraph: DesiredStateGraph = {
                     $ref: "host-deploy.url",
                 },
                 gitDomain: "git.example.com",
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -249,7 +250,7 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -301,7 +302,7 @@ export const expectedGraph: DesiredStateGraph = {
                 forgejoUrl: {
                     $ref: "host-git.url",
                 },
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -342,7 +343,7 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -394,7 +395,7 @@ export const expectedGraph: DesiredStateGraph = {
                 forgejoUrl: {
                     $ref: "host-git.url",
                 },
-                adminUser: "admin",
+                adminUser: "puristic",
                 adminPassword: {
                     $secret: {
                         source: "env",

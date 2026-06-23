@@ -1,6 +1,6 @@
 import type { Ref, SecretRef } from "@puristic/deploy-protocol";
 import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
-import { forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
+import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
 import type { HostInput } from "./inputs.js";
 import type { ResolvedNode } from "./resource-types.js";
 import type { IngressPair } from "./route.js";
@@ -43,7 +43,7 @@ export const resolvePlatform = (
         {
             id: forgejo,
             type: "forgejo",
-            inputs: { server, ...ssh, internalIp, domain: gitDomain(zone), adminUser: "admin", adminPassword: env("FORGEJO_ADMIN_PASSWORD") },
+            inputs: { server, ...ssh, internalIp, domain: gitDomain(zone), adminUser: adminUsername, adminPassword: env("FORGEJO_ADMIN_PASSWORD") },
             explicitDependsOn: [],
             readyWhen: httpOk(ref(forgejo, "internalUrl"), { timeout: "120s" }),
         },
@@ -63,6 +63,7 @@ export const resolvePlatform = (
                 domain: komodoDomain(zone),
                 forgejoUrl: ref(forgejo, "internalUrl"),
                 runnerToken: ref(forgejo, "runnerToken"),
+                adminUser: adminUsername,
                 adminPassword: env("KOMODO_ADMIN_PASSWORD"),
                 // Shared with each deploy-hook so Komodo validates the incoming push webhook's signature.
                 webhookSecret: env("KOMODO_WEBHOOK_SECRET"),

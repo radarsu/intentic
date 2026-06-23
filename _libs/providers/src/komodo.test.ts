@@ -67,6 +67,7 @@ const inputs = {
     domain: "komodo.example.com",
     forgejoUrl: "http://10.0.0.5:3000",
     runnerToken: "tok-123",
+    adminUser: "puristic",
     adminPassword: "pw",
     webhookSecret: "whsec",
 };

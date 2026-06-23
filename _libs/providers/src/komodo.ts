@@ -11,6 +11,7 @@ const komodoSchema = sshSchema.extend({
     domain: z.string(),
     forgejoUrl: z.string(),
     runnerToken: z.string(),
+    adminUser: z.string(),
     adminPassword: z.string(),
     webhookSecret: z.string(),
 });
@@ -75,7 +76,7 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         "TZ=Etc/UTC",
         "COMPOSE_KOMODO_IMAGE_TAG=2",
         "KOMODO_LOCAL_AUTH=true",
-        "KOMODO_INIT_ADMIN_USERNAME=admin",
+        `KOMODO_INIT_ADMIN_USERNAME=${parsed.adminUser}`,
         "KOMODO_DATABASE_ADDRESS=ferretdb:27017",
         "KOMODO_FIRST_SERVER_NAME=Local",
         "KOMODO_FIRST_SERVER=https://periphery:8120",

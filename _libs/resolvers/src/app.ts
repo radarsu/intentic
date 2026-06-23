@@ -1,6 +1,6 @@
 import type { Ref, SecretRef } from "@puristic/deploy-protocol";
 import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
-import { deployHookId, deploymentId, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
+import { adminUsername, deployHookId, deploymentId, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
 import type { PlatformRefs } from "./platform.js";
 import type { ResolvedNode } from "./resource-types.js";
@@ -23,8 +23,8 @@ export const resolveApp = (
     const repo = repoId(intent.id);
     const forgejoUrl = ref(platform.forgejo, "url");
     const komodoUrl = ref(platform.deploy, "url");
-    const forgejoAdmin = { adminUser: "admin", adminPassword: env("FORGEJO_ADMIN_PASSWORD") };
-    const komodoAdmin = { adminUser: "admin", adminPassword: env("KOMODO_ADMIN_PASSWORD") };
+    const forgejoAdmin = { adminUser: adminUsername, adminPassword: env("FORGEJO_ADMIN_PASSWORD") };
+    const komodoAdmin = { adminUser: adminUsername, adminPassword: env("KOMODO_ADMIN_PASSWORD") };
 
     const nodes: ResolvedNode[] = [
         {

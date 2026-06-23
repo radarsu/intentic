@@ -17,3 +17,7 @@ export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
 export const deployHookId = (appId: string, environment: string): string => `${deploymentId(appId, environment)}-deploy-hook`;
 export const gitDomain = (zone: string): string => `git.${zone}`;
 export const komodoDomain = (zone: string): string => `komodo.${zone}`;
+// The single admin identity for both Forgejo and Komodo — also the repo owner namespace and the Komodo
+// build's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
+// `forgejo admin user create --username admin` fails.
+export const adminUsername = "puristic";
