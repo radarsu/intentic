@@ -93,9 +93,7 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         'echo "KOMODO_DATABASE_USERNAME=komodo"',
         `echo "KOMODO_DATABASE_PASSWORD=$(openssl rand -hex 16)"`,
     ].join("; ");
-    await session.exec(
-        `test -f ${STATE_DIR}/.env || { printf '%s\\n' ${staticEnv} > ${STATE_DIR}/.env; { ${generated}; } >> ${STATE_DIR}/.env; }`,
-    );
+    await session.exec(`test -f ${STATE_DIR}/.env || { printf '%s\\n' ${staticEnv} > ${STATE_DIR}/.env; { ${generated}; } >> ${STATE_DIR}/.env; }`);
 };
 
 // Probe Core FROM THE HOST over SSH (Core publishes 9120 on the host), so the check works regardless of

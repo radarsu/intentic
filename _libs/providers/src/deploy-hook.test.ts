@@ -11,6 +11,9 @@ const api = (overrides: Partial<ForgejoApi>): ForgejoApi => ({
     listHooks: NOT_USED,
     createHook: NOT_USED,
     updateHook: NOT_USED,
+    latestCommit: NOT_USED,
+    readFile: NOT_USED,
+    commitFile: NOT_USED,
     ...overrides,
 });
 

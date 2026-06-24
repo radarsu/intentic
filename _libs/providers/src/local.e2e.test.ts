@@ -3,8 +3,8 @@ import { defineStack } from "@puristic/deploy-core";
 import type { ApplyOutcome, ReadinessProbe } from "@puristic/deploy-engine";
 import { apply } from "@puristic/deploy-engine";
 import { env } from "@puristic/deploy-protocol";
-import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { utils } from "ssh2";
+import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cloudflareApi } from "./cloudflare-api.js";
 import { createProviders } from "./providers.js";
@@ -82,7 +82,9 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
             const tunnelId = first.outputs["host-tunnel"]?.["tunnelId"];
             const zoneId = first.outputs["cf"]?.["zoneId"];
             if (typeof tunnelId === "string") {
-                await cloudflareApi.deleteTunnel({ accountId, apiToken, tunnelId }).catch((error) => console.warn(`tunnel cleanup: ${String(error)}`));
+                await cloudflareApi
+                    .deleteTunnel({ accountId, apiToken, tunnelId })
+                    .catch((error) => console.warn(`tunnel cleanup: ${String(error)}`));
             }
             if (typeof zoneId === "string") {
                 for (const name of [`git.${zone}`, `komodo.${zone}`, `staging.${zone}`]) {
@@ -117,7 +119,12 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
 
     it("creates the whole stack over SSH, then is idempotent", async () => {
         const providers = createProviders();
-        const config = { providers, env: { ...process.env, HOST_SSH_KEY: privateKey }, probe: sshProbe, log: (message: string) => console.log(message) };
+        const config = {
+            providers,
+            env: { ...process.env, HOST_SSH_KEY: privateKey },
+            probe: sshProbe,
+            log: (message: string) => console.log(message),
+        };
 
         first = await apply(buildGraph(), config);
         const actions = new Map(first.steps.map((step) => [step.id, step.action]));

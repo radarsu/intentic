@@ -12,6 +12,7 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken"],
     repo: ["cloneUrl", "sshUrl"],
+    "control-repo": ["cloneUrl", "sshUrl"],
     "forgejo-runner": [],
     komodo: ["url", "internalUrl"],
     app: [],

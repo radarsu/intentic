@@ -1,9 +1,17 @@
 export { resolveApp } from "./app.js";
+export type { AssignmentPlan, Candidate } from "./candidate.js";
+export { enumerateAssignments, generateCandidates } from "./candidate.js";
+export type { Catalog, Option } from "./catalog.js";
+export { defaultCatalog } from "./catalog.js";
+export { choose } from "./choose.js";
+export type { Assignment } from "./emit.js";
+export { emit } from "./emit.js";
 export { adminUsername, deploymentId, repoId } from "./ids.js";
 export type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput } from "./inputs.js";
 export type { AppIntent, CloudflareIntent, HostIntent, IntentSet } from "./intent.js";
+export type { Capability, Need } from "./needs.js";
+export { deriveNeeds, needKey } from "./needs.js";
 export { OUTPUTS } from "./outputs.js";
 export type { PlatformRefs } from "./platform.js";
 export { resolvePlatform } from "./platform.js";
-export { resolve } from "./resolve.js";
 export type { ResourceType } from "./resource-types.js";

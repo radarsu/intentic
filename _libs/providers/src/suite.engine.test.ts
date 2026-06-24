@@ -81,6 +81,7 @@ const fakeCloudflare = (): CloudflareApi => {
 const fakeForgejoApi = (): ForgejoApi => {
     const repos = new Map<string, ForgejoRepo>();
     const hooks = new Map<string, ForgejoHook[]>();
+    const files = new Map<string, string>();
     let seq = 0;
     return {
         findRepo: async ({ name }) => repos.get(name),
@@ -100,6 +101,12 @@ const fakeForgejoApi = (): ForgejoApi => {
                 name,
                 (hooks.get(name) ?? []).map((hook) => (hook.id === id ? { ...hook, config, events } : hook)),
             );
+        },
+        latestCommit: async ({ name, branch }) => (files.has(`${name}@${branch}`) ? `sha-${name}-${branch}` : undefined),
+        readFile: async ({ name, branch, path }) => files.get(`${name}@${branch}:${path}`),
+        commitFile: async ({ name, branch, path, content }) => {
+            files.set(`${name}@${branch}`, "");
+            files.set(`${name}@${branch}:${path}`, content);
         },
     };
 };
@@ -179,8 +186,7 @@ const buildGraph = () =>
     });
 
 // Drive the real registry entirely off in-memory fakes — same wiring the e2e harness uses with real deps.
-const realProviders = () =>
-    createProviders({ ssh: fakeSsh(), cloudflare: fakeCloudflare(), forgejo: fakeForgejoApi(), komodo: fakeKomodoApi() });
+const realProviders = () => createProviders({ ssh: fakeSsh(), cloudflare: fakeCloudflare(), forgejo: fakeForgejoApi(), komodo: fakeKomodoApi() });
 
 const base = { env: fullEnv, probe: async () => true, log: () => {} };
 

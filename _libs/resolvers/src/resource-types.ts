@@ -10,6 +10,7 @@ export type ResourceType =
     | "tunnel"
     | "forgejo"
     | "repo"
+    | "control-repo"
     | "forgejo-runner"
     | "komodo"
     | "app"

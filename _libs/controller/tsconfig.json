@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./",
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "tsBuildInfoFile": "./.cache/tsbuildinfo"
+    },
+    "include": ["./src/**/*"],
+    "exclude": ["./src/**/*.test.ts"],
+    "references": [{ "path": "../protocol" }, { "path": "../resolvers" }, { "path": "../engine" }, { "path": "../providers" }],
+    "extends": "@puristic/tsconfig/tsconfig.base.json"
+}

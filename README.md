@@ -7,10 +7,11 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 | Package | Description |
 | --- | --- |
 | [`@puristic/deploy-protocol`](_libs/protocol) | Product-agnostic desired-state IR: refs, secrets, readiness, the serializable graph, and the compiler. |
-| [`@puristic/deploy-resolvers`](_libs/resolvers) | Resolves intent into concrete resources — the app resolver derives the Forgejo/Komodo/Cloudflare support stack. |
+| [`@puristic/deploy-resolvers`](_libs/resolvers) | Computes intent into needs, the option catalog that meets them, and every valid reconciliation-target artifact — then chooses one. |
 | [`@puristic/deploy-core`](_libs/core) | Authoring surface (`i.have` / `i.want`) and `defineStack`: build → resolve → compile. |
 | [`@puristic/deploy-engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
 | [`@puristic/deploy-providers`](_libs/providers) | Real reconcile providers over the engine SPI: `host` (SSH/Docker via `ssh2`), `cloudflare` (resolve owned zone → id), `tunnel` (Cloudflare Tunnel + `cloudflared` on the host), `cf-route` (proxied DNS CNAME). |
+| [`@puristic/deploy-controller`](_libs/controller) | Intent-driven control plane: `bootstrap` a standalone Gitea/Forgejo with the intent + reconciliation-target repos, then `runController` watches the intent repo, computes + auto-picks a candidate, stores it, and reconciles it until state reads true. |
 
 ## Getting started
 

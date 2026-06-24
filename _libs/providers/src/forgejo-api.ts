@@ -10,6 +10,11 @@ export interface ForgejoRepo {
 }
 
 const rawRepoSchema = z.object({ clone_url: z.string(), ssh_url: z.string() });
+const rawCommitSchema = z.object({ sha: z.string() });
+const rawContentSchema = z.object({ sha: z.string() });
+
+// Percent-encode each path segment but keep the slashes, so a nested file path stays a valid URL path.
+const encodePath = (path: string): string => path.split("/").map(encodeURIComponent).join("/");
 
 export const forgejoHookSchema = z.object({
     id: z.number(),
@@ -72,6 +77,37 @@ export interface ForgejoApi {
         readonly config: Readonly<Record<string, string>>;
         readonly events: readonly string[];
     }) => Promise<void>;
+    // The latest commit sha on `branch`; undefined when the repo has no commits on it yet.
+    readonly latestCommit: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly branch: string;
+    }) => Promise<string | undefined>;
+    // The raw contents of `path` on `branch`; undefined if it does not exist (404).
+    readonly readFile: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly branch: string;
+        readonly path: string;
+    }) => Promise<string | undefined>;
+    // Create or replace `path` on `branch` with `content` (utf-8), committing with `message`.
+    readonly commitFile: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly branch: string;
+        readonly path: string;
+        readonly content: string;
+        readonly message: string;
+    }) => Promise<void>;
 }
 
 const authHeader = (user: string, password: string): string => `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
@@ -128,5 +164,40 @@ export const forgejoApi: ForgejoApi = {
     updateHook: async ({ baseUrl, user, password, owner, name, id, config, events }) => {
         const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/hooks/${id}`;
         await ok(await request({ method: "PATCH", baseUrl, path, user, password, body: { config, events, active: true } }), "PATCH", path);
+    },
+    latestCommit: async ({ baseUrl, user, password, owner, name, branch }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/commits?sha=${encodeURIComponent(branch)}&limit=1`;
+        const response = await request({ method: "GET", baseUrl, path, user, password });
+        // An empty repo answers 409 and a missing branch 404; either way nothing has been pushed yet.
+        if (!response.ok) {
+            return undefined;
+        }
+        const commits = parseResponse(z.array(rawCommitSchema), await response.json(), `Forgejo API GET ${path}`);
+        return commits[0]?.sha;
+    },
+    readFile: async ({ baseUrl, user, password, owner, name, branch, path: filePath }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/raw/${encodePath(filePath)}?ref=${encodeURIComponent(branch)}`;
+        const response = await request({ method: "GET", baseUrl, path, user, password });
+        if (response.status === 404) {
+            return undefined;
+        }
+        return (await ok(response, "GET", path)).text();
+    },
+    commitFile: async ({ baseUrl, user, password, owner, name, branch, path: filePath, content, message }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/contents/${encodePath(filePath)}`;
+        const base64 = Buffer.from(content).toString("base64");
+        // Forgejo's contents API creates with POST and replaces with PUT (which requires the current blob
+        // sha), so look the file up first and branch on whether it already exists.
+        const existing = await request({ method: "GET", baseUrl, path: `${path}?ref=${encodeURIComponent(branch)}`, user, password });
+        if (existing.status === 404) {
+            await ok(await request({ method: "POST", baseUrl, path, user, password, body: { content: base64, message, branch } }), "POST", path);
+            return;
+        }
+        const current = parseResponse(rawContentSchema, await (await ok(existing, "GET", path)).json(), `Forgejo API GET ${path}`);
+        await ok(
+            await request({ method: "PUT", baseUrl, path, user, password, body: { content: base64, message, branch, sha: current.sha } }),
+            "PUT",
+            path,
+        );
     },
 };

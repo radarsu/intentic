@@ -1,4 +1,3 @@
-import type { RawNode } from "@puristic/deploy-protocol";
 import { makeRef } from "@puristic/deploy-protocol";
 import { resolveApp } from "./app.js";
 import { tunnelId, tunnelName } from "./ids.js";
@@ -8,6 +7,16 @@ import type { PlatformRefs } from "./platform.js";
 import { resolvePlatform } from "./platform.js";
 import type { ResolvedNode } from "./resource-types.js";
 import type { IngressPair } from "./route.js";
+
+// One concrete choice of option per need: `${capability}:${scope}` -> option id. The candidate generator
+// builds these from the catalog; emit turns one into the support stack it describes.
+export interface Assignment {
+    readonly byNeed: ReadonlyMap<string, string>;
+}
+
+// The option set this emitter knows how to build. Today's only valid combination; once a second option
+// (e.g. Gitlab) lands, emit branches on the assignment instead of asserting it.
+const supportedOptions = new Set(["forgejo", "komodo", "ssh-linux", "cloudflare-tunnel"]);
 
 // Everything the tunnel node for one host needs: the platform's exposed-service refs, the Cloudflare
 // account it connects through, the host's SSH connection (cloudflared runs there), and the accumulated
@@ -20,11 +29,17 @@ interface HostPlatform {
     readonly ingress: IngressPair[];
 }
 
-// The "what that requires" layer: an IntentSet (have + want) resolved into the concrete RawNodes the
-// compiler folds into a DesiredStateGraph. Inventory becomes its own nodes; each app's support stack is
-// derived, sharing one git/CI/deploy platform per host across all apps. Each host that exposes anything
-// also gets one Cloudflare Tunnel node owning the host's aggregated ingress.
-export const resolve = (intent: IntentSet): RawNode[] => {
+// Build the concrete RawNodes for one assignment. Inventory becomes its own nodes; each app's support
+// stack is derived, sharing one git/CI/deploy platform per host across all apps. Each host that exposes
+// anything also gets one Cloudflare Tunnel node owning the host's aggregated ingress. The compiler folds
+// the result into one reconciliation-target artifact (a DesiredStateGraph).
+export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] => {
+    for (const optionId of assignment.byNeed.values()) {
+        if (!supportedOptions.has(optionId)) {
+            throw new Error(`unsupported option "${optionId}"; the emitter only implements ${[...supportedOptions].join("/")}`);
+        }
+    }
+
     const zoneById = new Map(intent.clouds.map((cloud) => [cloud.id, cloud.input.zone]));
     const cloudById = new Map(intent.clouds.map((cloud) => [cloud.id, cloud.input]));
     const hostById = new Map(intent.hosts.map((host) => [host.id, host.input]));

@@ -5,4 +5,6 @@ export type { FakeWorld } from "./providers/fake.js";
 export { createFakeProviders } from "./providers/fake.js";
 export type { ReadinessProbe } from "./readiness.js";
 export { httpProbe, parseDuration, waitReady } from "./readiness.js";
+export type { ConvergeResult } from "./reconcile-loop.js";
+export { reconcile } from "./reconcile-loop.js";
 export type { Action, ApplyOutcome, EngineConfig, Orphan, PlanOutcome, ResolvedInputs, Step } from "./types.js";
