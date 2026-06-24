@@ -7,7 +7,7 @@
         "skipLibCheck": true
     },
     "include": ["./src/**/*"],
-    "exclude": ["./src/**/*.test.ts"],
+    "exclude": ["./src/**/*.test.ts", "./src/__fixtures__/**"],
     "references": [
         { "path": "../../_libs/graph" },
         { "path": "../../_libs/resolvers" },

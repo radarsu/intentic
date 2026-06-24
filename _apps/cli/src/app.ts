@@ -1,65 +1,106 @@
 import { createRequire } from "node:module";
-import type { CommandContext, FlagParametersForType } from "@stricli/core";
+import { dirname, join } from "node:path";
+import { plan, reconcile } from "@intentic/engine";
+import { createProviders } from "@intentic/providers";
+import { choose } from "@intentic/resolvers";
+import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
-import { bootstrap } from "./bootstrap.js";
-import type { ControlPlaneFlags } from "./config.js";
-import { readConfig } from "./config.js";
-import { runController } from "./controller.js";
-import { evaluateIntentSource } from "./evaluate-intent.js";
+import { ARTIFACT_FILE, CONFIG_FILE, readArtifact, STATUS_FILE, writeArtifact, writeStatus } from "./artifact.js";
+import { scaffold } from "./init.js";
+import { loadCandidates } from "./resolve.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
-// Shared control-plane config flags — both `up` and `watch` need the full ControlPlaneConfig. Each flag is
-// optional and falls back to its env var inside readConfig.
-const controlPlaneFlags: FlagParametersForType<ControlPlaneFlags> = {
-    hostAddress: { kind: "parsed", parse: String, optional: true, brief: "Control host address (env INTENTIC_HOST_ADDRESS)" },
-    hostUser: { kind: "parsed", parse: String, optional: true, brief: "Control host SSH user (env INTENTIC_HOST_USER)" },
-    hostPort: { kind: "parsed", parse: numberParser, optional: true, brief: "Control host SSH port (env INTENTIC_HOST_PORT)" },
-    internalIp: { kind: "parsed", parse: String, optional: true, brief: "Control plane internal IP (env INTENTIC_CONTROL_INTERNAL_IP)" },
-    domain: { kind: "parsed", parse: String, optional: true, brief: "Control plane git domain (env INTENTIC_CONTROL_DOMAIN)" },
-};
+const DEFAULT_MAX_ITERATIONS = 5;
 
-const up = buildCommand<ControlPlaneFlags>({
-    docs: { brief: "Bootstrap the control plane and print the outcome" },
-    parameters: { flags: controlPlaneFlags },
-    async func(this: CommandContext, flags: ControlPlaneFlags) {
-        const outcome = await bootstrap(readConfig(flags));
-        this.process.stdout.write(`${JSON.stringify(outcome, undefined, 4)}\n`);
+const init = buildCommand<{ dir?: string }>({
+    docs: { brief: "Scaffold local intent and reconciliation-target git repos" },
+    parameters: { flags: { dir: { kind: "parsed", parse: String, optional: true, brief: "Directory to scaffold in (default: .)" } } },
+    async func(this: CommandContext, flags: { dir?: string }) {
+        const { intentDir, targetDir } = await scaffold(flags.dir ?? ".");
+        this.process.stdout.write(`initialized ${intentDir} (with ${CONFIG_FILE}) and ${targetDir}\n`);
     },
 });
 
-interface WatchFlags extends ControlPlaneFlags {
-    readonly pollInterval?: number;
+interface ResolveFlags {
+    readonly config?: string;
+    readonly out?: string;
+    readonly prefer?: string;
+}
+
+const resolveCommand = buildCommand<ResolveFlags>({
+    docs: { brief: "Resolve a deploy.config.ts into a reconciliation-target artifact" },
+    parameters: {
+        flags: {
+            config: { kind: "parsed", parse: String, optional: true, brief: `Path to the intent config (default: ${CONFIG_FILE})` },
+            out: { kind: "parsed", parse: String, optional: true, brief: `Path to write the artifact (default: ${ARTIFACT_FILE})` },
+            prefer: { kind: "parsed", parse: String, optional: true, brief: "Candidate key to choose (default: the only/first candidate)" },
+        },
+    },
+    async func(this: CommandContext, flags: ResolveFlags) {
+        const candidates = await loadCandidates(flags.config ?? CONFIG_FILE);
+        const chosen = choose(candidates, flags.prefer);
+        const out = flags.out ?? ARTIFACT_FILE;
+        await writeArtifact(out, chosen.graph);
+        const count = Object.keys(chosen.graph.resources).length;
+        this.process.stdout.write(`resolved ${candidates.length} candidate(s); chose "${chosen.key}" (${count} resources) → ${out}\n`);
+    },
+});
+
+const planCommand = buildCommand<{ artifact?: string }>({
+    docs: { brief: "Show what applying the artifact would create/update (read-only)" },
+    parameters: {
+        flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_FILE})` } },
+    },
+    async func(this: CommandContext, flags: { artifact?: string }) {
+        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const graph = await readArtifact(flags.artifact ?? ARTIFACT_FILE);
+        const outcome = await plan(graph, { providers: createProviders(), log });
+        for (const step of outcome.steps) {
+            log(`${step.action}\t${step.type}\t${step.id}${step.reason !== undefined ? `\t(${step.reason})` : ""}`);
+        }
+    },
+});
+
+interface ApplyFlags {
+    readonly artifact?: string;
     readonly maxIterations?: number;
 }
 
-const watch = buildCommand<WatchFlags>({
-    docs: { brief: "Watch the intent repo and run the reconcile control loop" },
+const apply = buildCommand<ApplyFlags>({
+    docs: { brief: "Execute the reconciliation-target artifact until state reads true" },
     parameters: {
         flags: {
-            ...controlPlaneFlags,
-            pollInterval: { kind: "parsed", parse: numberParser, optional: true, brief: "Intent poll interval in ms (default 15000)" },
-            maxIterations: { kind: "parsed", parse: numberParser, optional: true, brief: "Max reconcile iterations per cycle (default 5)" },
+            artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_FILE})` },
+            maxIterations: {
+                kind: "parsed",
+                parse: numberParser,
+                optional: true,
+                brief: `Max reconcile iterations (default ${DEFAULT_MAX_ITERATIONS})`,
+            },
         },
     },
-    async func(flags: WatchFlags) {
-        await runController({
-            config: readConfig(flags),
-            evaluateIntent: evaluateIntentSource,
-            ...(flags.pollInterval !== undefined ? { pollIntervalMs: flags.pollInterval } : {}),
-            ...(flags.maxIterations !== undefined ? { maxIterations: flags.maxIterations } : {}),
+    async func(this: CommandContext, flags: ApplyFlags) {
+        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const artifact = flags.artifact ?? ARTIFACT_FILE;
+        const graph = await readArtifact(artifact);
+        const result = await reconcile(
+            graph,
+            { providers: createProviders(), log },
+            { maxIterations: flags.maxIterations ?? DEFAULT_MAX_ITERATIONS },
+        );
+        await writeStatus(join(dirname(artifact), STATUS_FILE), {
+            converged: result.converged,
+            iterations: result.iterations,
+            steps: result.outcome.steps,
         });
+        log(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
     },
 });
 
 export const app = buildApplication(
     buildRouteMap({
-        routes: {
-            "control-plane": buildRouteMap({
-                routes: { up, watch },
-                docs: { brief: "Manage the standalone control plane" },
-            }),
-        },
+        routes: { init, resolve: resolveCommand, plan: planCommand, apply },
         docs: { brief: "intentic — intent-driven deployment" },
     }),
     {

@@ -12,7 +12,7 @@ export const build = (declare: (stack: Stack) => void): IntentSet => {
 };
 
 // Layer 2 — "what that requires", as every valid option combination: build the intent -> generate the
-// set of candidate reconciliation-target artifacts. The controller presents these for choice.
+// set of candidate reconciliation-target artifacts. `intentic resolve` presents these for choice.
 export const defineCandidates = (declare: (stack: Stack) => void): Candidate[] => generateCandidates(build(declare));
 
 // One-shot: build -> generate candidates -> choose one -> its desired-state graph. `preferKey` selects a

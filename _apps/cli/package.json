@@ -44,10 +44,10 @@
         "@intentic/providers": "workspace:*",
         "@intentic/resolvers": "workspace:*",
         "@stricli/core": "^1.2.8",
-        "tslib": "catalog:",
-        "zod": "catalog:"
+        "tslib": "catalog:"
     },
     "devDependencies": {
+        "@intentic/sdk": "workspace:*",
         "@intentic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",

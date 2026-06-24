@@ -37,18 +37,20 @@ of resource nodes with refs, secrets, and readiness gates. ([_libs/graph/src/typ
 
 ## Control plane vs application plane
 
-- **Control plane** — stood up *before* any user intent exists: a standalone Gitea/Forgejo holding the
-  `intent` and `reconciliation-target` repos. The controller bootstraps it, watches the intent repo, and on
-  each push runs the flow above, committing the chosen artifact back to the target repo.
-  ([_apps/cli/src/control-plane.ts](_apps/cli/src/control-plane.ts),
-  [bootstrap.ts](_apps/cli/src/bootstrap.ts), [controller.ts](_apps/cli/src/controller.ts))
+- **Control plane** — two local git repos: an `intent` repo holding `deploy.config.ts` and a
+  `reconciliation-target` repo holding the chosen artifact + execution status. `intentic resolve` runs the
+  flow above and writes the artifact; `intentic apply` executes it. A remote, PR-managed control plane (a
+  standalone Forgejo watching the intent repo) is a planned later evolution of this same flow.
+  ([_apps/cli/src/resolve.ts](_apps/cli/src/resolve.ts), [artifact.ts](_apps/cli/src/artifact.ts),
+  [app.ts](_apps/cli/src/app.ts))
 - **Application plane** — the per-host support stack (Forgejo/Komodo/runner, Cloudflare tunnel + DNS
   routes) *derived from* `i.want.app`. This is what the resolver emits and the engine reconciles onto owned
   infra. ([_libs/resolvers/src/platform.ts](_libs/resolvers/src/platform.ts),
   [_libs/providers/](_libs/providers/src/))
 
-The two planes deliberately share code: the control-plane Forgejo reuses the same `forgejo` provider as the
-application-plane one — they are different node instances, not different implementations.
+The application plane is self-contained: its per-host Forgejo is just another reconciled node, so `apply`
+needs no pre-existing control plane. A future remote control plane would reuse the same `forgejo` provider —
+a different node instance, not a different implementation.
 
 ## Packages
 
@@ -66,18 +68,18 @@ graph ──► resolvers ──► sdk
 | [`@intentic/sdk`](_libs/sdk) | lib | Authoring surface (`i.want.app`); `defineStack` (one graph) and `defineCandidates` (the set). |
 | [`@intentic/engine`](_libs/engine) | lib | Stateless reconcile engine: `plan`/`apply`, the Provider SPI, and the `reconcile` loop. |
 | [`@intentic/providers`](_libs/providers) | lib | Real Provider SPI impls over SSH/Docker, Cloudflare, Forgejo, Komodo. |
-| [`@intentic/cli`](_apps/cli) | **app** | The runnable product: bootstrap the control plane, watch intent, execute. CLI `bin: intentic`. |
+| [`@intentic/cli`](_apps/cli) | **app** | The runnable product: `init` local repos, `resolve` intent → artifact, `apply` it. CLI `bin: intentic`. |
 
 ## The intent contract
 
-A pushed `deploy.config.ts` (see [/examples/deploy.config.ts](examples/deploy.config.ts)) must
-`export const candidates = defineCandidates(...)` — the set the controller chooses from.
-([evaluate-intent.ts](_apps/cli/src/evaluate-intent.ts)). `defineStack(...)` is the one-shot,
+A local `deploy.config.ts` (see [/examples/deploy.config.ts](examples/deploy.config.ts)) must
+`export const candidates = defineCandidates(...)` — the set `resolve` chooses from
+([resolve.ts](_apps/cli/src/resolve.ts)). `defineStack(...)` is the one-shot,
 single-graph form used when a single deterministic graph is wanted directly.
 
 ## Conventions (so the layout is predictable)
 
-- **One concept per file**, named for the concept (`reconcile-loop.ts`, `control-plane.ts`,
+- **One concept per file**, named for the concept (`reconcile-loop.ts`, `resolve.ts`,
   `forgejo-api.ts`). Tests are **co-located** next to their source.
 - **Test naming:** `*.test.ts` = unit; `*.engine.test.ts` = integration driven through the real engine;
   `*.e2e.test.ts` = gated real run (set `INTENTIC_E2E=1`; excluded from CI).

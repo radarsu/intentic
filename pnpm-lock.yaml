@@ -93,44 +93,10 @@ importers:
       tslib:
         specifier: 'catalog:'
         version: 2.8.1
-      zod:
-        specifier: 'catalog:'
-        version: 4.4.3
     devDependencies:
-      '@intentic/tsconfig':
+      '@intentic/sdk':
         specifier: workspace:*
-        version: link:../../_tools/tsconfig
-      '@types/node':
-        specifier: 'catalog:'
-        version: 25.5.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/node@25.5.2)(jiti@2.7.0)(yaml@2.9.0)
-
-  _apps/controller:
-    dependencies:
-      '@intentic/engine':
-        specifier: workspace:*
-        version: link:../../_libs/engine
-      '@intentic/graph':
-        specifier: workspace:*
-        version: link:../../_libs/graph
-      '@intentic/providers':
-        specifier: workspace:*
-        version: link:../../_libs/providers
-      '@intentic/resolvers':
-        specifier: workspace:*
-        version: link:../../_libs/resolvers
-      tslib:
-        specifier: 'catalog:'
-        version: 2.8.1
-      zod:
-        specifier: 'catalog:'
-        version: 4.4.3
-    devDependencies:
+        version: link:../../_libs/sdk
       '@intentic/tsconfig':
         specifier: workspace:*
         version: link:../../_tools/tsconfig

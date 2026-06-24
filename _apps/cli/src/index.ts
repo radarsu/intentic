@@ -1,16 +1,3 @@
-export type { BootstrapDeps, BootstrapOutcome } from "./bootstrap.js";
-export { bootstrap } from "./bootstrap.js";
-export type { ControlPlaneConfig } from "./control-plane.js";
-export {
-    buildControlPlaneGraph,
-    controlBranch,
-    controlGitId,
-    intentRepoId,
-    intentRepoName,
-    targetRepoId,
-    targetRepoName,
-} from "./control-plane.js";
-export { createControlRepoProvider } from "./control-repo.js";
-export type { ControllerDeps, CycleParams } from "./controller.js";
-export { artifactFileName, configFileName, runController, runCycle, statusFileName } from "./controller.js";
-export { evaluateIntentSource } from "./evaluate-intent.js";
+export { ARTIFACT_FILE, CONFIG_FILE, readArtifact, STATUS_FILE, writeArtifact, writeStatus } from "./artifact.js";
+export { scaffold } from "./init.js";
+export { loadCandidates } from "./resolve.js";

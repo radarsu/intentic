@@ -5,10 +5,11 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/intentic-deploy.git"
+        "url": "git+https://github.com/radarsu/intentic.git"
     },
     "scripts": {
         "build": "turbo run build",
+        "intentic": "tsc -b tsconfig.libs.json && node _apps/cli/dist/cli.js",
         "test": "turbo run test",
         "diff:stat": "git diff HEAD --shortstat",
         "clear": "find . \\( -name 'node_modules' -or -name '.cache' -or -name 'dist' -or -name '.turbo' -or -name 'pnpm-lock.yaml' \\) -exec rm -rf '{}' +",

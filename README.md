@@ -11,7 +11,7 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 | [`@intentic/sdk`](_libs/sdk) | Authoring surface (`i.want.app`) and `defineStack`: build → resolve → compile. |
 | [`@intentic/engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
 | [`@intentic/providers`](_libs/providers) | Real reconcile providers over the engine SPI: `host` (SSH/Docker via `ssh2`), `cloudflare` (resolve owned zone → id), `tunnel` (Cloudflare Tunnel + `cloudflared` on the host), `cf-route` (proxied DNS CNAME). |
-| [`@intentic/cli`](_apps/cli) | The runnable product (`bin: intentic`): `bootstrap` a standalone Gitea/Forgejo with the intent + reconciliation-target repos, then `runController` watches the intent repo, computes + auto-picks a candidate, stores it, and reconciles it until state reads true. |
+| [`@intentic/cli`](_apps/cli) | The runnable product (`bin: intentic`): `resolve` a local `deploy.config.ts` into a reconciliation-target artifact and `apply` it until state reads true; `init` scaffolds the two local git repos. |
 
 ## Getting started
 
@@ -20,6 +20,12 @@ pnpm install
 pnpm build         # turbo build across packages
 pnpm test
 pnpm libs:watch    # incremental TypeScript build in watch mode
+
+# run the CLI from the repo root (first call builds dist via tsc, then incremental)
+pnpm intentic --help
+pnpm intentic init                   # scaffold intent + reconciliation-target git repos
+pnpm intentic resolve                # deploy.config.ts -> reconciliation-target.json
+pnpm intentic apply                  # execute the artifact until state reads true
 ```
 
 > Requires **Node 24** and **pnpm 11**.

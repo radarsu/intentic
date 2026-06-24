@@ -1,7 +1,6 @@
-// Canonical intent file. Push this into the control plane's `intent` repo: the controller imports the
-// module, reads the exported `candidates`, computes every valid reconciliation-target artifact (one per
-// option combination that meets the needs), auto-picks one, stores it in the `reconciliation-target`
-// repo, and reconciles it until state reads true.
+// Canonical intent file. `intentic resolve` imports this module, reads the exported `candidates`, computes
+// every valid reconciliation-target artifact (one per option combination that meets the needs), and
+// auto-picks one; `intentic apply` then reconciles that artifact until state reads true.
 //
 // `env` comes from its true source, @intentic/graph (the SDK does not re-export it).
 
