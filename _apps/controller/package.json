@@ -7,7 +7,7 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/radarsu/intentic-deploy.git",
-        "directory": "_libs/controller"
+        "directory": "_apps/controller"
     },
     "files": [
         "dist"

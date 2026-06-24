@@ -7,6 +7,11 @@
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],
-    "references": [{ "path": "../graph" }, { "path": "../resolvers" }, { "path": "../engine" }, { "path": "../providers" }],
+    "references": [
+        { "path": "../../_libs/graph" },
+        { "path": "../../_libs/resolvers" },
+        { "path": "../../_libs/engine" },
+        { "path": "../../_libs/providers" }
+    ],
     "extends": "@intentic/tsconfig/tsconfig.base.json"
 }

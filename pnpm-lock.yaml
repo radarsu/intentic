@@ -73,20 +73,20 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
-  _libs/controller:
+  _apps/controller:
     dependencies:
       '@intentic/engine':
         specifier: workspace:*
-        version: link:../engine
+        version: link:../../_libs/engine
       '@intentic/graph':
         specifier: workspace:*
-        version: link:../graph
+        version: link:../../_libs/graph
       '@intentic/providers':
         specifier: workspace:*
-        version: link:../providers
+        version: link:../../_libs/providers
       '@intentic/resolvers':
         specifier: workspace:*
-        version: link:../resolvers
+        version: link:../../_libs/resolvers
       tslib:
         specifier: 'catalog:'
         version: 2.8.1

@@ -1,5 +1,5 @@
-import { defineStack } from "@intentic/sdk";
 import { env, linearize } from "@intentic/graph";
+import { defineStack } from "@intentic/sdk";
 import { expect, test } from "vitest";
 
 import { apply } from "./apply.js";

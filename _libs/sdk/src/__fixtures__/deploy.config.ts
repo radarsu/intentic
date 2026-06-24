@@ -1,9 +1,9 @@
-// Developer-authored deployment declaration for @intentic/sdk.
-// A real consumer imports the package name:
-//   import { defineStack, env } from "@intentic/sdk";
-// In-repo we import relatively so it runs under vitest with no resolve condition.
+// Test fixture: a representative authoring declaration, compiled and asserted against deploy.graph.ts.
+// The canonical user-facing example lives in /examples/deploy.config.ts; this copy exists only to pin the
+// compiled desired-state graph. In-repo we import relatively so it runs under vitest with no resolve
+// condition (a real consumer would `import { defineStack, env } from "@intentic/sdk"`).
 import { env } from "@intentic/graph";
-import { defineStack } from "./index.js";
+import { defineStack } from "../index.js";
 
 export const graph = defineStack((i) => {
     // What I have: one SSH + Docker host, one Cloudflare account.
@@ -30,5 +30,3 @@ export const graph = defineStack((i) => {
         },
     });
 });
-
-console.log(graph);

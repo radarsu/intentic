@@ -1,8 +1,8 @@
 import { fileURLToPath } from "node:url";
-import { defineStack } from "@intentic/sdk";
 import type { ApplyOutcome, ReadinessProbe } from "@intentic/engine";
 import { apply } from "@intentic/engine";
 import { env } from "@intentic/graph";
+import { defineStack } from "@intentic/sdk";
 import { utils } from "ssh2";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

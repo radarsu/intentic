@@ -4,7 +4,7 @@ import { env, isRef } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resolvers";
 import { OUTPUTS } from "@intentic/resolvers";
 import { expect, test } from "vitest";
-import { graph } from "./deploy.config.js";
+import { graph } from "./__fixtures__/deploy.config.js";
 import { defineStack } from "./index.js";
 
 // The Ref<string> output props on a handle are the author-facing source of truth; OUTPUTS is the runtime

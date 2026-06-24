@@ -1,7 +1,7 @@
 import { linearize } from "@intentic/graph";
 import { expect, test } from "vitest";
+import { graph } from "./__fixtures__/deploy.config.js";
 import { expectedGraph } from "./__fixtures__/deploy.graph.js";
-import { graph } from "./deploy.config.js";
 
 test("declaration compiles to the expected desired-state graph", () => {
     expect(graph).toEqual(expectedGraph);
