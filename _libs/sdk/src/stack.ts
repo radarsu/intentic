@@ -1,11 +1,11 @@
 import { makeRef } from "@intentic/graph";
-import type { AppIntent, CloudflareInput, CloudflareIntent, EnvironmentInput, HostInput, HostIntent, IntentSet } from "@intentic/resolvers";
+import type { AppIntent, EnvironmentInput, IntentSet } from "@intentic/resolvers";
 import { deploymentId, repoId } from "@intentic/resolvers";
-import type { App, Cloudflare, Deployment, Host, Repo, Stack, WantAppInput } from "./handles.js";
+import type { App, Deployment, Repo, Stack, WantAppInput } from "./handles.js";
 
-// The builder is a pure intent recorder: i.have.* / i.want.app record what was declared and hand back
-// typed handles for wiring. No derivation happens here — that is the resolver's job. The App handle's
-// per-environment ids come from the same deploymentId() the resolver uses, so they cannot drift.
+// The builder is a pure intent recorder: i.want.app records what was declared and hands back typed handles
+// for wiring. No derivation happens here — that is the resolver's job. The App handle's per-environment ids
+// come from the same deploymentId() the resolver uses, so they cannot drift.
 export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const claimed = new Set<string>();
     const claim = (id: string): void => {
@@ -15,28 +15,12 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         claimed.add(id);
     };
 
-    const hosts: HostIntent[] = [];
-    const clouds: CloudflareIntent[] = [];
     const apps: AppIntent[] = [];
-
-    const host = (id: string, input: HostInput): Host => {
-        claim(id);
-        hosts.push({ id, input });
-        return Object.freeze({ ...makeRef(id), internalIp: makeRef<string>(id, "internalIp"), publicIp: makeRef<string>(id, "publicIp") }) as Host;
-    };
-
-    const cloudflare = (id: string, input: CloudflareInput): Cloudflare => {
-        claim(id);
-        clouds.push({ id, input });
-        return Object.freeze({ ...makeRef(id), zoneId: makeRef<string>(id, "zoneId") }) as Cloudflare;
-    };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
         claim(id);
         apps.push({
             id,
-            on: input.on.resourceId,
-            expose: input.expose.resourceId,
             ...(input.notify !== undefined ? { notify: input.notify } : {}),
             environments: input.environments,
         });
@@ -56,6 +40,6 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze({ ...makeRef(id), repo, environments: Object.freeze(environments) }) as App<keyof E & string>;
     };
 
-    const stack: Stack = { have: { host, cloudflare }, want: { app } };
-    return { stack, intent: { hosts, clouds, apps } };
+    const stack: Stack = { want: { app } };
+    return { stack, intent: { apps } };
 };

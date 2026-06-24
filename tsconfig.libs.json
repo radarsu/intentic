@@ -6,6 +6,6 @@
         { "path": "_libs/sdk" },
         { "path": "_libs/engine" },
         { "path": "_libs/providers" },
-        { "path": "_apps/controller" }
+        { "path": "_apps/cli" }
     ]
 }

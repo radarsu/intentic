@@ -1,6 +1,6 @@
 import type { SerializedValue } from "@intentic/graph";
 
-import { env, isRef } from "@intentic/graph";
+import { isRef } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resolvers";
 import { OUTPUTS } from "@intentic/resolvers";
 import { expect, test } from "vitest";
@@ -21,17 +21,14 @@ test("public handles' output refs match OUTPUTS exactly", () => {
     const handles: Partial<Record<ResourceType, object>> = {};
 
     defineStack((i) => {
-        const host = i.have.host("host", { address: "1.2.3.4", user: "deploy", sshKey: env("K") });
-        handles["host"] = host;
-        const cf = i.have.cloudflare("cf", { accountId: "acc", apiToken: env("T"), zone: "example.com" });
-        handles["cloudflare"] = cf;
-        const app = i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
+        const app = i.want.app("app", { environments: { prod: { domain: "app.example.com", branch: "main" } } });
         handles["app"] = app;
         handles["repo"] = app.repo;
         handles["deployment"] = app.environments["prod"];
     });
 
-    for (const type of ["host", "cloudflare", "app", "deployment", "repo"] as const) {
+    // host/cloudflare are no longer author-facing handles — they are the implicit reconciled inventory.
+    for (const type of ["app", "deployment", "repo"] as const) {
         const handle = handles[type];
         expect(handle, `no handle captured for type "${type}"`).toBeDefined();
         expect(outputPropsOf(handle as object)).toEqual([...OUTPUTS[type]].sort());

@@ -2,6 +2,7 @@ import type { SecretRef } from "@intentic/graph";
 import { env, httpOk, makeRef } from "@intentic/graph";
 import { adminUsername, deployHookId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
+import { CLOUDFLARE_ID, HOST_ID } from "./inventory.js";
 import type { PlatformRefs } from "./platform.js";
 import type { ResolvedNode } from "./resource-types.js";
 import type { IngressPair } from "./route.js";
@@ -60,8 +61,8 @@ export const resolveApp = (
                 name,
                 branch: environment.branch,
                 domain: environment.domain,
-                server: makeRef(intent.on),
-                internalIp: makeRef<string>(intent.on, "internalIp"),
+                server: makeRef(HOST_ID),
+                internalIp: makeRef<string>(HOST_ID, "internalIp"),
                 port,
                 komodoUrl,
                 ...komodoAdmin,
@@ -70,7 +71,7 @@ export const resolveApp = (
             explicitDependsOn: [intent.id, platform.komodoRoute],
             readyWhen: environment.readyWhen ?? httpOk(makeRef<string>(id, "internalUrl"), { timeout: "60s" }),
         });
-        const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
+        const exposure = exposeRoute(CLOUDFLARE_ID, HOST_ID, environment.domain, port, apiToken);
         nodes.push(exposure.route);
         ingress.push(exposure.ingress);
         // Push-to-deploy: a Forgejo repo webhook that calls Komodo's deploy listener for this environment

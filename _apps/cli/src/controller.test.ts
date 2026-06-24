@@ -1,5 +1,4 @@
 import { createFakeProviders } from "@intentic/engine";
-import { env } from "@intentic/graph";
 import type { ForgejoApi } from "@intentic/providers";
 import type { Candidate, IntentSet } from "@intentic/resolvers";
 import { generateCandidates } from "@intentic/resolvers";
@@ -11,12 +10,19 @@ const NOT_USED = async (): Promise<never> => {
 };
 
 const intent: IntentSet = {
-    hosts: [{ id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } }],
-    clouds: [{ id: "cf", input: { accountId: "acc", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" } }],
-    apps: [{ id: "my-app", on: "host", expose: "cf", environments: { production: { domain: "app.example.com", branch: "main" } } }],
+    apps: [{ id: "my-app", environments: { production: { domain: "app.example.com", branch: "main" } } }],
 };
 
-const fullEnv = { HOST_SSH_KEY: "k", CLOUDFLARE_API_TOKEN: "k", FORGEJO_ADMIN_PASSWORD: "k", KOMODO_ADMIN_PASSWORD: "k", KOMODO_WEBHOOK_SECRET: "k" };
+const fullEnv = {
+    HOST_ADDRESS: "203.0.113.10",
+    HOST_USER: "deploy",
+    HOST_SSH_KEY: "k",
+    CLOUDFLARE_ACCOUNT_ID: "acc",
+    CLOUDFLARE_API_TOKEN: "k",
+    FORGEJO_ADMIN_PASSWORD: "k",
+    KOMODO_ADMIN_PASSWORD: "k",
+    KOMODO_WEBHOOK_SECRET: "k",
+};
 const access = { baseUrl: "http://10.0.0.1:3000", user: "intentic", password: "pw" };
 
 // A forgejo fake that serves a fixed head commit + config source and records every commit written back.

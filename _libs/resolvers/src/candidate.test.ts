@@ -1,17 +1,11 @@
-import { env } from "@intentic/graph";
 import { expect, test } from "vitest";
 import { enumerateAssignments, generateCandidates } from "./candidate.js";
 import type { Catalog, Option } from "./catalog.js";
 import { defaultCatalog } from "./catalog.js";
 import type { IntentSet } from "./intent.js";
 
-const cloud = { id: "cf", input: { accountId: "a", apiToken: env("T"), zone: "example.com" } };
-const host = { id: "host", input: { address: "1.2.3.4", user: "deploy", sshKey: env("K") } };
-
 const intent: IntentSet = {
-    hosts: [host],
-    clouds: [cloud],
-    apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    apps: [{ id: "app", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
 };
 
 test("the default catalog yields exactly one candidate built from forgejo/komodo/ssh-linux/cloudflare-tunnel", () => {

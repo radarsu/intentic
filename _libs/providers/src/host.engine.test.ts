@@ -1,6 +1,5 @@
 import { apply } from "@intentic/engine";
-import { env } from "@intentic/graph";
-import { defineStack } from "@intentic/sdk";
+import { compile, env, toNodeMap } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import { createHostProvider } from "./host.js";
@@ -15,14 +14,23 @@ const reachable: SshExecutor = {
     }),
 };
 
-test("host-only stack: the engine reconciles an owned host to noop and records its facts", async () => {
-    const graph = defineStack((i) => {
-        i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
-    });
+test("host node: the engine reconciles an owned host to noop and records its facts", async () => {
+    // The host is the implicit reconciled inventory (its connection sourced from canonical env secrets, filled
+    // at the decision/PR step); build its node directly to exercise the host provider in isolation.
+    const graph = compile(
+        toNodeMap([
+            {
+                id: "host",
+                type: "host",
+                inputs: { address: env("HOST_ADDRESS"), user: env("HOST_USER"), sshKey: env("HOST_SSH_KEY") },
+                explicitDependsOn: [],
+            },
+        ]),
+    );
 
     const result = await apply(graph, {
         providers: { host: createHostProvider(reachable) },
-        env: { HOST_SSH_KEY: "key-material" },
+        env: { HOST_ADDRESS: "203.0.113.10", HOST_USER: "deploy", HOST_SSH_KEY: "key-material" },
         log: () => {},
     });
 

@@ -1,13 +1,13 @@
 import { fileURLToPath } from "node:url";
 import type { ApplyOutcome, ReadinessProbe } from "@intentic/engine";
 import { apply } from "@intentic/engine";
-import { env } from "@intentic/graph";
 import { defineStack } from "@intentic/sdk";
 import { utils } from "ssh2";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cloudflareApi } from "./cloudflare-api.js";
 import { createProviders } from "./providers.js";
+import type { SshExecutor } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 
 // A real, manual, Tier-1 end-to-end run: boot a Docker-in-Docker "host", reach it over SSH, and let the
@@ -38,21 +38,21 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
     let accountId: string;
     let apiToken: string;
 
+    // The host is the implicit reconciled inventory; the zone is derived from the environment domains. The
+    // host's connection (address/user/sshKey) is supplied through the engine env below, and the engine
+    // reaches the DinD host on its mapped SSH port via the port-injecting executor (see mappedSsh).
     const buildGraph = () =>
         defineStack((i) => {
-            const onHost = i.have.host("host", {
-                address: host.getHost(),
-                port: host.getMappedPort(22),
-                user: "root",
-                sshKey: env("HOST_SSH_KEY"),
-            });
-            const cf = i.have.cloudflare("cf", { accountId, apiToken: env("CLOUDFLARE_API_TOKEN"), zone });
             i.want.app("my-app", {
-                on: onHost,
-                expose: cf,
                 environments: { staging: { domain: `staging.${zone}`, branch: "main", env: {} } },
             });
         });
+
+    // The graph's host carries no port (default 22), but the DinD host is reached on a random mapped port —
+    // inject it into every SSH connection the providers open.
+    const mappedSsh: SshExecutor = {
+        connect: (target) => sshExecutor.connect({ ...target, port: host.getMappedPort(22) }),
+    };
 
     beforeAll(async () => {
         zone = required("CLOUDFLARE_ZONE");
@@ -118,10 +118,16 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
     };
 
     it("creates the whole stack over SSH, then is idempotent", async () => {
-        const providers = createProviders();
+        const providers = createProviders({ ssh: mappedSsh });
         const config = {
             providers,
-            env: { ...process.env, HOST_SSH_KEY: privateKey },
+            env: {
+                ...process.env,
+                HOST_ADDRESS: host.getHost(),
+                HOST_USER: "root",
+                HOST_SSH_KEY: privateKey,
+                CLOUDFLARE_ACCOUNT_ID: accountId,
+            },
             probe: sshProbe,
             log: (message: string) => console.log(message),
         };

@@ -7,9 +7,6 @@ import { emit } from "./emit.js";
 import type { IntentSet } from "./intent.js";
 import { deriveNeeds, needKey } from "./needs.js";
 
-const cloud = { id: "cf", input: { accountId: "a", apiToken: env("T"), zone: "example.com" } };
-const host = { id: "host", input: { address: "1.2.3.4", user: "deploy", sshKey: env("K") } };
-
 // The full single-combination assignment for an intent under the default catalog — the one combo emit
 // supports today.
 const assign = (intent: IntentSet): Assignment => {
@@ -26,13 +23,9 @@ const assign = (intent: IntentSet): Assignment => {
 
 test("emit derives the full support stack for a two-environment app", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [cloud],
         apps: [
             {
                 id: "app",
-                on: "host",
-                expose: "cf",
                 environments: {
                     staging: { domain: "staging.example.com", branch: "develop" },
                     production: { domain: "app.example.com", branch: "main" },
@@ -61,37 +54,31 @@ test("emit derives the full support stack for a two-environment app", () => {
     ]);
 });
 
-test("apps on the same host share one derived platform", () => {
+test("apps share one derived platform", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [cloud],
         apps: [
-            { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
-            { id: "two", on: "host", expose: "cf", environments: { prod: { domain: "two.example.com", branch: "main" } } },
+            { id: "one", environments: { prod: { domain: "one.example.com", branch: "main" } } },
+            { id: "two", environments: { prod: { domain: "two.example.com", branch: "main" } } },
         ],
     };
 
     const types = emit(intent, assign(intent)).map((node) => node.type);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
-    // One tunnel per host, shared across all apps on that host.
+    // One tunnel for the shared host, across all apps.
     expect(types.filter((type) => type === "tunnel")).toHaveLength(1);
 });
 
-test("an app exposed through a cloudflare with no zone throws", () => {
+test("environment domains spanning multiple zones throws", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [],
-        apps: [{ id: "app", on: "host", expose: "ghost", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+        apps: [{ id: "app", environments: { a: { domain: "a.example.com", branch: "main" }, b: { domain: "b.other.com", branch: "main" } } }],
     };
-    expect(() => emit(intent, assign(intent))).toThrow('cloudflare "ghost" has no zone');
+    expect(() => emit(intent, assign(intent))).toThrow(/multiple zones/);
 });
 
 test("an unsupported option assignment throws", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [cloud],
-        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+        apps: [{ id: "app", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
     const byNeed = new Map(assign(intent).byNeed);
     byNeed.set("source-control:host", "gitlab");
@@ -100,13 +87,9 @@ test("an unsupported option assignment throws", () => {
 
 test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to the app's stack", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [cloud],
         apps: [
             {
                 id: "app",
-                on: "host",
-                expose: "cf",
                 notify: { discord: env("DISCORD_WEBHOOK_URL") },
                 environments: { prod: { domain: "app.example.com", branch: "main" } },
             },
@@ -129,9 +112,7 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
 
 test("an app without notify derives no notification sinks", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [cloud],
-        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+        apps: [{ id: "app", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
     const types = emit(intent, assign(intent)).map((node) => node.type);
@@ -141,20 +122,14 @@ test("an app without notify derives no notification sinks", () => {
 
 test("notification sinks are derived per app, while the platform stays shared per host", () => {
     const intent: IntentSet = {
-        hosts: [host],
-        clouds: [cloud],
         apps: [
             {
                 id: "one",
-                on: "host",
-                expose: "cf",
                 notify: { discord: env("WEBHOOK") },
                 environments: { prod: { domain: "one.example.com", branch: "main" } },
             },
             {
                 id: "two",
-                on: "host",
-                expose: "cf",
                 notify: { discord: env("WEBHOOK") },
                 environments: { prod: { domain: "two.example.com", branch: "main" } },
             },

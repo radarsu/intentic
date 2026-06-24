@@ -3,7 +3,8 @@
         "baseUrl": "./",
         "outDir": "./dist",
         "rootDir": "./src",
-        "tsBuildInfoFile": "./.cache/tsbuildinfo"
+        "tsBuildInfoFile": "./.cache/tsbuildinfo",
+        "skipLibCheck": true
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],

@@ -1,7 +1,9 @@
 # Architecture
 
-intentic is **intent-driven deployment**: you declare *what you have* and *what you want*; the system
-computes every valid way to satisfy that, picks one, and reconciles infrastructure until reality matches.
+intentic is **intent-driven deployment**: you declare *what you want*; the system computes every valid way
+to satisfy that, picks one, and reconciles infrastructure until reality matches. The things you "have" (the
+host it runs on, the Cloudflare it's exposed through) are not authored — they are reconciled resources in
+the target artifact, their connection values filled at the decision/PR step.
 
 ## The intent-driven flow
 
@@ -9,8 +11,9 @@ computes every valid way to satisfy that, picks one, and reconciles infrastructu
 Intent ──► Needs ──► Options (catalog) ──► Candidates ──► Choose ──► Execute ──► (reads true)
 ```
 
-1. **Intent** — a declaration authored with the SDK: `i.have.host(...)` / `i.have.cloudflare(...)` (what
-   you have) and `i.want.app(...)` (what you want). Captured as a serializable `IntentSet`.
+1. **Intent** — a declaration authored with the SDK: `i.want.app(...)` (what you want). Captured as a
+   serializable `IntentSet`. The host and Cloudflare are the implicit reconciled inventory (see
+   [_libs/resolvers/src/inventory.ts](_libs/resolvers/src/inventory.ts)), so the intent carries only apps.
    ([_libs/sdk/src/stack.ts](_libs/sdk/src/stack.ts))
 2. **Needs** — the abstract capabilities the intent requires, derived from it: `source-control`,
    `docker-registry`, `infra-control`, `deployment-target`, `domain`. (`deriveNeeds` in
@@ -37,8 +40,8 @@ of resource nodes with refs, secrets, and readiness gates. ([_libs/graph/src/typ
 - **Control plane** — stood up *before* any user intent exists: a standalone Gitea/Forgejo holding the
   `intent` and `reconciliation-target` repos. The controller bootstraps it, watches the intent repo, and on
   each push runs the flow above, committing the chosen artifact back to the target repo.
-  ([_apps/controller/src/control-plane.ts](_apps/controller/src/control-plane.ts),
-  [bootstrap.ts](_apps/controller/src/bootstrap.ts), [controller.ts](_apps/controller/src/controller.ts))
+  ([_apps/cli/src/control-plane.ts](_apps/cli/src/control-plane.ts),
+  [bootstrap.ts](_apps/cli/src/bootstrap.ts), [controller.ts](_apps/cli/src/controller.ts))
 - **Application plane** — the per-host support stack (Forgejo/Komodo/runner, Cloudflare tunnel + DNS
   routes) *derived from* `i.want.app`. This is what the resolver emits and the engine reconciles onto owned
   infra. ([_libs/resolvers/src/platform.ts](_libs/resolvers/src/platform.ts),
@@ -53,23 +56,23 @@ Dependency direction (one-way):
 
 ```
 graph ──► resolvers ──► sdk
-   └────► engine ──► providers ──► controller (app)
+   └────► engine ──► providers ──► cli (app)
 ```
 
 | Package | Tier | Role |
 | --- | --- | --- |
 | [`@intentic/graph`](_libs/graph) | lib | Product-agnostic IR: refs, secrets, readiness, `DesiredStateGraph`, and the compiler. |
 | [`@intentic/resolvers`](_libs/resolvers) | lib | Intent → needs → catalog → candidates → choose; the closed `ResourceType` vocabulary and `OUTPUTS`. |
-| [`@intentic/sdk`](_libs/sdk) | lib | Authoring surface (`i.have`/`i.want`); `defineStack` (one graph) and `defineCandidates` (the set). |
+| [`@intentic/sdk`](_libs/sdk) | lib | Authoring surface (`i.want.app`); `defineStack` (one graph) and `defineCandidates` (the set). |
 | [`@intentic/engine`](_libs/engine) | lib | Stateless reconcile engine: `plan`/`apply`, the Provider SPI, and the `reconcile` loop. |
 | [`@intentic/providers`](_libs/providers) | lib | Real Provider SPI impls over SSH/Docker, Cloudflare, Forgejo, Komodo. |
-| [`@intentic/controller`](_apps/controller) | **app** | The runnable product: bootstrap the control plane, watch intent, execute. CLI `bin: intentic`. |
+| [`@intentic/cli`](_apps/cli) | **app** | The runnable product: bootstrap the control plane, watch intent, execute. CLI `bin: intentic`. |
 
 ## The intent contract
 
 A pushed `deploy.config.ts` (see [/examples/deploy.config.ts](examples/deploy.config.ts)) must
 `export const candidates = defineCandidates(...)` — the set the controller chooses from.
-([evaluate-intent.ts](_apps/controller/src/evaluate-intent.ts)). `defineStack(...)` is the one-shot,
+([evaluate-intent.ts](_apps/cli/src/evaluate-intent.ts)). `defineStack(...)` is the one-shot,
 single-graph form used when a single deterministic graph is wanted directly.
 
 ## Conventions (so the layout is predictable)

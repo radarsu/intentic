@@ -8,10 +8,10 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 | --- | --- |
 | [`@intentic/graph`](_libs/graph) | Product-agnostic desired-state IR: refs, secrets, readiness, the serializable graph, and the compiler. |
 | [`@intentic/resolvers`](_libs/resolvers) | Computes intent into needs, the option catalog that meets them, and every valid reconciliation-target artifact — then chooses one. |
-| [`@intentic/sdk`](_libs/sdk) | Authoring surface (`i.have` / `i.want`) and `defineStack`: build → resolve → compile. |
+| [`@intentic/sdk`](_libs/sdk) | Authoring surface (`i.want.app`) and `defineStack`: build → resolve → compile. |
 | [`@intentic/engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
 | [`@intentic/providers`](_libs/providers) | Real reconcile providers over the engine SPI: `host` (SSH/Docker via `ssh2`), `cloudflare` (resolve owned zone → id), `tunnel` (Cloudflare Tunnel + `cloudflared` on the host), `cf-route` (proxied DNS CNAME). |
-| [`@intentic/controller`](_apps/controller) | Intent-driven control plane: `bootstrap` a standalone Gitea/Forgejo with the intent + reconciliation-target repos, then `runController` watches the intent repo, computes + auto-picks a candidate, stores it, and reconciles it until state reads true. |
+| [`@intentic/cli`](_apps/cli) | The runnable product (`bin: intentic`): `bootstrap` a standalone Gitea/Forgejo with the intent + reconciliation-target repos, then `runController` watches the intent repo, computes + auto-picks a candidate, stores it, and reconciles it until state reads true. |
 
 ## Getting started
 

@@ -6,9 +6,13 @@ import { apply } from "./apply.js";
 import { plan } from "./plan.js";
 import { createFakeProviders } from "./providers/fake.js";
 
-// The full secret set the example declaration references.
+// The full secret set the example declaration references, including the implicit host/Cloudflare
+// connection (filled at the decision/PR step) the resolver now sources from canonical env keys.
 const fullEnv = {
+    HOST_ADDRESS: "203.0.113.10",
+    HOST_USER: "deploy",
     HOST_SSH_KEY: "k",
+    CLOUDFLARE_ACCOUNT_ID: "acc_123",
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
@@ -20,11 +24,7 @@ const fullEnv = {
 // Source the real graph from the authoring stack (build -> resolve -> compile), not a hand copy.
 const buildGraph = () =>
     defineStack((i) => {
-        const host = i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
-        const cf = i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
         i.want.app("my-app", {
-            on: host,
-            expose: cf,
             environments: {
                 staging: { domain: "staging.example.com", branch: "develop", env: { DATABASE_URL: env("STAGING_DATABASE_URL") } },
                 production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },

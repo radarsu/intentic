@@ -1,22 +1,12 @@
 import type { Ref } from "@intentic/graph";
-import type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput } from "@intentic/resolvers";
+import type { EnvironmentInput, NotifyInput } from "@intentic/resolvers";
 
-// The authoring surface. A developer declares inventory ("what you have" — i.have.*) and the one thing
-// they want ("what you want" — i.want.app); the support stack each app requires is derived by the
-// resolver, never declared here. These handles are inert refs the author wires `on`/`expose` with.
+// The authoring surface. A developer declares only what they want — i.want.app — and the support stack it
+// requires (git+CI, deploy orchestrator, the host it runs on, the Cloudflare it's exposed through) is
+// derived by the resolver and reconciled as resources in the target artifact; their connection values are
+// filled at the decision/PR step, never authored here. These handles are the inert refs i.want.app hands back.
 
-// --- Inventory handles; their output properties are inert refs ---
-
-export interface Host extends Ref<"host"> {
-    readonly internalIp: Ref<string>;
-    readonly publicIp: Ref<string>;
-}
-
-export interface Cloudflare extends Ref<"cloudflare"> {
-    readonly zoneId: Ref<string>;
-}
-
-// --- The app, its source repo, and its environments (the handles i.want.app hands back) ---
+// --- The app, its source repo, and its environments ---
 
 export interface Repo extends Ref<"repo"> {
     readonly cloneUrl: Ref<string>;
@@ -33,18 +23,11 @@ export interface App<Names extends string = string> extends Ref<"app"> {
     readonly environments: Readonly<Record<Names, Deployment>>;
 }
 
-// --- Intent input. "Wants require haves" is enforced structurally: on: Host, expose: Cloudflare. ---
+// --- Intent input: the one thing you want, an app shipped to one or more environments. ---
 
 export interface WantAppInput {
-    on: Host;
-    expose: Cloudflare;
     notify?: NotifyInput;
     environments: Record<string, EnvironmentInput>;
-}
-
-export interface Have {
-    host(id: string, input: HostInput): Host;
-    cloudflare(id: string, input: CloudflareInput): Cloudflare;
 }
 
 export interface Want {
@@ -53,6 +36,5 @@ export interface Want {
 }
 
 export interface Stack {
-    readonly have: Have;
     readonly want: Want;
 }
