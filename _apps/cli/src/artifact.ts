@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DesiredStateGraph } from "@intentic/graph";
@@ -9,6 +10,7 @@ export const TARGET_DIR = "desired-state";
 export const CONFIG_FILE = "deploy.config.ts";
 export const ARTIFACT_FILE = "desired-state.json";
 export const STATUS_FILE = "status.json";
+export const ENV_FILE = ".env";
 
 // The defaults every command resolves against cwd: the config in the intent repo, the artifact in the
 // desired-state repo. `init` scaffolds both repos at these same paths.
@@ -27,3 +29,13 @@ export const writeArtifact = async (path: string, graph: DesiredStateGraph): Pro
     writeFile(path, `${JSON.stringify(graph, undefined, 4)}\n`);
 
 export const writeStatus = async (path: string, status: unknown): Promise<void> => writeFile(path, `${JSON.stringify(status, undefined, 4)}\n`);
+
+// `apply`/`plan` resolve secrets from process.env; load them from the `.env` beside the artifact being
+// executed. Optional: a missing file is fine — CI or the shell may set the vars directly.
+export const loadEnvFile = (dir: string): void => {
+    const path = join(dir, ENV_FILE);
+    if (!existsSync(path)) {
+        return;
+    }
+    process.loadEnvFile(path);
+};

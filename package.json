@@ -11,6 +11,7 @@
         "build": "turbo run build",
         "intentic": "tsc -b tsconfig.libs.json && node _apps/cli/dist/cli.js",
         "test": "turbo run test",
+        "e2e": "turbo run e2e --ui=stream",
         "diff:stat": "git diff HEAD --shortstat",
         "clear": "find . \\( -name 'node_modules' -or -name '.cache' -or -name 'dist' -or -name '.turbo' -or -name 'pnpm-lock.yaml' \\) -exec rm -rf '{}' +",
         "cache:clear": "find . \\( -name '.cache' -or -name 'dist' -or -name '.turbo' \\) -exec rm -rf '{}' +",

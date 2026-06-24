@@ -22,14 +22,23 @@ Built on [stricli](https://github.com/bloomberg/stricli) with generated `--help`
   create/update.
 - `intentic apply [--artifact desired-state.json] [--max-iterations 5]` — reconcile the artifact
   until state reads true, writing `status.json` beside it. Deploy-target secrets (e.g. `HOST_SSH_KEY`,
-  `CLOUDFLARE_API_TOKEN`) are read from the environment at apply time.
+  `CLOUDFLARE_API_TOKEN`) are read at apply time from `.env` beside the artifact (the `desired-state`
+  repo, gitignored) or from the environment.
+
+## Secrets
+
+`apply` and `plan` resolve deploy-target secrets from a `.env` in the artifact's directory (the
+`desired-state` repo), falling back to the ambient environment when a key is absent there. `init`
+scaffolds a gitignored `.env` slot: copy `desired-state/.env.example` to `desired-state/.env` and fill
+it in. The `.env` is gitignored so secrets never land in the PR-managed repo.
 
 ## Workflow
 
 ```sh
 intentic init
 cd intent && intentic resolve --out ../desired-state/desired-state.json
-cd ../desired-state && HOST_SSH_KEY=… CLOUDFLARE_API_TOKEN=… intentic apply
+cp ../desired-state/.env.example ../desired-state/.env   # then fill in HOST_SSH_KEY, CLOUDFLARE_API_TOKEN, …
+cd .. && intentic apply
 ```
 
 > A `deploy.config.ts` imports `@intentic/sdk` + `@intentic/graph`, so the project it lives in must have

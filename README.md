@@ -71,17 +71,17 @@ graph converges (`create`) and a second `apply` is all-`noop` (idempotency), the
 resources it created. Tier 1 builds no app, so the deployment's runtime health gate is short-circuited.
 
 It is gated behind `INTENTIC_E2E` and **excluded from `pnpm test` / CI** (needs a privileged Docker
-daemon and live Cloudflare credentials). Run it with:
+daemon and live Cloudflare credentials). Run it from the repo root with `pnpm e2e`, which builds the
+libs, sets `INTENTIC_E2E=1` for you, and fails loudly if any secret below is missing:
 
 ```sh
-INTENTIC_E2E=1 \
 CLOUDFLARE_API_TOKEN=...      # Account → Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read
 CLOUDFLARE_ACCOUNT_ID=... \
 CLOUDFLARE_ZONE=example.com \ # a throwaway zone you own — DNS records + a tunnel are created and deleted
 FORGEJO_ADMIN_PASSWORD=... \
 KOMODO_ADMIN_PASSWORD=... \
 KOMODO_WEBHOOK_SECRET=... \
-pnpm --filter @intentic/providers e2e
+pnpm e2e
 ```
 
 > Networking: providers run nested containers with `--network host`, so the engine reaches services at

@@ -34,7 +34,7 @@
         "watch": "tsc --build --watch",
         "test": "vitest run",
         "test:watch": "vitest",
-        "e2e": "vitest run local.e2e"
+        "e2e": "INTENTIC_E2E=1 vitest run local.e2e"
     },
     "dependencies": {
         "@intentic/engine": "workspace:*",

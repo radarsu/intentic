@@ -5,7 +5,7 @@ import { createProviders } from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
-import { ARTIFACT_PATH, CONFIG_FILE, CONFIG_PATH, readArtifact, STATUS_FILE, writeArtifact, writeStatus } from "./artifact.js";
+import { ARTIFACT_PATH, CONFIG_FILE, CONFIG_PATH, loadEnvFile, readArtifact, STATUS_FILE, writeArtifact, writeStatus } from "./artifact.js";
 import { scaffold } from "./init.js";
 import { loadIntent } from "./resolve.js";
 
@@ -57,7 +57,9 @@ const planCommand = buildCommand<{ artifact?: string }>({
     },
     async func(this: CommandContext, flags: { artifact?: string }) {
         const log = (message: string): void => this.process.stdout.write(`${message}\n`);
-        const graph = await readArtifact(flags.artifact ?? ARTIFACT_PATH);
+        const artifact = flags.artifact ?? ARTIFACT_PATH;
+        loadEnvFile(dirname(artifact));
+        const graph = await readArtifact(artifact);
         const outcome = await plan(graph, { providers: createProviders(), log });
         for (const step of outcome.steps) {
             log(`${step.action}\t${step.type}\t${step.id}${step.reason !== undefined ? `\t(${step.reason})` : ""}`);
@@ -86,6 +88,7 @@ const apply = buildCommand<ApplyFlags>({
     async func(this: CommandContext, flags: ApplyFlags) {
         const log = (message: string): void => this.process.stdout.write(`${message}\n`);
         const artifact = flags.artifact ?? ARTIFACT_PATH;
+        loadEnvFile(dirname(artifact));
         const graph = await readArtifact(artifact);
         const result = await reconcile(
             graph,

@@ -10,6 +10,19 @@
             "dependsOn": ["^build"],
             "outputs": []
         },
+        "e2e": {
+            "dependsOn": ["^build"],
+            "cache": false,
+            "passThroughEnv": [
+                "INTENTIC_E2E",
+                "CLOUDFLARE_API_TOKEN",
+                "CLOUDFLARE_ACCOUNT_ID",
+                "CLOUDFLARE_ZONE",
+                "FORGEJO_ADMIN_PASSWORD",
+                "KOMODO_ADMIN_PASSWORD",
+                "KOMODO_WEBHOOK_SECRET"
+            ]
+        },
         "watch": {
             "cache": false,
             "persistent": true

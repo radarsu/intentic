@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { CONFIG_FILE, INTENT_DIR, TARGET_DIR } from "./artifact.js";
+import { CONFIG_FILE, ENV_FILE, INTENT_DIR, TARGET_DIR } from "./artifact.js";
 
 const exec = promisify(execFile);
 
@@ -32,6 +32,15 @@ export const intent = defineIntent((i) => {
     });
 });
 `;
+
+// The secret keys the starter config references via env(). `apply`/`plan` load these from
+// `desired-state/.env`; the example documents what to fill in, the .gitignore keeps the real .env (and the
+// secrets it holds) out of the PR-managed desired-state repo.
+const STARTER_ENV_EXAMPLE = `HOST_SSH_KEY=
+CLOUDFLARE_API_TOKEN=
+PRODUCTION_DATABASE_URL=
+`;
+const TARGET_GITIGNORE = `${ENV_FILE}\n`;
 
 // A standalone TS project for the one config file: type-strip-importable by `resolve`, type-checked in an
 // editor against the @intentic/* packages' shipped declarations (no build of the intent repo itself).
@@ -77,6 +86,8 @@ export const scaffold = async (dir: string, version: string, link: boolean): Pro
     await writeFile(join(intentDir, CONFIG_FILE), STARTER_CONFIG);
     await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
     await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
+    await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
+    await writeFile(join(targetDir, `${ENV_FILE}.example`), STARTER_ENV_EXAMPLE);
     await exec("pnpm", ["install", "--ignore-workspace"], { cwd: intentDir });
     return { intentDir, targetDir };
 };
