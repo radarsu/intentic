@@ -12,21 +12,9 @@ interface WorldEntry {
 // run (and across runs) is what proves idempotency — a 2nd apply finds everything and reports noop.
 export type FakeWorld = Map<string, WorldEntry>;
 
-const RESOURCE_TYPES: readonly ResourceType[] = [
-    "host",
-    "cloudflare",
-    "cf-route",
-    "tunnel",
-    "forgejo",
-    "repo",
-    "forgejo-runner",
-    "komodo",
-    "app",
-    "deployment",
-    "forgejo-notify",
-    "komodo-notify",
-    "deploy-hook",
-];
+// Every kind the resolver stack declares — OUTPUTS is the single authority, so the fake map cannot drift
+// from the ResourceType union when a kind is added.
+const RESOURCE_TYPES = Object.keys(OUTPUTS) as ResourceType[];
 
 // Deterministic outputs from id + OUTPUTS[type] so every downstream $ref resolves and readiness urls
 // are stub-probeable. url-ish names get a fake URL; everything else gets a stable "id::name" token.

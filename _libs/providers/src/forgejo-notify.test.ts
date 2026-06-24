@@ -1,21 +1,7 @@
 import { expect, test } from "vitest";
-import type { ForgejoApi, ForgejoHook } from "./forgejo-api.js";
+import { fakeForgejoApi } from "./forgejo-api.fake.js";
+import type { ForgejoHook } from "./forgejo-api.js";
 import { createForgejoNotifyProvider } from "./forgejo-notify.js";
-
-const NOT_USED = async (): Promise<never> => {
-    throw new Error("unused by the forgejo-notify provider");
-};
-const api = (overrides: Partial<ForgejoApi>): ForgejoApi => ({
-    findRepo: NOT_USED,
-    createRepo: NOT_USED,
-    listHooks: NOT_USED,
-    createHook: NOT_USED,
-    updateHook: NOT_USED,
-    latestCommit: NOT_USED,
-    readFile: NOT_USED,
-    commitFile: NOT_USED,
-    ...overrides,
-});
 
 const ctx = () => ({
     env: {},
@@ -44,38 +30,40 @@ const discordHook = (over: Partial<ForgejoHook> = {}): ForgejoHook => ({
 });
 
 test("read returns undefined when forgejoUrl is PENDING", async () => {
-    expect(await createForgejoNotifyProvider(api({})).read({ ...inputs, forgejoUrl: 42 }, ctx())).toBeUndefined();
+    expect(await createForgejoNotifyProvider(fakeForgejoApi({})).read({ ...inputs, forgejoUrl: 42 }, ctx())).toBeUndefined();
 });
 
 test("read returns undefined when no discord hook matches the webhook url", async () => {
-    expect(await createForgejoNotifyProvider(api({ listHooks: async () => [] })).read(inputs, ctx())).toBeUndefined();
+    expect(await createForgejoNotifyProvider(fakeForgejoApi({ listHooks: async () => [] })).read(inputs, ctx())).toBeUndefined();
 });
 
 test("read returns the matched discord hook detail", async () => {
-    const observed = await createForgejoNotifyProvider(api({ listHooks: async () => [discordHook()] })).read(inputs, ctx());
+    const observed = await createForgejoNotifyProvider(fakeForgejoApi({ listHooks: async () => [discordHook()] })).read(inputs, ctx());
     expect(observed).toEqual({ outputs: {}, detail: { events: ["push"], active: true } });
 });
 
 test("diff is noop when active and events match", () => {
-    expect(createForgejoNotifyProvider(api({})).diff(inputs, { outputs: {}, detail: { events: ["push"], active: true } })).toEqual({
+    expect(createForgejoNotifyProvider(fakeForgejoApi({})).diff(inputs, { outputs: {}, detail: { events: ["push"], active: true } })).toEqual({
         action: "noop",
     });
 });
 
 test("diff is update when the hook is disabled", () => {
-    expect(createForgejoNotifyProvider(api({})).diff(inputs, { outputs: {}, detail: { events: ["push"], active: false } }).action).toBe("update");
+    expect(createForgejoNotifyProvider(fakeForgejoApi({})).diff(inputs, { outputs: {}, detail: { events: ["push"], active: false } }).action).toBe(
+        "update",
+    );
 });
 
 test("diff is update when events differ", () => {
-    expect(createForgejoNotifyProvider(api({})).diff(inputs, { outputs: {}, detail: { events: ["pull_request"], active: true } }).action).toBe(
-        "update",
-    );
+    expect(
+        createForgejoNotifyProvider(fakeForgejoApi({})).diff(inputs, { outputs: {}, detail: { events: ["pull_request"], active: true } }).action,
+    ).toBe("update");
 });
 
 test("apply creates a discord webhook when none matches", async () => {
     let created: unknown;
     const provider = createForgejoNotifyProvider(
-        api({
+        fakeForgejoApi({
             listHooks: async () => [],
             createHook: async (args) => {
                 created = args;
@@ -89,7 +77,7 @@ test("apply creates a discord webhook when none matches", async () => {
 test("apply updates the existing matching hook rather than creating", async () => {
     let updatedId: number | undefined;
     const provider = createForgejoNotifyProvider(
-        api({
+        fakeForgejoApi({
             listHooks: async () => [discordHook({ id: 7 })],
             updateHook: async (args) => {
                 updatedId = args.id;
@@ -101,5 +89,7 @@ test("apply updates the existing matching hook rather than creating", async () =
 });
 
 test("malformed inputs are rejected", async () => {
-    await expect(createForgejoNotifyProvider(api({})).read({ ...inputs, webhook: 5 }, ctx())).rejects.toThrow(/forgejo-notify inputs malformed/);
+    await expect(createForgejoNotifyProvider(fakeForgejoApi({})).read({ ...inputs, webhook: 5 }, ctx())).rejects.toThrow(
+        /forgejo-notify inputs malformed/,
+    );
 });

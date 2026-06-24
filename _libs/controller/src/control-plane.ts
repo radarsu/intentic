@@ -1,4 +1,4 @@
-import type { DesiredStateGraph, Ref, SecretRef } from "@puristic/deploy-protocol";
+import type { DesiredStateGraph, SecretRef } from "@puristic/deploy-protocol";
 import { compile, httpOk, makeRef, toNodeMap } from "@puristic/deploy-protocol";
 import { adminUsername } from "@puristic/deploy-resolvers";
 
@@ -61,7 +61,7 @@ export const buildControlPlaneGraph = (config: ControlPlaneConfig): DesiredState
                     adminPassword: config.adminPassword,
                 },
                 explicitDependsOn: [],
-                readyWhen: httpOk(makeRef(controlGitId, "internalUrl") as Ref<string>, { timeout: "120s" }),
+                readyWhen: httpOk(makeRef<string>(controlGitId, "internalUrl"), { timeout: "120s" }),
             },
             repo(intentRepoId, intentRepoName),
             repo(targetRepoId, targetRepoName),

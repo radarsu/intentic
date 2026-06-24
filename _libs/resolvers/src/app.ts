@@ -1,4 +1,4 @@
-import type { Ref, SecretRef } from "@puristic/deploy-protocol";
+import type { SecretRef } from "@puristic/deploy-protocol";
 import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
 import { adminUsername, deployHookId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
@@ -19,10 +19,9 @@ export const resolveApp = (
     apiToken: SecretRef,
     zone: string,
 ): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
-    const ref = (id: string, output: string): Ref<string> => makeRef(id, output) as Ref<string>;
     const repo = repoId(intent.id);
-    const forgejoUrl = ref(platform.forgejo, "url");
-    const komodoUrl = ref(platform.deploy, "url");
+    const forgejoUrl = makeRef<string>(platform.forgejo, "url");
+    const komodoUrl = makeRef<string>(platform.deploy, "url");
     const forgejoAdmin = { adminUser: adminUsername, adminPassword: env("FORGEJO_ADMIN_PASSWORD") };
     const komodoAdmin = { adminUser: adminUsername, adminPassword: env("KOMODO_ADMIN_PASSWORD") };
 
@@ -38,7 +37,7 @@ export const resolveApp = (
             id: intent.id,
             type: "app",
             inputs: {
-                source: ref(repo, "cloneUrl"),
+                source: makeRef<string>(repo, "cloneUrl"),
                 repoName: intent.id,
                 deployer: makeRef(platform.deploy),
                 komodoUrl,
@@ -62,14 +61,14 @@ export const resolveApp = (
                 branch: environment.branch,
                 domain: environment.domain,
                 server: makeRef(intent.on),
-                internalIp: ref(intent.on, "internalIp"),
+                internalIp: makeRef<string>(intent.on, "internalIp"),
                 port,
                 komodoUrl,
                 ...komodoAdmin,
                 ...(environment.env !== undefined ? { env: environment.env } : {}),
             },
             explicitDependsOn: [intent.id, platform.komodoRoute],
-            readyWhen: environment.readyWhen ?? httpOk(ref(id, "internalUrl"), { timeout: "60s" }),
+            readyWhen: environment.readyWhen ?? httpOk(makeRef<string>(id, "internalUrl"), { timeout: "60s" }),
         });
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
         nodes.push(exposure.route);

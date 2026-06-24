@@ -1,6 +1,6 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider } from "@puristic/deploy-engine";
 import type { ForgejoApi } from "@puristic/deploy-providers";
-import { forgejoApi } from "@puristic/deploy-providers";
+import { forgejoApi, parseInputs } from "@puristic/deploy-providers";
 import { z } from "zod";
 
 const controlRepoSchema = z.object({
@@ -12,16 +12,6 @@ const controlRepoSchema = z.object({
     adminPassword: z.string(),
 });
 type ControlRepoInputs = z.infer<typeof controlRepoSchema>;
-
-const parse = (inputs: ResolvedInputs): ControlRepoInputs => {
-    const result = controlRepoSchema.safeParse(inputs);
-    if (!result.success) {
-        throw new Error(
-            `control-repo inputs malformed: ${result.error.issues.map((issue) => `${issue.path.join(".")} ${issue.message}`).join("; ")}`,
-        );
-    }
-    return result.data;
-};
 
 const find = (api: ForgejoApi, parsed: ControlRepoInputs) =>
     api.findRepo({ baseUrl: parsed.baseUrl, user: parsed.adminUser, password: parsed.adminPassword, owner: parsed.owner, name: parsed.name });
@@ -35,7 +25,7 @@ export const createControlRepoProvider = (api: ForgejoApi = forgejoApi): Provide
         if (typeof inputs["baseUrl"] !== "string") {
             return undefined;
         }
-        const parsed = parse(inputs);
+        const parsed = parseInputs(controlRepoSchema, inputs, "control-repo");
         try {
             const repo = await find(api, parsed);
             if (repo === undefined) {
@@ -49,7 +39,7 @@ export const createControlRepoProvider = (api: ForgejoApi = forgejoApi): Provide
     },
     diff: () => ({ action: "noop" }),
     apply: async (inputs) => {
-        const parsed = parse(inputs);
+        const parsed = parseInputs(controlRepoSchema, inputs, "control-repo");
         const existing = await find(api, parsed);
         const repo =
             existing ??

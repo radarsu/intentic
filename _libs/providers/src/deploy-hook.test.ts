@@ -1,21 +1,7 @@
 import { expect, test } from "vitest";
 import { createDeployHookProvider } from "./deploy-hook.js";
-import type { ForgejoApi, ForgejoHook } from "./forgejo-api.js";
-
-const NOT_USED = async (): Promise<never> => {
-    throw new Error("unused by the deploy-hook provider");
-};
-const api = (overrides: Partial<ForgejoApi>): ForgejoApi => ({
-    findRepo: NOT_USED,
-    createRepo: NOT_USED,
-    listHooks: NOT_USED,
-    createHook: NOT_USED,
-    updateHook: NOT_USED,
-    latestCommit: NOT_USED,
-    readFile: NOT_USED,
-    commitFile: NOT_USED,
-    ...overrides,
-});
+import { fakeForgejoApi } from "./forgejo-api.fake.js";
+import type { ForgejoHook } from "./forgejo-api.js";
 
 const ctx = () => ({
     env: {},
@@ -40,25 +26,25 @@ const LISTENER = "https://komodo.example.com/listener/github/deployment/my-app.s
 const hook = (): ForgejoHook => ({ id: 3, type: "gitea", config: { url: LISTENER }, events: ["push"], active: true });
 
 test("read returns undefined when forgejoUrl or komodoUrl is PENDING", async () => {
-    expect(await createDeployHookProvider(api({})).read({ ...inputs, komodoUrl: 42 }, ctx())).toBeUndefined();
+    expect(await createDeployHookProvider(fakeForgejoApi({})).read({ ...inputs, komodoUrl: 42 }, ctx())).toBeUndefined();
 });
 
 test("read returns undefined when no hook targets the deploy listener", async () => {
-    expect(await createDeployHookProvider(api({ listHooks: async () => [] })).read(inputs, ctx())).toBeUndefined();
+    expect(await createDeployHookProvider(fakeForgejoApi({ listHooks: async () => [] })).read(inputs, ctx())).toBeUndefined();
 });
 
 test("read returns empty outputs when the deploy-listener hook exists", async () => {
-    expect(await createDeployHookProvider(api({ listHooks: async () => [hook()] })).read(inputs, ctx())).toEqual({ outputs: {} });
+    expect(await createDeployHookProvider(fakeForgejoApi({ listHooks: async () => [hook()] })).read(inputs, ctx())).toEqual({ outputs: {} });
 });
 
 test("diff is always noop", () => {
-    expect(createDeployHookProvider(api({})).diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
+    expect(createDeployHookProvider(fakeForgejoApi({})).diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
 });
 
 test("apply creates a gitea hook targeting the Komodo listener with the shared secret", async () => {
     let created: unknown;
     const provider = createDeployHookProvider(
-        api({
+        fakeForgejoApi({
             listHooks: async () => [],
             createHook: async (args) => {
                 created = args;
@@ -72,7 +58,7 @@ test("apply creates a gitea hook targeting the Komodo listener with the shared s
 test("apply updates the existing hook rather than creating", async () => {
     let updatedId: number | undefined;
     const provider = createDeployHookProvider(
-        api({
+        fakeForgejoApi({
             listHooks: async () => [hook()],
             updateHook: async (args) => {
                 updatedId = args.id;
@@ -84,5 +70,5 @@ test("apply updates the existing hook rather than creating", async () => {
 });
 
 test("malformed inputs are rejected", async () => {
-    await expect(createDeployHookProvider(api({})).read({ ...inputs, secret: 5 }, ctx())).rejects.toThrow(/deploy-hook inputs malformed/);
+    await expect(createDeployHookProvider(fakeForgejoApi({})).read({ ...inputs, secret: 5 }, ctx())).rejects.toThrow(/deploy-hook inputs malformed/);
 });

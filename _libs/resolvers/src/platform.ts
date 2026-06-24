@@ -1,4 +1,4 @@
-import type { Ref, SecretRef } from "@puristic/deploy-protocol";
+import type { SecretRef } from "@puristic/deploy-protocol";
 import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
 import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
 import type { HostInput } from "./inputs.js";
@@ -34,7 +34,6 @@ export const resolvePlatform = (
     const forgejo = forgejoId(hostId);
     const deploy = komodoId(hostId);
     const server = makeRef(hostId);
-    const ref = (id: string, output: string): Ref<string> => makeRef(id, output) as Ref<string>;
     // The platform services are deployed ONTO the host over SSH (like the tunnel connector), so every
     // deploy-style node carries the host's SSH creds + its internal ip. internalUrl/readyWhen are keyed
     // to the host-internal address so they're reachable before the Cloudflare tunnel + DNS routes exist.
@@ -44,7 +43,7 @@ export const resolvePlatform = (
         sshKey: host.sshKey,
         ...(host.port !== undefined ? { port: host.port } : {}),
     };
-    const internalIp = ref(hostId, "internalIp");
+    const internalIp = makeRef<string>(hostId, "internalIp");
     const git = exposeRoute(cloudflareId, hostId, gitDomain(zone), FORGEJO_PORT, apiToken);
     const komodo = exposeRoute(cloudflareId, hostId, komodoDomain(zone), KOMODO_PORT, apiToken);
 
@@ -54,12 +53,12 @@ export const resolvePlatform = (
             type: "forgejo",
             inputs: { server, ...ssh, internalIp, domain: gitDomain(zone), adminUser: adminUsername, adminPassword: env("FORGEJO_ADMIN_PASSWORD") },
             explicitDependsOn: [],
-            readyWhen: httpOk(ref(forgejo, "internalUrl"), { timeout: "120s" }),
+            readyWhen: httpOk(makeRef<string>(forgejo, "internalUrl"), { timeout: "120s" }),
         },
         {
             id: runnerId(hostId),
             type: "forgejo-runner",
-            inputs: { server, ...ssh, instanceUrl: ref(forgejo, "url"), token: ref(forgejo, "runnerToken") },
+            inputs: { server, ...ssh, instanceUrl: makeRef<string>(forgejo, "url"), token: makeRef<string>(forgejo, "runnerToken") },
             explicitDependsOn: [],
         },
         {
@@ -70,15 +69,15 @@ export const resolvePlatform = (
                 ...ssh,
                 internalIp,
                 domain: komodoDomain(zone),
-                forgejoUrl: ref(forgejo, "internalUrl"),
-                runnerToken: ref(forgejo, "runnerToken"),
+                forgejoUrl: makeRef<string>(forgejo, "internalUrl"),
+                runnerToken: makeRef<string>(forgejo, "runnerToken"),
                 adminUser: adminUsername,
                 adminPassword: env("KOMODO_ADMIN_PASSWORD"),
                 // Shared with each deploy-hook so Komodo validates the incoming push webhook's signature.
                 webhookSecret: env("KOMODO_WEBHOOK_SECRET"),
             },
             explicitDependsOn: [],
-            readyWhen: httpOk(ref(deploy, "internalUrl"), { timeout: "90s" }),
+            readyWhen: httpOk(makeRef<string>(deploy, "internalUrl"), { timeout: "90s" }),
         },
         git.route,
         komodo.route,

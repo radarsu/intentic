@@ -1,4 +1,3 @@
-import type { Ref } from "@puristic/deploy-protocol";
 import { makeRef } from "@puristic/deploy-protocol";
 import type { AppIntent, CloudflareInput, CloudflareIntent, EnvironmentInput, HostInput, HostIntent, IntentSet } from "@puristic/deploy-resolvers";
 import { deploymentId, repoId } from "@puristic/deploy-resolvers";
@@ -20,18 +19,16 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const clouds: CloudflareIntent[] = [];
     const apps: AppIntent[] = [];
 
-    const ref = (resourceId: string, output: string): Ref<string> => makeRef(resourceId, output) as Ref<string>;
-
     const host = (id: string, input: HostInput): Host => {
         claim(id);
         hosts.push({ id, input });
-        return Object.freeze({ ...makeRef(id), internalIp: ref(id, "internalIp"), publicIp: ref(id, "publicIp") }) as Host;
+        return Object.freeze({ ...makeRef(id), internalIp: makeRef<string>(id, "internalIp"), publicIp: makeRef<string>(id, "publicIp") }) as Host;
     };
 
     const cloudflare = (id: string, input: CloudflareInput): Cloudflare => {
         claim(id);
         clouds.push({ id, input });
-        return Object.freeze({ ...makeRef(id), zoneId: ref(id, "zoneId") }) as Cloudflare;
+        return Object.freeze({ ...makeRef(id), zoneId: makeRef<string>(id, "zoneId") }) as Cloudflare;
     };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
@@ -47,11 +44,15 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         const environments: Record<string, Deployment> = {};
         for (const name of Object.keys(input.environments)) {
             const did = deploymentId(id, name);
-            environments[name] = Object.freeze({ ...makeRef(did), internalUrl: ref(did, "internalUrl"), url: ref(did, "url") }) as Deployment;
+            environments[name] = Object.freeze({
+                ...makeRef(did),
+                internalUrl: makeRef<string>(did, "internalUrl"),
+                url: makeRef<string>(did, "url"),
+            }) as Deployment;
         }
 
         const rid = repoId(id);
-        const repo = Object.freeze({ ...makeRef(rid), cloneUrl: ref(rid, "cloneUrl"), sshUrl: ref(rid, "sshUrl") }) as Repo;
+        const repo = Object.freeze({ ...makeRef(rid), cloneUrl: makeRef<string>(rid, "cloneUrl"), sshUrl: makeRef<string>(rid, "sshUrl") }) as Repo;
         return Object.freeze({ ...makeRef(id), repo, environments: Object.freeze(environments) }) as App<keyof E & string>;
     };
 
