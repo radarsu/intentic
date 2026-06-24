@@ -1,470 +1,519 @@
 import type { DesiredStateGraph } from "@puristic/deploy-protocol";
 
-// Golden expected output for ../deploy.config.ts — regenerated from the compiled graph after the
-// full-platform-suite resolver change: SSH-cred + internalIp threading into forgejo/forgejo-runner/komodo,
-// internal readyWhen gates (so readiness passes before the tunnel + DNS exist), config-provider auth
-// inputs (forgejoUrl/komodoUrl + admin password), the shared KOMODO_WEBHOOK_SECRET, and a per-environment
-// push-to-deploy webhook node. Independently guarded by the topo-order, ref-edge, and secret tests.
+// Golden expected output for ../deploy.config.ts — regenerated from the compiled graph. Captures the
+// platform-self-init ordering: the tunnel comes up before the control plane (deps host+cf only, ingress
+// as {hostname,port} built from the host internal ip), deployments carry a deterministic port input, and
+// the control-plane nodes (repo/app/deployment/deploy-hook/notify) depend on their public cf-route.
+// Guarded by the topo-order, ref-edge, and secret tests.
 export const expectedGraph: DesiredStateGraph = {
-    version: 1,
-    resources: {
-        host: {
-            id: "host",
-            type: "host",
-            inputs: {
-                address: "203.0.113.10",
-                user: "deploy",
-                sshKey: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_SSH_KEY",
-                    },
-                },
+    "version": 1,
+    "resources": {
+        "host": {
+            "id": "host",
+            "type": "host",
+            "inputs": {
+                "address": "203.0.113.10",
+                "user": "deploy",
+                "sshKey": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "HOST_SSH_KEY"
+                    }
+                }
             },
-            dependsOn: [],
+            "dependsOn": []
         },
-        cf: {
-            id: "cf",
-            type: "cloudflare",
-            inputs: {
-                accountId: "acc_123",
-                apiToken: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_API_TOKEN",
-                    },
+        "cf": {
+            "id": "cf",
+            "type": "cloudflare",
+            "inputs": {
+                "accountId": "acc_123",
+                "apiToken": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "CLOUDFLARE_API_TOKEN"
+                    }
                 },
-                zone: "example.com",
+                "zone": "example.com"
             },
-            dependsOn: [],
+            "dependsOn": []
         },
         "host-git": {
-            id: "host-git",
-            type: "forgejo",
-            inputs: {
-                server: {
-                    $ref: "host",
+            "id": "host-git",
+            "type": "forgejo",
+            "inputs": {
+                "server": {
+                    "$ref": "host"
                 },
-                address: "203.0.113.10",
-                user: "deploy",
-                sshKey: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_SSH_KEY",
-                    },
+                "address": "203.0.113.10",
+                "user": "deploy",
+                "sshKey": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "HOST_SSH_KEY"
+                    }
                 },
-                internalIp: {
-                    $ref: "host.internalIp",
+                "internalIp": {
+                    "$ref": "host.internalIp"
                 },
-                domain: "git.example.com",
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "FORGEJO_ADMIN_PASSWORD",
-                    },
-                },
+                "domain": "git.example.com",
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "FORGEJO_ADMIN_PASSWORD"
+                    }
+                }
             },
-            dependsOn: ["host"],
-            readyWhen: {
-                check: "httpOk",
-                url: {
-                    $ref: "host-git.internalUrl",
+            "dependsOn": [
+                "host"
+            ],
+            "readyWhen": {
+                "check": "httpOk",
+                "url": {
+                    "$ref": "host-git.internalUrl"
                 },
-                timeout: "120s",
-            },
+                "timeout": "120s"
+            }
         },
         "host-git-runner": {
-            id: "host-git-runner",
-            type: "forgejo-runner",
-            inputs: {
-                server: {
-                    $ref: "host",
+            "id": "host-git-runner",
+            "type": "forgejo-runner",
+            "inputs": {
+                "server": {
+                    "$ref": "host"
                 },
-                address: "203.0.113.10",
-                user: "deploy",
-                sshKey: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_SSH_KEY",
-                    },
+                "address": "203.0.113.10",
+                "user": "deploy",
+                "sshKey": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "HOST_SSH_KEY"
+                    }
                 },
-                instanceUrl: {
-                    $ref: "host-git.url",
+                "instanceUrl": {
+                    "$ref": "host-git.url"
                 },
-                token: {
-                    $ref: "host-git.runnerToken",
-                },
+                "token": {
+                    "$ref": "host-git.runnerToken"
+                }
             },
-            dependsOn: ["host", "host-git"],
+            "dependsOn": [
+                "host",
+                "host-git"
+            ]
         },
         "host-deploy": {
-            id: "host-deploy",
-            type: "komodo",
-            inputs: {
-                server: {
-                    $ref: "host",
+            "id": "host-deploy",
+            "type": "komodo",
+            "inputs": {
+                "server": {
+                    "$ref": "host"
                 },
-                address: "203.0.113.10",
-                user: "deploy",
-                sshKey: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_SSH_KEY",
-                    },
+                "address": "203.0.113.10",
+                "user": "deploy",
+                "sshKey": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "HOST_SSH_KEY"
+                    }
                 },
-                internalIp: {
-                    $ref: "host.internalIp",
+                "internalIp": {
+                    "$ref": "host.internalIp"
                 },
-                domain: "komodo.example.com",
-                forgejoUrl: {
-                    $ref: "host-git.internalUrl",
+                "domain": "komodo.example.com",
+                "forgejoUrl": {
+                    "$ref": "host-git.internalUrl"
                 },
-                runnerToken: {
-                    $ref: "host-git.runnerToken",
+                "runnerToken": {
+                    "$ref": "host-git.runnerToken"
                 },
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_ADMIN_PASSWORD",
-                    },
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_ADMIN_PASSWORD"
+                    }
                 },
-                webhookSecret: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_WEBHOOK_SECRET",
-                    },
-                },
+                "webhookSecret": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_WEBHOOK_SECRET"
+                    }
+                }
             },
-            dependsOn: ["host", "host-git"],
-            readyWhen: {
-                check: "httpOk",
-                url: {
-                    $ref: "host-deploy.internalUrl",
+            "dependsOn": [
+                "host",
+                "host-git"
+            ],
+            "readyWhen": {
+                "check": "httpOk",
+                "url": {
+                    "$ref": "host-deploy.internalUrl"
                 },
-                timeout: "90s",
-            },
+                "timeout": "90s"
+            }
         },
         "cf-git-example-com": {
-            id: "cf-git-example-com",
-            type: "cf-route",
-            inputs: {
-                hostname: "git.example.com",
-                zoneId: {
-                    $ref: "cf.zoneId",
+            "id": "cf-git-example-com",
+            "type": "cf-route",
+            "inputs": {
+                "hostname": "git.example.com",
+                "zoneId": {
+                    "$ref": "cf.zoneId"
                 },
-                apiToken: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_API_TOKEN",
-                    },
+                "apiToken": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "CLOUDFLARE_API_TOKEN"
+                    }
                 },
-                cname: {
-                    $ref: "host-tunnel.cname",
-                },
+                "cname": {
+                    "$ref": "host-tunnel.cname"
+                }
             },
-            dependsOn: ["cf", "host-tunnel"],
+            "dependsOn": [
+                "cf",
+                "host-tunnel"
+            ]
         },
         "cf-komodo-example-com": {
-            id: "cf-komodo-example-com",
-            type: "cf-route",
-            inputs: {
-                hostname: "komodo.example.com",
-                zoneId: {
-                    $ref: "cf.zoneId",
+            "id": "cf-komodo-example-com",
+            "type": "cf-route",
+            "inputs": {
+                "hostname": "komodo.example.com",
+                "zoneId": {
+                    "$ref": "cf.zoneId"
                 },
-                apiToken: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_API_TOKEN",
-                    },
+                "apiToken": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "CLOUDFLARE_API_TOKEN"
+                    }
                 },
-                cname: {
-                    $ref: "host-tunnel.cname",
-                },
+                "cname": {
+                    "$ref": "host-tunnel.cname"
+                }
             },
-            dependsOn: ["cf", "host-tunnel"],
+            "dependsOn": [
+                "cf",
+                "host-tunnel"
+            ]
         },
         "my-app-repo": {
-            id: "my-app-repo",
-            type: "repo",
-            inputs: {
-                name: "my-app",
-                private: true,
-                forgejoUrl: {
-                    $ref: "host-git.url",
+            "id": "my-app-repo",
+            "type": "repo",
+            "inputs": {
+                "name": "my-app",
+                "private": true,
+                "forgejoUrl": {
+                    "$ref": "host-git.url"
                 },
-                domain: "git.example.com",
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "FORGEJO_ADMIN_PASSWORD",
-                    },
-                },
+                "domain": "git.example.com",
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "FORGEJO_ADMIN_PASSWORD"
+                    }
+                }
             },
-            dependsOn: ["host-git"],
+            "dependsOn": [
+                "host-git",
+                "cf-git-example-com"
+            ]
         },
         "my-app": {
-            id: "my-app",
-            type: "app",
-            inputs: {
-                source: {
-                    $ref: "my-app-repo.cloneUrl",
+            "id": "my-app",
+            "type": "app",
+            "inputs": {
+                "source": {
+                    "$ref": "my-app-repo.cloneUrl"
                 },
-                repoName: "my-app",
-                deployer: {
-                    $ref: "host-deploy",
+                "repoName": "my-app",
+                "deployer": {
+                    "$ref": "host-deploy"
                 },
-                komodoUrl: {
-                    $ref: "host-deploy.url",
+                "komodoUrl": {
+                    "$ref": "host-deploy.url"
                 },
-                gitDomain: "git.example.com",
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_ADMIN_PASSWORD",
-                    },
-                },
+                "gitDomain": "git.example.com",
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_ADMIN_PASSWORD"
+                    }
+                }
             },
-            dependsOn: ["host-deploy", "my-app-repo"],
+            "dependsOn": [
+                "host-deploy",
+                "cf-komodo-example-com",
+                "my-app-repo"
+            ]
         },
         "my-app.staging": {
-            id: "my-app.staging",
-            type: "deployment",
-            inputs: {
-                app: {
-                    $ref: "my-app",
+            "id": "my-app.staging",
+            "type": "deployment",
+            "inputs": {
+                "app": {
+                    "$ref": "my-app"
                 },
-                name: "staging",
-                branch: "develop",
-                domain: "staging.example.com",
-                server: {
-                    $ref: "host",
+                "name": "staging",
+                "branch": "develop",
+                "domain": "staging.example.com",
+                "server": {
+                    "$ref": "host"
                 },
-                internalIp: {
-                    $ref: "host.internalIp",
+                "internalIp": {
+                    "$ref": "host.internalIp"
                 },
-                komodoUrl: {
-                    $ref: "host-deploy.url",
+                "port": 27748,
+                "komodoUrl": {
+                    "$ref": "host-deploy.url"
                 },
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_ADMIN_PASSWORD",
-                    },
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_ADMIN_PASSWORD"
+                    }
                 },
-                env: {
-                    DATABASE_URL: {
-                        $secret: {
-                            source: "env",
-                            key: "STAGING_DATABASE_URL",
-                        },
-                    },
-                },
+                "env": {
+                    "DATABASE_URL": {
+                        "$secret": {
+                            "source": "env",
+                            "key": "STAGING_DATABASE_URL"
+                        }
+                    }
+                }
             },
-            dependsOn: ["my-app", "host", "host-deploy"],
-            readyWhen: {
-                check: "httpOk",
-                url: {
-                    $ref: "my-app.staging.internalUrl",
+            "dependsOn": [
+                "my-app",
+                "cf-komodo-example-com",
+                "host",
+                "host-deploy"
+            ],
+            "readyWhen": {
+                "check": "httpOk",
+                "url": {
+                    "$ref": "my-app.staging.internalUrl"
                 },
-                timeout: "60s",
-            },
+                "timeout": "60s"
+            }
         },
         "cf-staging-example-com": {
-            id: "cf-staging-example-com",
-            type: "cf-route",
-            inputs: {
-                hostname: "staging.example.com",
-                zoneId: {
-                    $ref: "cf.zoneId",
+            "id": "cf-staging-example-com",
+            "type": "cf-route",
+            "inputs": {
+                "hostname": "staging.example.com",
+                "zoneId": {
+                    "$ref": "cf.zoneId"
                 },
-                apiToken: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_API_TOKEN",
-                    },
+                "apiToken": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "CLOUDFLARE_API_TOKEN"
+                    }
                 },
-                cname: {
-                    $ref: "host-tunnel.cname",
-                },
+                "cname": {
+                    "$ref": "host-tunnel.cname"
+                }
             },
-            dependsOn: ["cf", "host-tunnel"],
+            "dependsOn": [
+                "cf",
+                "host-tunnel"
+            ]
         },
         "my-app.staging-deploy-hook": {
-            id: "my-app.staging-deploy-hook",
-            type: "deploy-hook",
-            inputs: {
-                forgejoUrl: {
-                    $ref: "host-git.url",
+            "id": "my-app.staging-deploy-hook",
+            "type": "deploy-hook",
+            "inputs": {
+                "forgejoUrl": {
+                    "$ref": "host-git.url"
                 },
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "FORGEJO_ADMIN_PASSWORD",
-                    },
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "FORGEJO_ADMIN_PASSWORD"
+                    }
                 },
-                repoName: "my-app",
-                komodoUrl: {
-                    $ref: "host-deploy.url",
+                "repoName": "my-app",
+                "komodoUrl": {
+                    "$ref": "host-deploy.url"
                 },
-                deployment: "my-app.staging",
-                branch: "develop",
-                secret: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_WEBHOOK_SECRET",
-                    },
-                },
+                "deployment": "my-app.staging",
+                "branch": "develop",
+                "secret": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_WEBHOOK_SECRET"
+                    }
+                }
             },
-            dependsOn: ["my-app-repo", "my-app.staging", "host-git", "host-deploy"],
+            "dependsOn": [
+                "my-app-repo",
+                "my-app.staging",
+                "cf-git-example-com",
+                "host-git",
+                "host-deploy"
+            ]
         },
         "my-app.production": {
-            id: "my-app.production",
-            type: "deployment",
-            inputs: {
-                app: {
-                    $ref: "my-app",
+            "id": "my-app.production",
+            "type": "deployment",
+            "inputs": {
+                "app": {
+                    "$ref": "my-app"
                 },
-                name: "production",
-                branch: "main",
-                domain: "app.example.com",
-                server: {
-                    $ref: "host",
+                "name": "production",
+                "branch": "main",
+                "domain": "app.example.com",
+                "server": {
+                    "$ref": "host"
                 },
-                internalIp: {
-                    $ref: "host.internalIp",
+                "internalIp": {
+                    "$ref": "host.internalIp"
                 },
-                komodoUrl: {
-                    $ref: "host-deploy.url",
+                "port": 23104,
+                "komodoUrl": {
+                    "$ref": "host-deploy.url"
                 },
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_ADMIN_PASSWORD",
-                    },
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_ADMIN_PASSWORD"
+                    }
                 },
-                env: {
-                    DATABASE_URL: {
-                        $secret: {
-                            source: "env",
-                            key: "PRODUCTION_DATABASE_URL",
-                        },
-                    },
-                },
+                "env": {
+                    "DATABASE_URL": {
+                        "$secret": {
+                            "source": "env",
+                            "key": "PRODUCTION_DATABASE_URL"
+                        }
+                    }
+                }
             },
-            dependsOn: ["my-app", "host", "host-deploy"],
-            readyWhen: {
-                check: "httpOk",
-                url: {
-                    $ref: "my-app.production.internalUrl",
+            "dependsOn": [
+                "my-app",
+                "cf-komodo-example-com",
+                "host",
+                "host-deploy"
+            ],
+            "readyWhen": {
+                "check": "httpOk",
+                "url": {
+                    "$ref": "my-app.production.internalUrl"
                 },
-                timeout: "60s",
-            },
+                "timeout": "60s"
+            }
         },
         "cf-app-example-com": {
-            id: "cf-app-example-com",
-            type: "cf-route",
-            inputs: {
-                hostname: "app.example.com",
-                zoneId: {
-                    $ref: "cf.zoneId",
+            "id": "cf-app-example-com",
+            "type": "cf-route",
+            "inputs": {
+                "hostname": "app.example.com",
+                "zoneId": {
+                    "$ref": "cf.zoneId"
                 },
-                apiToken: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_API_TOKEN",
-                    },
+                "apiToken": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "CLOUDFLARE_API_TOKEN"
+                    }
                 },
-                cname: {
-                    $ref: "host-tunnel.cname",
-                },
+                "cname": {
+                    "$ref": "host-tunnel.cname"
+                }
             },
-            dependsOn: ["cf", "host-tunnel"],
+            "dependsOn": [
+                "cf",
+                "host-tunnel"
+            ]
         },
         "my-app.production-deploy-hook": {
-            id: "my-app.production-deploy-hook",
-            type: "deploy-hook",
-            inputs: {
-                forgejoUrl: {
-                    $ref: "host-git.url",
+            "id": "my-app.production-deploy-hook",
+            "type": "deploy-hook",
+            "inputs": {
+                "forgejoUrl": {
+                    "$ref": "host-git.url"
                 },
-                adminUser: "puristic",
-                adminPassword: {
-                    $secret: {
-                        source: "env",
-                        key: "FORGEJO_ADMIN_PASSWORD",
-                    },
+                "adminUser": "puristic",
+                "adminPassword": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "FORGEJO_ADMIN_PASSWORD"
+                    }
                 },
-                repoName: "my-app",
-                komodoUrl: {
-                    $ref: "host-deploy.url",
+                "repoName": "my-app",
+                "komodoUrl": {
+                    "$ref": "host-deploy.url"
                 },
-                deployment: "my-app.production",
-                branch: "main",
-                secret: {
-                    $secret: {
-                        source: "env",
-                        key: "KOMODO_WEBHOOK_SECRET",
-                    },
-                },
+                "deployment": "my-app.production",
+                "branch": "main",
+                "secret": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "KOMODO_WEBHOOK_SECRET"
+                    }
+                }
             },
-            dependsOn: ["my-app-repo", "my-app.production", "host-git", "host-deploy"],
+            "dependsOn": [
+                "my-app-repo",
+                "my-app.production",
+                "cf-git-example-com",
+                "host-git",
+                "host-deploy"
+            ]
         },
         "host-tunnel": {
-            id: "host-tunnel",
-            type: "tunnel",
-            inputs: {
-                name: "puristic-host",
-                accountId: "acc_123",
-                apiToken: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_API_TOKEN",
-                    },
+            "id": "host-tunnel",
+            "type": "tunnel",
+            "inputs": {
+                "name": "puristic-host",
+                "accountId": "acc_123",
+                "apiToken": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "CLOUDFLARE_API_TOKEN"
+                    }
                 },
-                address: "203.0.113.10",
-                user: "deploy",
-                sshKey: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_SSH_KEY",
-                    },
+                "address": "203.0.113.10",
+                "user": "deploy",
+                "sshKey": {
+                    "$secret": {
+                        "source": "env",
+                        "key": "HOST_SSH_KEY"
+                    }
                 },
-                ingress: [
+                "internalIp": {
+                    "$ref": "host.internalIp"
+                },
+                "ingress": [
                     {
-                        hostname: "git.example.com",
-                        service: {
-                            $ref: "host-git.internalUrl",
-                        },
+                        "hostname": "git.example.com",
+                        "port": 3000
                     },
                     {
-                        hostname: "komodo.example.com",
-                        service: {
-                            $ref: "host-deploy.internalUrl",
-                        },
+                        "hostname": "komodo.example.com",
+                        "port": 9120
                     },
                     {
-                        hostname: "staging.example.com",
-                        service: {
-                            $ref: "my-app.staging.internalUrl",
-                        },
+                        "hostname": "staging.example.com",
+                        "port": 27748
                     },
                     {
-                        hostname: "app.example.com",
-                        service: {
-                            $ref: "my-app.production.internalUrl",
-                        },
-                    },
-                ],
+                        "hostname": "app.example.com",
+                        "port": 23104
+                    }
+                ]
             },
-            dependsOn: ["cf", "host", "host-git", "host-deploy", "my-app.staging", "my-app.production"],
-        },
-    },
+            "dependsOn": [
+                "cf",
+                "host"
+            ]
+        }
+    }
 };

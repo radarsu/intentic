@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineStack } from "@puristic/deploy-core";
 import type { ApplyOutcome, ReadinessProbe } from "@puristic/deploy-engine";
-import { apply, httpProbe } from "@puristic/deploy-engine";
+import { apply } from "@puristic/deploy-engine";
 import { env } from "@puristic/deploy-protocol";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { utils } from "ssh2";
@@ -27,16 +27,6 @@ const required = (key: string): string => {
         throw new Error(`local e2e requires env var ${key}`);
     }
     return value;
-};
-
-// Tier 1 builds no app, so the deployment's runtime health gate can never pass — short-circuit it (its
-// host port is in the deterministic 20000+ range) while still probing the platform services for real.
-const tier1Probe: ReadinessProbe = async (url, expectedStatus) => {
-    const port = Number(new URL(url).port);
-    if (port >= 20000) {
-        return true;
-    }
-    return httpProbe(url, expectedStatus);
 };
 
 describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)", () => {
@@ -108,9 +98,26 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
         await host?.stop();
     }, 120_000);
 
+    // Probe readiness FROM THE HOST over SSH: the host trivially reaches its own services on the internal
+    // ip, sidestepping the runner's inability to route to the DinD container's network. Deployment ports
+    // (>= 20000) are short-circuited since Tier 1 builds no app.
+    const sshProbe: ReadinessProbe = async (url) => {
+        if (Number(new URL(url).port) >= 20000) {
+            return true;
+        }
+        const session = await sshExecutor.connect({ address: host.getHost(), port: host.getMappedPort(22), user: "root", privateKey });
+        try {
+            return (await session.exec(`wget -q -O /dev/null ${url}`)).code === 0;
+        } catch {
+            return false;
+        } finally {
+            await session.dispose();
+        }
+    };
+
     it("creates the whole stack over SSH, then is idempotent", async () => {
         const providers = createProviders();
-        const config = { providers, env: { ...process.env, HOST_SSH_KEY: privateKey }, probe: tier1Probe, log: (message: string) => console.log(message) };
+        const config = { providers, env: { ...process.env, HOST_SSH_KEY: privateKey }, probe: sshProbe, log: (message: string) => console.log(message) };
 
         first = await apply(buildGraph(), config);
         const actions = new Map(first.steps.map((step) => [step.id, step.action]));

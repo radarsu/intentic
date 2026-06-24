@@ -10,8 +10,14 @@ export const parseDuration = (text: string): number => {
 };
 
 export const httpProbe: ReadinessProbe = async (url, expectedStatus) => {
-    const response = await fetch(url, { method: "GET" });
-    return response.status === expectedStatus || response.status < 400;
+    // A connection refused/reset/timeout during warm-up means "not ready yet", not a fatal error — return
+    // false so waitReady keeps polling until the deadline rather than throwing on the first failed connect.
+    try {
+        const response = await fetch(url, { method: "GET" });
+        return response.status === expectedStatus || response.status < 400;
+    } catch {
+        return false;
+    }
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

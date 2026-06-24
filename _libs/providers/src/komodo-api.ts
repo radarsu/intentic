@@ -48,8 +48,6 @@ const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
 // deployment configs are provider-built and passed through opaquely (their exact v2 JSON shapes are
 // confirmed at integration time); the alerter config is typed because the notify provider diffs it.
 export interface KomodoApi {
-    // GET /api/health — true iff Core answers 2xx. Never throws on an unhealthy-but-reachable Core.
-    readonly health: (args: { readonly baseUrl: string }) => Promise<boolean>;
     // POST /auth/LoginLocalUser {username,password} -> jwt (local auth must be enabled).
     readonly login: (args: { readonly baseUrl: string; readonly username: string; readonly password: string }) => Promise<string>;
     readonly listBuilds: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
@@ -132,10 +130,6 @@ const project = (items: readonly z.infer<typeof listItemSchema>[]): readonly Kom
     items.map((item) => ({ id: item.id, name: item.name }));
 
 export const komodoApi: KomodoApi = {
-    health: async ({ baseUrl }) => {
-        const response = await fetch(`${baseUrl}/api/health`, { method: "GET" });
-        return response.ok;
-    },
     login: async ({ baseUrl, username, password }) => {
         const result = await read({ baseUrl, module: "auth", type: "LoginLocalUser", params: { username, password } }, jwtSchema);
         const jwt = result.jwt ?? result.Jwt?.jwt;

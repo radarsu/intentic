@@ -110,7 +110,6 @@ const fakeKomodoApi = (): KomodoApi => {
     const alerters = new Map<string, { id: string; config: AlerterConfig }>();
     let seq = 0;
     return {
-        health: async () => true,
         login: async () => "jwt",
         listBuilds: async () => [...builds].map(([name, id]) => ({ id, name })),
         createBuild: async ({ name }) => {

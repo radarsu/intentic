@@ -1,4 +1,5 @@
 import type { RawNode } from "@puristic/deploy-protocol";
+import { makeRef } from "@puristic/deploy-protocol";
 import { resolveApp } from "./app.js";
 import { tunnelId, tunnelName } from "./ids.js";
 import type { CloudflareInput, HostInput } from "./inputs.js";
@@ -87,7 +88,9 @@ export const resolve = (intent: IntentSet): RawNode[] => {
 
     // One Cloudflare Tunnel per host that exposes anything: cloudflared runs on the host (hence the
     // copied SSH creds), connects through the platform's Cloudflare account, and owns the host's
-    // aggregated ingress. Routes reference its cname; the service refs in ingress induce the dep edges.
+    // aggregated ingress. Its ingress is (hostname -> host-internal port), computable from the host's
+    // internal ip alone, so the tunnel depends only on the host + Cloudflare and can come up BEFORE the
+    // control plane that reaches Forgejo/Komodo through its public routes. Routes reference its cname.
     for (const [hostId, platform] of platformByHost) {
         nodes.push({
             id: tunnelId(hostId),
@@ -100,6 +103,7 @@ export const resolve = (intent: IntentSet): RawNode[] => {
                 user: platform.host.user,
                 sshKey: platform.host.sshKey,
                 ...(platform.host.port !== undefined ? { port: platform.host.port } : {}),
+                internalIp: makeRef(hostId, "internalIp"),
                 ingress: platform.ingress,
             },
             explicitDependsOn: [platform.cloudflareId, hostId],

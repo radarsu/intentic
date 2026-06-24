@@ -9,7 +9,16 @@ import { exposeRoute } from "./route.js";
 export interface PlatformRefs {
     readonly forgejo: string;
     readonly deploy: string;
+    // The cf-route ids for the platform's public hostnames, so the control-plane nodes that call those
+    // public URLs can depend on the route being live (DNS + tunnel) before they run.
+    readonly gitRoute: string;
+    readonly komodoRoute: string;
 }
+
+// The fixed host ports the platform services listen on (Forgejo HTTP, Komodo Core), mirrored by their
+// providers; the tunnel routes git.<zone>/komodo.<zone> to these.
+const FORGEJO_PORT = 3000;
+const KOMODO_PORT = 9120;
 
 // The git+CI and deploy-orchestrator stack every app on a host requires, shared per host: Forgejo, its
 // runner, and Komodo, exposed at git.<zone>/komodo.<zone> so push/CI/UI are reachable. Terse defaults:
@@ -36,8 +45,8 @@ export const resolvePlatform = (
         ...(host.port !== undefined ? { port: host.port } : {}),
     };
     const internalIp = ref(hostId, "internalIp");
-    const git = exposeRoute(cloudflareId, hostId, gitDomain(zone), ref(forgejo, "internalUrl"), apiToken);
-    const komodo = exposeRoute(cloudflareId, hostId, komodoDomain(zone), ref(deploy, "internalUrl"), apiToken);
+    const git = exposeRoute(cloudflareId, hostId, gitDomain(zone), FORGEJO_PORT, apiToken);
+    const komodo = exposeRoute(cloudflareId, hostId, komodoDomain(zone), KOMODO_PORT, apiToken);
 
     const nodes: ResolvedNode[] = [
         {
@@ -74,5 +83,5 @@ export const resolvePlatform = (
         git.route,
         komodo.route,
     ];
-    return { nodes, refs: { forgejo, deploy }, ingress: [git.ingress, komodo.ingress] };
+    return { nodes, refs: { forgejo, deploy, gitRoute: git.route.id, komodoRoute: komodo.route.id }, ingress: [git.ingress, komodo.ingress] };
 };

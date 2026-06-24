@@ -1,6 +1,6 @@
 import type { Ref, SecretRef } from "@puristic/deploy-protocol";
 import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
-import { adminUsername, deployHookId, deploymentId, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
+import { adminUsername, deployHookId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
 import type { PlatformRefs } from "./platform.js";
 import type { ResolvedNode } from "./resource-types.js";
@@ -31,7 +31,8 @@ export const resolveApp = (
             id: repo,
             type: "repo",
             inputs: { name: intent.id, private: true, forgejoUrl, domain: gitDomain(zone), ...forgejoAdmin },
-            explicitDependsOn: [platform.forgejo],
+            // Calls the public git URL, so it must run after git's DNS + tunnel route is live.
+            explicitDependsOn: [platform.forgejo, platform.gitRoute],
         },
         {
             id: intent.id,
@@ -44,13 +45,14 @@ export const resolveApp = (
                 gitDomain: gitDomain(zone),
                 ...komodoAdmin,
             },
-            explicitDependsOn: [platform.deploy, repo],
+            explicitDependsOn: [platform.deploy, platform.komodoRoute, repo],
         },
     ];
     const ingress: IngressPair[] = [];
 
     for (const [name, environment] of Object.entries(intent.environments)) {
         const id = deploymentId(intent.id, name);
+        const port = deploymentPort(id);
         nodes.push({
             id,
             type: "deployment",
@@ -61,14 +63,15 @@ export const resolveApp = (
                 domain: environment.domain,
                 server: makeRef(intent.on),
                 internalIp: ref(intent.on, "internalIp"),
+                port,
                 komodoUrl,
                 ...komodoAdmin,
                 ...(environment.env !== undefined ? { env: environment.env } : {}),
             },
-            explicitDependsOn: [intent.id],
+            explicitDependsOn: [intent.id, platform.komodoRoute],
             readyWhen: environment.readyWhen ?? httpOk(ref(id, "internalUrl"), { timeout: "60s" }),
         });
-        const exposure = exposeRoute(intent.expose, intent.on, environment.domain, ref(id, "internalUrl"), apiToken);
+        const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
         nodes.push(exposure.route);
         ingress.push(exposure.ingress);
         // Push-to-deploy: a Forgejo repo webhook that calls Komodo's deploy listener for this environment
@@ -85,7 +88,8 @@ export const resolveApp = (
                 branch: environment.branch,
                 secret: env("KOMODO_WEBHOOK_SECRET"),
             },
-            explicitDependsOn: [repo, id],
+            // Registers a Forgejo webhook via the public git URL, so it waits on git's route.
+            explicitDependsOn: [repo, id, platform.gitRoute],
         });
     }
 
@@ -97,14 +101,14 @@ export const resolveApp = (
             id: forgejoNotifyId(intent.id),
             type: "forgejo-notify",
             inputs: { forgejoUrl, ...forgejoAdmin, repoName: intent.id, webhook: intent.notify.discord, events: ["build"] },
-            explicitDependsOn: [platform.forgejo, repo],
+            explicitDependsOn: [platform.forgejo, platform.gitRoute, repo],
         });
         const targets = Object.keys(intent.environments).map((environment) => deploymentId(intent.id, environment));
         nodes.push({
             id: komodoNotifyId(intent.id),
             type: "komodo-notify",
             inputs: { komodoUrl, ...komodoAdmin, targets, webhook: intent.notify.discord, events: ["deploy"] },
-            explicitDependsOn: [platform.deploy, intent.id, ...targets],
+            explicitDependsOn: [platform.deploy, platform.komodoRoute, intent.id, ...targets],
         });
     }
 

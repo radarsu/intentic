@@ -17,6 +17,11 @@ export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
 export const deployHookId = (appId: string, environment: string): string => `${deploymentId(appId, environment)}-deploy-hook`;
 export const gitDomain = (zone: string): string => `git.${zone}`;
 export const komodoDomain = (zone: string): string => `komodo.${zone}`;
+// A deterministic host port per deployment so co-located environments don't collide. Resolver-owned so the
+// tunnel's ingress (hostname -> http://<internalIp>:<port>) can be computed without depending on the
+// deployment node — which is what lets the tunnel come up before the control plane uses it.
+export const deploymentPort = (deploymentId: string): number =>
+    20000 + [...deploymentId].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 10000, 7);
 // The single admin identity for both Forgejo and Komodo — also the repo owner namespace and the Komodo
 // build's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
 // `forgejo admin user create --username admin` fails.

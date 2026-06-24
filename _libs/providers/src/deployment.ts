@@ -13,26 +13,24 @@ const deploymentSchema = z.object({
     domain: z.string(),
     server: z.string(),
     internalIp: z.string(),
+    // The deterministic host port the deployment publishes, computed by the resolver (deploymentPort) so it
+    // matches the tunnel's ingress for this environment exactly.
+    port: z.coerce.number(),
     env: z.record(z.string(), z.unknown()).default({}),
 });
 type DeploymentInputs = z.infer<typeof deploymentSchema>;
 const parse = (inputs: ResolvedInputs): DeploymentInputs => parseInputs(deploymentSchema, inputs, "deployment");
 
-// A deterministic host port per deployment so multiple environments co-located on one host do not collide;
-// the provider both publishes this port and re-derives internalUrl from it, keeping them consistent. The
-// real published-port strategy is confirmed at integration.
-const portFor = (id: string): number => 20000 + [...id].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 10000, 7);
-
-const outputsFor = (parsed: DeploymentInputs, id: string): Record<string, unknown> => ({
+const outputsFor = (parsed: DeploymentInputs): Record<string, unknown> => ({
     url: `https://${parsed.domain}`,
-    internalUrl: `http://${parsed.internalIp}:${portFor(id)}`,
+    internalUrl: `http://${parsed.internalIp}:${parsed.port}`,
 });
 
-const deploymentConfig = (parsed: DeploymentInputs, id: string): Record<string, unknown> => ({
+const deploymentConfig = (parsed: DeploymentInputs): Record<string, unknown> => ({
     server_id: parsed.server,
     image: { type: "Build", params: { build: parsed.app } },
     branch: parsed.branch,
-    ports: [`${portFor(id)}:${portFor(id)}`],
+    ports: [`${parsed.port}:${parsed.port}`],
     environment: Object.entries(parsed.env).map(([variable, value]) => ({ variable, value })),
 });
 
@@ -73,7 +71,7 @@ export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider =
                 return undefined;
             }
             const config = await api.getDeployment({ baseUrl: parsed.komodoUrl, jwt, deployment: ctx.id });
-            return { outputs: outputsFor(parsed, ctx.id), detail: { config } };
+            return { outputs: outputsFor(parsed), detail: { config } };
         } catch (error) {
             ctx.log(`deployment "${ctx.id}": komodo not reachable yet, treating as not-yet-created: ${String(error)}`);
             return undefined;
@@ -91,11 +89,11 @@ export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider =
         const jwt = await api.login({ baseUrl: parsed.komodoUrl, username: parsed.adminUser, password: parsed.adminPassword });
         const existing = (await api.listDeployments({ baseUrl: parsed.komodoUrl, jwt })).find((item) => item.name === ctx.id);
         if (existing === undefined) {
-            await api.createDeployment({ baseUrl: parsed.komodoUrl, jwt, name: ctx.id, config: deploymentConfig(parsed, ctx.id) });
+            await api.createDeployment({ baseUrl: parsed.komodoUrl, jwt, name: ctx.id, config: deploymentConfig(parsed) });
         } else {
-            await api.updateDeployment({ baseUrl: parsed.komodoUrl, jwt, id: existing.id, config: deploymentConfig(parsed, ctx.id) });
+            await api.updateDeployment({ baseUrl: parsed.komodoUrl, jwt, id: existing.id, config: deploymentConfig(parsed) });
         }
         await api.deploy({ baseUrl: parsed.komodoUrl, jwt, deployment: ctx.id });
-        return outputsFor(parsed, ctx.id);
+        return outputsFor(parsed);
     },
 });

@@ -6,7 +6,6 @@ const NOT_USED = async (): Promise<never> => {
     throw new Error("unused by the deployment provider");
 };
 const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
-    health: NOT_USED,
     login: async () => "jwt",
     listBuilds: NOT_USED,
     createBuild: NOT_USED,
@@ -39,6 +38,7 @@ const inputs = {
     domain: "staging.example.com",
     server: "host",
     internalIp: "10.0.0.5",
+    port: 24680,
     komodoUrl: "https://komodo.example.com",
     adminUser: "admin",
     adminPassword: "pw",

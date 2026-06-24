@@ -6,7 +6,6 @@ const NOT_USED = async (): Promise<never> => {
     throw new Error("unused by the komodo-notify provider");
 };
 const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
-    health: NOT_USED,
     login: async () => "jwt",
     listBuilds: NOT_USED,
     createBuild: NOT_USED,

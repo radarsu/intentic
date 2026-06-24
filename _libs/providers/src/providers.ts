@@ -45,7 +45,7 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         tunnel: createTunnelProvider(cloudflare, ssh),
         forgejo: createForgejoProvider(ssh),
         "forgejo-runner": createForgejoRunnerProvider(ssh),
-        komodo: createKomodoProvider(komodo, ssh),
+        komodo: createKomodoProvider(ssh),
         repo: createRepoProvider(forgejo),
         app: createAppProvider(komodo),
         deployment: createDeploymentProvider(komodo),

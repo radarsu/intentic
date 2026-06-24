@@ -10,7 +10,8 @@ const tunnelSchema = sshSchema.extend({
     name: z.string(),
     accountId: z.string(),
     apiToken: z.string(),
-    ingress: z.array(z.object({ hostname: z.string(), service: z.string() })),
+    internalIp: z.string(),
+    ingress: z.array(z.object({ hostname: z.string(), port: z.coerce.number() })),
 });
 type TunnelInputs = z.infer<typeof tunnelSchema>;
 const parse = (inputs: ResolvedInputs): TunnelInputs => parseInputs(tunnelSchema, inputs, "tunnel");
@@ -18,7 +19,13 @@ const parse = (inputs: ResolvedInputs): TunnelInputs => parseInputs(tunnelSchema
 // Cloudflare requires every ingress list to end with a catch-all rule (no hostname). The provider owns
 // this policy so the API adapter stays a dumb transport.
 const CATCH_ALL: IngressRule = { service: "http_status:404" };
-const withCatchAll = (rules: readonly IngressRule[]): IngressRule[] => [...rules, CATCH_ALL];
+
+// Each public hostname routes to a service on the host's internal ip at its fixed port; cloudflared dials
+// these over --network host. The full desired rule set ends with the catch-all.
+const desiredRules = (parsed: TunnelInputs): IngressRule[] => [
+    ...parsed.ingress.map((rule) => ({ hostname: rule.hostname, service: `http://${parsed.internalIp}:${rule.port}` })),
+    CATCH_ALL,
+];
 
 const cname = (tunnelId: string): string => `${tunnelId}.cfargotunnel.com`;
 const containerName = (tunnelId: string): string => `puristic-tunnel-${tunnelId}`;
@@ -95,7 +102,7 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
         }
         const current = detail["ingress"];
         const actual = Array.isArray(current) ? (current as IngressRule[]) : [];
-        if (!ingressEqual(actual, withCatchAll(parsed.ingress))) {
+        if (!ingressEqual(actual, desiredRules(parsed))) {
             return { action: "update", reason: "tunnel ingress differs from desired" };
         }
         return { action: "noop" };
@@ -110,7 +117,7 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
             accountId: parsed.accountId,
             apiToken: parsed.apiToken,
             tunnelId: tunnel.id,
-            ingress: withCatchAll(parsed.ingress),
+            ingress: desiredRules(parsed),
         });
         return { tunnelId: tunnel.id, cname: cname(tunnel.id) };
     },

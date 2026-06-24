@@ -90,9 +90,9 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
     const komodoNotify = nodes.find((node) => node.id === "app-notify");
 
     expect(forgejoNotify?.type).toBe("forgejo-notify");
-    expect(forgejoNotify?.explicitDependsOn).toEqual(["host-git", "app-repo"]);
+    expect(forgejoNotify?.explicitDependsOn).toEqual(["host-git", "cf-git-example-com", "app-repo"]);
     expect(komodoNotify?.type).toBe("komodo-notify");
-    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "app", "app.prod"]);
+    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "cf-komodo-example-com", "app", "app.prod"]);
 
     // The webhook secret passes through unresolved — the engine resolves it per apply.
     expect(forgejoNotify?.inputs["webhook"]).toEqual(env("DISCORD_WEBHOOK_URL"));

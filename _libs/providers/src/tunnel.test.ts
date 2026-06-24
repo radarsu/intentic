@@ -62,7 +62,8 @@ const inputs = {
     address: "203.0.113.10",
     user: "deploy",
     sshKey: "key",
-    ingress: [appRule],
+    internalIp: "10.0.0.5",
+    ingress: [{ hostname: "app.example.com", port: 3000 }],
 };
 
 test("read returns undefined when the tunnel does not exist", async () => {

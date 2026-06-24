@@ -1,8 +1,6 @@
 import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
 import { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
-import type { KomodoApi } from "./komodo-api.js";
-import { komodoApi } from "./komodo-api.js";
 import type { SshSession } from "./ssh.js";
 import { type SshExecutor, sshExecutor } from "./ssh.js";
 
@@ -72,6 +70,9 @@ const composeYaml = (): string =>
 const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<void> => {
     await session.exec(`mkdir -p ${STATE_DIR}`);
     await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml()}COMPOSE_EOF`);
+    // Each line is a separate printf argument so `printf '%s\n'` emits one KEY=value per line. Joining with
+    // "\n" into a single arg would print the literal characters \n (printf %s does not interpret escapes),
+    // leaving compose unable to parse the file — the image tags would come through blank.
     const staticEnv = [
         "TZ=Etc/UTC",
         "COMPOSE_KOMODO_IMAGE_TAG=2",
@@ -80,7 +81,9 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         "KOMODO_DATABASE_ADDRESS=ferretdb:27017",
         "KOMODO_FIRST_SERVER_NAME=Local",
         "KOMODO_FIRST_SERVER=https://periphery:8120",
-    ].join("\n");
+    ]
+        .map((line) => `'${line}'`)
+        .join(" ");
     const generated = [
         `echo "KOMODO_HOST=https://${parsed.domain}"`,
         `echo "KOMODO_INIT_ADMIN_PASSWORD=${parsed.adminPassword}"`,
@@ -91,14 +94,22 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         `echo "KOMODO_DATABASE_PASSWORD=$(openssl rand -hex 16)"`,
     ].join("; ");
     await session.exec(
-        `test -f ${STATE_DIR}/.env || { printf '%s\\n' '${staticEnv.replace(/\n/g, "\\n")}' > ${STATE_DIR}/.env; { ${generated}; } >> ${STATE_DIR}/.env; }`,
+        `test -f ${STATE_DIR}/.env || { printf '%s\\n' ${staticEnv} > ${STATE_DIR}/.env; { ${generated}; } >> ${STATE_DIR}/.env; }`,
     );
 };
 
-const waitHealthy = async (api: KomodoApi, baseUrl: string): Promise<void> => {
+// Probe Core FROM THE HOST over SSH (Core publishes 9120 on the host), so the check works regardless of
+// whether the engine's own network can reach the host's internal ip. Core has no dedicated health route;
+// it answers 200 on / once it is up and connected to the database, which is exactly the liveness we want.
+const healthy = async (session: SshSession, parsed: KomodoInputs): Promise<boolean> => {
+    const result = await session.exec(`wget -q -O /dev/null ${internalUrl(parsed)}`);
+    return result.code === 0;
+};
+
+const waitHealthy = async (session: SshSession, parsed: KomodoInputs): Promise<void> => {
     const deadline = Date.now() + READY_TIMEOUT_MS;
     for (;;) {
-        if (await api.health({ baseUrl })) {
+        if (await healthy(session, parsed)) {
             return;
         }
         if (Date.now() >= deadline) {
@@ -113,7 +124,7 @@ const waitHealthy = async (api: KomodoApi, baseUrl: string): Promise<void> => {
 // deterministic url/internalUrl); diff is a noop. apply is idempotent: secrets persist host-side and
 // `docker compose up -d` reconciles the stack. No passkey/apiKey output — the CD-notify provider
 // authenticates by admin login.
-export const createKomodoProvider = (api: KomodoApi = komodoApi, executor: SshExecutor = sshExecutor): Provider => ({
+export const createKomodoProvider = (executor: SshExecutor = sshExecutor): Provider => ({
     read: async (inputs, ctx) => {
         const parsed = parse(inputs);
         let session: SshSession;
@@ -124,16 +135,13 @@ export const createKomodoProvider = (api: KomodoApi = komodoApi, executor: SshEx
             return undefined;
         }
         try {
-            if (!(await running(session))) {
+            if (!(await running(session)) || !(await healthy(session, parsed))) {
                 return undefined;
             }
+            return { outputs: outputsFor(parsed) };
         } finally {
             await session.dispose();
         }
-        if (!(await api.health({ baseUrl: internalUrl(parsed) }))) {
-            return undefined;
-        }
-        return { outputs: outputsFor(parsed) };
     },
     diff: () => ({ action: "noop" }),
     apply: async (inputs) => {
@@ -141,14 +149,19 @@ export const createKomodoProvider = (api: KomodoApi = komodoApi, executor: SshEx
         const session = await executor.connect(sshTarget(parsed));
         try {
             await ensureFiles(session, parsed);
-            const up = await session.exec(`docker compose -p komodo -f ${STATE_DIR}/compose.yaml up -d`);
+            // --env-file/--project-directory pin the .env we wrote as both the interpolation source (the
+            // $COMPOSE_KOMODO_IMAGE_TAG etc. in compose.yaml) and the core service's runtime env; without
+            // them compose looks in the SSH working dir, leaving the image tags blank.
+            const up = await session.exec(
+                `docker compose -p komodo --project-directory ${STATE_DIR} --env-file ${STATE_DIR}/.env -f ${STATE_DIR}/compose.yaml up -d`,
+            );
             if (up.code !== 0) {
                 throw new Error(`failed to bring up komodo stack: exited ${up.code}: ${up.stderr.trim()}`);
             }
+            await waitHealthy(session, parsed);
+            return outputsFor(parsed);
         } finally {
             await session.dispose();
         }
-        await waitHealthy(api, internalUrl(parsed));
-        return outputsFor(parsed);
     },
 });
