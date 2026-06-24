@@ -1,5 +1,5 @@
-import type { ResourceType } from "@intentic/resolvers";
-import { OUTPUTS } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
+import { OUTPUTS } from "@intentic/resources";
 import type { Observed, Provider, Providers } from "../provider.js";
 import type { ResolvedInputs } from "../types.js";
 

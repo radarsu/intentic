@@ -1,5 +1,5 @@
-import type { ResourceType } from "@intentic/resolvers";
-import { OUTPUTS } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
+import { OUTPUTS } from "@intentic/resources";
 
 // A provider may only produce outputs declared for its kind in the OUTPUTS authority. (It need not
 // produce all of them; a missing output that something REFERENCES is caught later at ref resolution.)

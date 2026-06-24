@@ -1,6 +1,6 @@
 import type { DesiredStateGraph } from "@intentic/graph";
 import { linearize, refKey } from "@intentic/graph";
-import type { ResourceType } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
 import { collectOrphans } from "./orphans.js";
 import { validateOutputs } from "./outputs-check.js";
 import { httpProbe, waitReady } from "./readiness.js";

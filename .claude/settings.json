@@ -10,7 +10,11 @@
       "Grep(*)",
       "WebFetch(*)",
       "Skill(claude-api)",
-      "Skill(claude-api:*)"
+      "Skill(claude-api:*)",
+      "Bash(mkdir -p /home/radarsu/.claude/plans 2>&1 && echo \"plans dir ready\")"
+    ],
+    "additionalDirectories": [
+      "/home/radarsu/.claude/plans"
     ]
   },
   "effortLevel": "high"

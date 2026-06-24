@@ -1,11 +1,19 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { DesiredStateGraph } from "@intentic/graph";
 
-// The file a user authors (intent), the artifact `resolve` writes, and the execution record `apply` writes
-// beside it. The two repos a local control plane is made of hold these.
+// A local control plane is two repos: an `intent` repo (holds the deploy.config.ts a user authors) and a
+// `desired-state` repo (holds the artifact `resolve` writes and the status `apply` writes beside it).
+export const INTENT_DIR = "intent";
+export const TARGET_DIR = "desired-state";
 export const CONFIG_FILE = "deploy.config.ts";
 export const ARTIFACT_FILE = "desired-state.json";
 export const STATUS_FILE = "status.json";
+
+// The defaults every command resolves against cwd: the config in the intent repo, the artifact in the
+// desired-state repo. `init` scaffolds both repos at these same paths.
+export const CONFIG_PATH = join(INTENT_DIR, CONFIG_FILE);
+export const ARTIFACT_PATH = join(TARGET_DIR, ARTIFACT_FILE);
 
 export const readArtifact = async (path: string): Promise<DesiredStateGraph> => {
     const graph = JSON.parse(await readFile(path, "utf8")) as DesiredStateGraph;

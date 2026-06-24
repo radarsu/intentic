@@ -2,7 +2,7 @@
 
 The **runnable product** — the `intentic` CLI (`bin: intentic`). It turns a local intent file into a
 desired-state artifact and executes it, with no remote control plane required. Depends on
-`@intentic/engine`, `@intentic/providers`, `@intentic/resolvers`, `@intentic/graph`.
+`@intentic/engine`, `@intentic/providers`, `@intentic/need-resolver`, `@intentic/state-resolver`, `@intentic/graph`.
 
 ## Local control plane
 
@@ -16,9 +16,8 @@ Built on [stricli](https://github.com/bloomberg/stricli) with generated `--help`
 
 - `intentic init [--dir .]` — scaffold the `intent` and `desired-state` git repos (intent seeded
   with a starter `deploy.config.ts`).
-- `intentic resolve [--config deploy.config.ts] [--out desired-state.json] [--prefer <key>]` —
-  load the intent, generate candidates, `choose` one, and write its `DesiredStateGraph`. Pure: no secrets,
-  no infra access.
+- `intentic resolve [--config deploy.config.ts] [--out desired-state.json]` —
+  load the intent, resolve it to a `DesiredStateGraph`, and write it. Pure: no secrets, no infra access.
 - `intentic plan [--artifact desired-state.json]` — read-only preview of what `apply` would
   create/update.
 - `intentic apply [--artifact desired-state.json] [--max-iterations 5]` — reconcile the artifact

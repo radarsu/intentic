@@ -2,7 +2,7 @@
 
 The stateless reconcile engine. Walks a `DesiredStateGraph` in dependency order and converges it through
 the **Provider SPI** — never constructing providers itself, only consuming a `ResourceType → Provider`
-map. Depends on `@intentic/graph` + `@intentic/resolvers`; the real providers live in `@intentic/providers`.
+map. Depends on `@intentic/graph` + `@intentic/resources` (the `ResourceType`/`OUTPUTS` vocabulary); the real providers live in `@intentic/providers`.
 
 **Key exports:** `apply` (converge once: read → diff → create/update/noop, gating on readiness); `plan`
 (dry run); `reconcile` + `ConvergeResult` (execute until a plan reads all-noop — "state reads true");

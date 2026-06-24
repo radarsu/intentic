@@ -1,4 +1,4 @@
-import type { ResourceType } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
 import type { ResolvedInputs } from "./types.js";
 
 // A resource that exists in actual infrastructure, recovered statelessly by its ownership stamp/id.

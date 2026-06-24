@@ -1,7 +1,7 @@
 import type { SecretRef } from "@intentic/graph";
 import { makeRef } from "@intentic/graph";
+import type { ResolvedNode } from "@intentic/resources";
 import { tunnelId } from "./ids.js";
-import type { ResolvedNode } from "./resource-types.js";
 
 const slug = (hostname: string): string =>
     hostname

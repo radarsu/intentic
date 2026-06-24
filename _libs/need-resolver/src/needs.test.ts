@@ -1,0 +1,41 @@
+import { env } from "@intentic/graph";
+import { expect, test } from "vitest";
+
+import type { CloudflareIntent, HostIntent, IntentSet } from "./intent.js";
+import { resolveNeeds } from "./needs.js";
+
+const host: HostIntent = { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } };
+const cloudflare: CloudflareIntent = { id: "cf", input: { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" } };
+
+test("an app derives the four host capabilities plus a domain", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    expect(resolveNeeds(intent)).toEqual([
+        { capability: "source-control", scope: "host", plane: "control" },
+        { capability: "docker-registry", scope: "host", plane: "control" },
+        { capability: "infra-control", scope: "host", plane: "control" },
+        { capability: "deployment-target", scope: "host", plane: "application" },
+        { capability: "domain", scope: "cf", plane: "application" },
+    ]);
+});
+
+test("multiple apps collapse to one set of needs on the shared host and cloud", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        apps: [
+            { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
+            { id: "two", on: "host", expose: "cf", environments: { prod: { domain: "two.example.com", branch: "main" } } },
+        ],
+    };
+
+    expect(resolveNeeds(intent)).toHaveLength(5);
+});
+
+test("no apps derive no needs", () => {
+    expect(resolveNeeds({ apps: [] })).toEqual([]);
+});

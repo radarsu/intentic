@@ -2,7 +2,9 @@
     "files": [],
     "references": [
         { "path": "_libs/graph" },
-        { "path": "_libs/resolvers" },
+        { "path": "_libs/resources" },
+        { "path": "_libs/need-resolver" },
+        { "path": "_libs/state-resolver" },
         { "path": "_libs/sdk" },
         { "path": "_libs/engine" },
         { "path": "_libs/providers" },

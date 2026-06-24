@@ -1,5 +1,5 @@
 import { refKey } from "@intentic/graph";
-import type { ResourceType } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
 import type { Provider, ProviderContext, Providers } from "./provider.js";
 import type { OutputStore } from "./store.js";
 

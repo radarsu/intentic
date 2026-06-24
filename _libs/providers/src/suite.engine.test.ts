@@ -165,10 +165,7 @@ const fakeKomodoApi = (): KomodoApi => {
 };
 
 const fullEnv = {
-    HOST_ADDRESS: "203.0.113.10",
-    HOST_USER: "deploy",
     HOST_SSH_KEY: "k",
-    CLOUDFLARE_ACCOUNT_ID: "acc_123",
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
@@ -178,7 +175,11 @@ const fullEnv = {
 
 const buildGraph = () =>
     defineStack((i) => {
+        const host = i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
+        const cf = i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
         i.want.app("my-app", {
+            on: host,
+            expose: cf,
             notify: { discord: env("DISCORD_WEBHOOK") },
             environments: { production: { domain: "app.example.com", branch: "main" } },
         });

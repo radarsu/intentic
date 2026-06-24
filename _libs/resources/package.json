@@ -1,5 +1,5 @@
 {
-    "name": "@intentic/cli",
+    "name": "@intentic/resources",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
@@ -7,14 +7,11 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/radarsu/intentic-deploy.git",
-        "directory": "_apps/cli"
+        "directory": "_libs/resources"
     },
     "files": [
         "dist"
     ],
-    "bin": {
-        "intentic": "./dist/cli.js"
-    },
     "publishConfig": {
         "access": "public",
         "registry": "https://registry.npmjs.org/"
@@ -34,24 +31,14 @@
     },
     "scripts": {
         "build": "tsc",
-        "watch": "tsc --build --watch",
-        "test": "vitest run",
-        "test:watch": "vitest"
+        "watch": "tsc --build --watch"
     },
     "dependencies": {
-        "@intentic/engine": "workspace:*",
         "@intentic/graph": "workspace:*",
-        "@intentic/need-resolver": "workspace:*",
-        "@intentic/providers": "workspace:*",
-        "@intentic/state-resolver": "workspace:*",
-        "@stricli/core": "^1.2.8",
         "tslib": "catalog:"
     },
     "devDependencies": {
-        "@intentic/sdk": "workspace:*",
         "@intentic/tsconfig": "workspace:*",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-        "vitest": "catalog:"
+        "typescript": "catalog:"
     }
 }

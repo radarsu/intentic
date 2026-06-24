@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { ApplyOutcome, ReadinessProbe } from "@intentic/engine";
 import { apply } from "@intentic/engine";
+import { env } from "@intentic/graph";
 import { defineStack } from "@intentic/sdk";
 import { utils } from "ssh2";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
@@ -38,12 +39,16 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
     let accountId: string;
     let apiToken: string;
 
-    // The host is the implicit reconciled inventory; the zone is derived from the environment domains. The
-    // host's connection (address/user/sshKey) is supplied through the engine env below, and the engine
+    // The host + Cloudflare are authored inventory. address/user/accountId/zone are literals (resolved at
+    // call time from the DinD container + the throwaway zone); only the SSH key is an env secret. The engine
     // reaches the DinD host on its mapped SSH port via the port-injecting executor (see mappedSsh).
     const buildGraph = () =>
         defineStack((i) => {
+            const h = i.have.host("host", { address: host.getHost(), user: "root", sshKey: env("HOST_SSH_KEY") });
+            const cf = i.have.cloudflare("cf", { accountId, apiToken: env("CLOUDFLARE_API_TOKEN"), zone });
             i.want.app("my-app", {
+                on: h,
+                expose: cf,
                 environments: { staging: { domain: `staging.${zone}`, branch: "main", env: {} } },
             });
         });
@@ -123,10 +128,7 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
             providers,
             env: {
                 ...process.env,
-                HOST_ADDRESS: host.getHost(),
-                HOST_USER: "root",
                 HOST_SSH_KEY: privateKey,
-                CLOUDFLARE_ACCOUNT_ID: accountId,
             },
             probe: sshProbe,
             log: (message: string) => console.log(message),

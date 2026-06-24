@@ -6,10 +6,24 @@ import { env } from "@intentic/graph";
 import { defineStack } from "../index.js";
 
 export const graph = defineStack((i) => {
-    // What I want: an app shipped to two environments. That's it — the tool derives the Git+CI, deploy
-    // orchestrator, runner, repo, routes, and the host/Cloudflare it all runs on, reconciling them as
-    // resources in the target artifact (their connection values filled at the decision/PR step).
+    // What I have: one SSH + Docker host, one Cloudflare account.
+    const host = i.have.host("host", {
+        address: "203.0.113.10",
+        user: "deploy",
+        sshKey: env("HOST_SSH_KEY"),
+    });
+
+    const cf = i.have.cloudflare("cf", {
+        accountId: "acc_123",
+        apiToken: env("CLOUDFLARE_API_TOKEN"),
+        zone: "example.com",
+    });
+
+    // What I want: an app shipped to two environments. The tool derives the Git+CI, deploy orchestrator,
+    // runner, repo, and routes on the host I declared, exposed through the Cloudflare account I declared.
     i.want.app("my-app", {
+        on: host,
+        expose: cf,
         environments: {
             staging: { domain: "staging.example.com", branch: "develop", env: { DATABASE_URL: env("STAGING_DATABASE_URL") } },
             production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },

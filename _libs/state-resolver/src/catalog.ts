@@ -1,4 +1,4 @@
-import type { Capability } from "./needs.js";
+import type { Capability } from "@intentic/need-resolver";
 
 // A concrete way to satisfy one or more capabilities. One option can fill several needs at once — Forgejo
 // (the "Gitea" option) provides both source control and a Docker registry — which couples those needs to
@@ -12,9 +12,9 @@ export interface Catalog {
     optionsFor(capability: Capability): readonly Option[];
 }
 
-// Today's fixed stack as the default catalog: one option per capability. Adding Gitlab later is a pure
-// data change — a second option providing source-control + docker-registry — which makes
-// generateCandidates yield more than one desired-state artifact.
+// Today's fixed stack as the default catalog: exactly one option per capability. The state resolver makes
+// no choice, so the catalog stays single-option-per-capability; supporting an alternative (e.g. Gitlab for
+// source-control + docker-registry) would mean the intent itself selecting between them.
 const options: readonly Option[] = [
     { id: "forgejo", provides: ["source-control", "docker-registry"] },
     { id: "komodo", provides: ["infra-control"] },

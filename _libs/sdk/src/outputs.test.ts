@@ -1,8 +1,8 @@
 import type { SerializedValue } from "@intentic/graph";
 
-import { isRef } from "@intentic/graph";
-import type { ResourceType } from "@intentic/resolvers";
-import { OUTPUTS } from "@intentic/resolvers";
+import { env, isRef } from "@intentic/graph";
+import type { ResourceType } from "@intentic/resources";
+import { OUTPUTS } from "@intentic/resources";
 import { expect, test } from "vitest";
 import { graph } from "./__fixtures__/deploy.config.js";
 import { defineStack } from "./index.js";
@@ -21,14 +21,18 @@ test("public handles' output refs match OUTPUTS exactly", () => {
     const handles: Partial<Record<ResourceType, object>> = {};
 
     defineStack((i) => {
-        const app = i.want.app("app", { environments: { prod: { domain: "app.example.com", branch: "main" } } });
+        const host = i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
+        const cf = i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
+        const app = i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
+        handles["host"] = host;
+        handles["cloudflare"] = cf;
         handles["app"] = app;
         handles["repo"] = app.repo;
         handles["deployment"] = app.environments["prod"];
     });
 
-    // host/cloudflare are no longer author-facing handles — they are the implicit reconciled inventory.
-    for (const type of ["app", "deployment", "repo"] as const) {
+    // host/cloudflare are author-facing handles again (i.have.host / i.have.cloudflare) — walk them too.
+    for (const type of ["host", "cloudflare", "app", "deployment", "repo"] as const) {
         const handle = handles[type];
         expect(handle, `no handle captured for type "${type}"`).toBeDefined();
         expect(outputPropsOf(handle as object)).toEqual([...OUTPUTS[type]].sort());

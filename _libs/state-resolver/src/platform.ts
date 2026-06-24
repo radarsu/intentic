@@ -1,8 +1,8 @@
 import type { SecretRef } from "@intentic/graph";
 import { env, httpOk, makeRef } from "@intentic/graph";
+import type { HostInput } from "@intentic/need-resolver";
+import type { ResolvedNode } from "@intentic/resources";
 import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
-import type { HostConnection } from "./inventory.js";
-import type { ResolvedNode } from "./resource-types.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
@@ -29,7 +29,7 @@ export const resolvePlatform = (
     cloudflareId: string,
     zone: string,
     apiToken: SecretRef,
-    ssh: HostConnection,
+    host: HostInput,
 ): { nodes: ResolvedNode[]; refs: PlatformRefs; ingress: IngressPair[] } => {
     const forgejo = forgejoId(hostId);
     const deploy = komodoId(hostId);
@@ -37,6 +37,12 @@ export const resolvePlatform = (
     // The platform services are deployed ONTO the host over SSH (like the tunnel connector), so every
     // deploy-style node carries the host's SSH creds + its internal ip. internalUrl/readyWhen are keyed
     // to the host-internal address so they're reachable before the Cloudflare tunnel + DNS routes exist.
+    const ssh = {
+        address: host.address,
+        user: host.user,
+        sshKey: host.sshKey,
+        ...(host.port !== undefined ? { port: host.port } : {}),
+    };
     const internalIp = makeRef<string>(hostId, "internalIp");
     const git = exposeRoute(cloudflareId, hostId, gitDomain(zone), FORGEJO_PORT, apiToken);
     const komodo = exposeRoute(cloudflareId, hostId, komodoDomain(zone), KOMODO_PORT, apiToken);

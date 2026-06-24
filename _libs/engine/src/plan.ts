@@ -1,7 +1,7 @@
 import type { DesiredStateGraph } from "@intentic/graph";
 import { linearize, refKey } from "@intentic/graph";
-import type { ResourceType } from "@intentic/resolvers";
-import { OUTPUTS } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
+import { OUTPUTS } from "@intentic/resources";
 import { collectOrphans } from "./orphans.js";
 import { makeContext, requireProvider } from "./reconcile.js";
 import { resolveInputs } from "./resolve-inputs.js";

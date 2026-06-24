@@ -12,18 +12,8 @@ export const expectedGraph: DesiredStateGraph = {
             id: "host",
             type: "host",
             inputs: {
-                address: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_ADDRESS",
-                    },
-                },
-                user: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_USER",
-                    },
-                },
+                address: "203.0.113.10",
+                user: "deploy",
                 sshKey: {
                     $secret: {
                         source: "env",
@@ -37,12 +27,7 @@ export const expectedGraph: DesiredStateGraph = {
             id: "cf",
             type: "cloudflare",
             inputs: {
-                accountId: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_ACCOUNT_ID",
-                    },
-                },
+                accountId: "acc_123",
                 apiToken: {
                     $secret: {
                         source: "env",
@@ -60,18 +45,8 @@ export const expectedGraph: DesiredStateGraph = {
                 server: {
                     $ref: "host",
                 },
-                address: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_ADDRESS",
-                    },
-                },
-                user: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_USER",
-                    },
-                },
+                address: "203.0.113.10",
+                user: "deploy",
                 sshKey: {
                     $secret: {
                         source: "env",
@@ -106,18 +81,8 @@ export const expectedGraph: DesiredStateGraph = {
                 server: {
                     $ref: "host",
                 },
-                address: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_ADDRESS",
-                    },
-                },
-                user: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_USER",
-                    },
-                },
+                address: "203.0.113.10",
+                user: "deploy",
                 sshKey: {
                     $secret: {
                         source: "env",
@@ -140,18 +105,8 @@ export const expectedGraph: DesiredStateGraph = {
                 server: {
                     $ref: "host",
                 },
-                address: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_ADDRESS",
-                    },
-                },
-                user: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_USER",
-                    },
-                },
+                address: "203.0.113.10",
+                user: "deploy",
                 sshKey: {
                     $secret: {
                         source: "env",
@@ -469,30 +424,15 @@ export const expectedGraph: DesiredStateGraph = {
             type: "tunnel",
             inputs: {
                 name: "intentic-host",
-                accountId: {
-                    $secret: {
-                        source: "env",
-                        key: "CLOUDFLARE_ACCOUNT_ID",
-                    },
-                },
+                accountId: "acc_123",
                 apiToken: {
                     $secret: {
                         source: "env",
                         key: "CLOUDFLARE_API_TOKEN",
                     },
                 },
-                address: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_ADDRESS",
-                    },
-                },
-                user: {
-                    $secret: {
-                        source: "env",
-                        key: "HOST_USER",
-                    },
-                },
+                address: "203.0.113.10",
+                user: "deploy",
                 sshKey: {
                     $secret: {
                         source: "env",

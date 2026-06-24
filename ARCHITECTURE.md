@@ -1,71 +1,73 @@
 # Architecture
 
-intentic is **intent-driven deployment**: you declare *what you want*; the system computes every valid way
-to satisfy that, picks one, and reconciles infrastructure until reality matches. The things you "have" (the
-host it runs on, the Cloudflare it's exposed through) are not authored — they are reconciled resources in
-the target artifact, their connection values filled at the decision/PR step.
+intentic is **intent-driven deployment**: you declare *what you have* (the host apps run on, the Cloudflare
+they're exposed through) and *what you want* (apps); the system computes every valid way to satisfy that,
+picks one, and reconciles infrastructure until reality matches.
 
 ## The intent-driven flow
 
 ```
-Intent ──► Needs ──► Options (catalog) ──► Candidates ──► Choose ──► Execute ──► (reads true)
+Intent ──► NeedResolver ──► Needs ──► StateResolver ──► desired state ──► Execute ──► (reads true)
 ```
 
-1. **Intent** — a declaration authored with the SDK: `i.want.app(...)` (what you want). Captured as a
-   serializable `IntentSet`. The host and Cloudflare are the implicit reconciled inventory (see
-   [_libs/resolvers/src/inventory.ts](_libs/resolvers/src/inventory.ts)), so the intent carries only apps.
-   ([_libs/sdk/src/stack.ts](_libs/sdk/src/stack.ts))
-2. **Needs** — the abstract capabilities the intent requires, derived from it: `source-control`,
-   `docker-registry`, `infra-control`, `deployment-target`, `domain`. (`deriveNeeds` in
-   [_libs/resolvers/src/needs.ts](_libs/resolvers/src/needs.ts))
-3. **Options** — a catalog of concrete things that satisfy capabilities; one option may cover several
-   (Forgejo provides both source-control and docker-registry). (`defaultCatalog` in
-   [_libs/resolvers/src/catalog.ts](_libs/resolvers/src/catalog.ts))
-4. **Candidates** — every valid option-per-need combination, each compiled into one **desired-state
-   artifact** (a `DesiredStateGraph`). Today the catalog has one option per need, so there is exactly one
-   candidate; the structure supports N (e.g. a future Gitlab option). (`generateCandidates` in
-   [_libs/resolvers/src/candidate.ts](_libs/resolvers/src/candidate.ts), emitting nodes via
-   [emit.ts](_libs/resolvers/src/emit.ts))
-5. **Choose** — pick one candidate. Deterministic today (auto-pick / `preferKey`); the LLM-suggestion seam
-   lands here later. (`choose` in [_libs/resolvers/src/choose.ts](_libs/resolvers/src/choose.ts))
-6. **Execute** — apply the chosen artifact and re-read state, looping until a plan reads all-noop ("state
-   reads true"). (`reconcile` in [_libs/engine/src/reconcile-loop.ts](_libs/engine/src/reconcile-loop.ts),
-   over `apply`/`plan` and the Provider SPI)
+1. **Intent** — a declaration authored with the SDK: `i.have.host(...)` / `i.have.cloudflare(...)` (the
+   inventory you have) and `i.want.app(...)` (what you want), each app wired to its host/Cloudflare via
+   `on` / `expose`. Captured as a serializable `IntentSet`. ([_libs/sdk/src/stack.ts](_libs/sdk/src/stack.ts))
+2. **Need resolver** — derives the abstract capabilities the intent requires: `source-control`,
+   `docker-registry`, `infra-control` (control plane), `deployment-target`, `domain` (application plane).
+   (`resolveNeeds` in [_libs/need-resolver/src/needs.ts](_libs/need-resolver/src/needs.ts))
+3. **State resolver** — assigns each need its catalog option and compiles the emitted nodes into one
+   **desired state** (a `DesiredStateGraph`). The catalog maps capabilities to the concrete things that
+   satisfy them; one option may cover several (Forgejo provides both source-control and docker-registry).
+   The intent fully determines the result — there is no choice to make, so the catalog offers exactly one
+   option per capability. (`resolveState` in [_libs/state-resolver/src/state.ts](_libs/state-resolver/src/state.ts),
+   over `defaultCatalog` in [catalog.ts](_libs/state-resolver/src/catalog.ts) and the nodes emitted by
+   [emit.ts](_libs/state-resolver/src/emit.ts))
+4. **Execute** — apply the desired state and re-read it, looping until a plan reads all-noop ("state reads
+   true"). (`reconcile` in [_libs/engine/src/reconcile-loop.ts](_libs/engine/src/reconcile-loop.ts), over
+   `apply`/`plan` and the Provider SPI)
 
-A `DesiredStateGraph` (the artifact) is the central data structure: a serializable, dependency-ordered set
-of resource nodes with refs, secrets, and readiness gates. ([_libs/graph/src/types.ts](_libs/graph/src/types.ts))
+A `DesiredStateGraph` is the central data structure: a serializable, dependency-ordered set of resource
+nodes with refs, secrets, and readiness gates. ([_libs/graph/src/types.ts](_libs/graph/src/types.ts))
 
 ## Control plane vs application plane
 
-- **Control plane** — two local git repos: an `intent` repo holding `deploy.config.ts` and a
-  `desired-state` repo holding the chosen artifact + execution status. `intentic resolve` runs the
-  flow above and writes the artifact; `intentic apply` executes it. A remote, PR-managed control plane (a
-  standalone Forgejo watching the intent repo) is a planned later evolution of this same flow.
-  ([_apps/cli/src/resolve.ts](_apps/cli/src/resolve.ts), [artifact.ts](_apps/cli/src/artifact.ts),
+Every need carries a `plane` — its role, independent of where it runs ([needs.ts](_libs/need-resolver/src/needs.ts)):
+
+- **Control plane** — the deploy machinery: `source-control` + `docker-registry` (Forgejo) and
+  `infra-control` (Komodo) — git/CI plus the deploy orchestrator. The local `intent` repo
+  (`deploy.config.ts`) and `desired-state` repo (the artifact + execution status) drive it: `intentic
+  resolve` runs the flow above and writes the artifact, `intentic apply` executes it. A remote, PR-managed
+  control plane (a standalone Forgejo watching the intent repo) is a planned later evolution of this same
+  flow. ([_apps/cli/src/resolve.ts](_apps/cli/src/resolve.ts), [artifact.ts](_apps/cli/src/artifact.ts),
   [app.ts](_apps/cli/src/app.ts))
-- **Application plane** — the per-host support stack (Forgejo/Komodo/runner, Cloudflare tunnel + DNS
-  routes) *derived from* `i.want.app`. This is what the resolver emits and the engine reconciles onto owned
-  infra. ([_libs/resolvers/src/platform.ts](_libs/resolvers/src/platform.ts),
+- **Application plane** — what actually serves an app: its `deployment-target` (the app's runtime on the
+  host) and its `domain` (the Cloudflare tunnel + DNS routes). Both are *derived from* `i.want.app` and
+  emitted alongside the control-plane stack. ([_libs/state-resolver/src/platform.ts](_libs/state-resolver/src/platform.ts),
   [_libs/providers/](_libs/providers/src/))
 
-The application plane is self-contained: its per-host Forgejo is just another reconciled node, so `apply`
-needs no pre-existing control plane. A future remote control plane would reuse the same `forgejo` provider —
-a different node instance, not a different implementation.
+The whole per-host support stack is self-contained: its control-plane Forgejo is just another reconciled
+node, so `apply` needs no pre-existing control plane. A future remote control plane would reuse the same
+`forgejo` provider — a different node instance, not a different implementation.
 
 ## Packages
 
 Dependency direction (one-way):
 
 ```
-graph ──► resolvers ──► sdk
-   └────► engine ──► providers ──► cli (app)
+graph ──► resources ──► engine ──► providers
+   │           └──────► state-resolver ──► sdk
+   ├──► need-resolver ──► state-resolver
+   └──► (cli ◄── need-resolver, state-resolver, engine, providers)
 ```
 
 | Package | Tier | Role |
 | --- | --- | --- |
 | [`@intentic/graph`](_libs/graph) | lib | Product-agnostic IR: refs, secrets, readiness, `DesiredStateGraph`, and the compiler. |
-| [`@intentic/resolvers`](_libs/resolvers) | lib | Intent → needs → catalog → candidates → choose; the closed `ResourceType` vocabulary and `OUTPUTS`. |
-| [`@intentic/sdk`](_libs/sdk) | lib | Authoring surface (`i.want.app`); `defineIntent` (→ `IntentSet`) and `defineStack` (one graph). |
+| [`@intentic/resources`](_libs/resources) | lib | The closed resource vocabulary shared by the state resolver, engine, and providers: `ResourceType`, `ResolvedNode`, and `OUTPUTS`. |
+| [`@intentic/need-resolver`](_libs/need-resolver) | lib | The need resolver: intent → needs. Owns the authored intent/input shapes, `resolveNeeds`, and `Capability`/`Need`/`Plane`. |
+| [`@intentic/state-resolver`](_libs/state-resolver) | lib | The state resolver: needs → desired state, over the option catalog. `resolveState`, the catalog, `emit`, and the platform/app/route/id derivation. |
+| [`@intentic/sdk`](_libs/sdk) | lib | Authoring surface (`i.have.host` / `i.have.cloudflare` + `i.want.app`); `defineIntent` (→ `IntentSet`) and `defineStack` (one graph). |
 | [`@intentic/engine`](_libs/engine) | lib | Stateless reconcile engine: `plan`/`apply`, the Provider SPI, and the `reconcile` loop. |
 | [`@intentic/providers`](_libs/providers) | lib | Real Provider SPI impls over SSH/Docker, Cloudflare, Forgejo, Komodo. |
 | [`@intentic/cli`](_apps/cli) | **app** | The runnable product: `init` local repos, `resolve` intent → artifact, `apply` it. CLI `bin: intentic`. |
@@ -73,7 +75,7 @@ graph ──► resolvers ──► sdk
 ## The intent contract
 
 A local `deploy.config.ts` (see [/examples/deploy.config.ts](examples/deploy.config.ts)) must
-`export const intent = defineIntent(...)`; `resolve` generates the candidates from it and chooses one
+`export const intent = defineIntent(...)`; `resolve` derives the desired state from it
 ([resolve.ts](_apps/cli/src/resolve.ts)). `defineStack(...)` is the one-shot,
 single-graph form used when a single deterministic graph is wanted directly.
 

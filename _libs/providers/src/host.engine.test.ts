@@ -15,14 +15,14 @@ const reachable: SshExecutor = {
 };
 
 test("host node: the engine reconciles an owned host to noop and records its facts", async () => {
-    // The host is the implicit reconciled inventory (its connection sourced from canonical env secrets, filled
-    // at the decision/PR step); build its node directly to exercise the host provider in isolation.
+    // The host is authored inventory (address/user literals, the SSH key an env secret); build its node
+    // directly to exercise the host provider in isolation.
     const graph = compile(
         toNodeMap([
             {
                 id: "host",
                 type: "host",
-                inputs: { address: env("HOST_ADDRESS"), user: env("HOST_USER"), sshKey: env("HOST_SSH_KEY") },
+                inputs: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") },
                 explicitDependsOn: [],
             },
         ]),
@@ -30,7 +30,7 @@ test("host node: the engine reconciles an owned host to noop and records its fac
 
     const result = await apply(graph, {
         providers: { host: createHostProvider(reachable) },
-        env: { HOST_ADDRESS: "203.0.113.10", HOST_USER: "deploy", HOST_SSH_KEY: "key-material" },
+        env: { HOST_SSH_KEY: "key-material" },
         log: () => {},
     });
 

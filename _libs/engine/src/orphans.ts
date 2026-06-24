@@ -1,5 +1,5 @@
 import type { DesiredStateGraph } from "@intentic/graph";
-import type { ResourceType } from "@intentic/resolvers";
+import type { ResourceType } from "@intentic/resources";
 import type { ProviderContext, Providers } from "./provider.js";
 import type { Orphan } from "./types.js";
 

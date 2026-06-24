@@ -21,3 +21,7 @@ Thumbs.db
 /_*/*/generated
 /_*/*/.env.*
 !/_*/*/.env.local.template
+
+# Intentic.
+/intent
+/desired-state
