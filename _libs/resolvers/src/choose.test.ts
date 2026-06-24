@@ -6,7 +6,7 @@ import { choose } from "./choose.js";
 const candidate = (key: string): Candidate => ({ key, chosenOptions: {}, graph: { version: 1, resources: {} } });
 
 test("choosing from no candidates throws", () => {
-    expect(() => choose([])).toThrow("no candidate reconciliation-target artifacts");
+    expect(() => choose([])).toThrow("no candidate desired-state artifacts");
 });
 
 test("without a preferKey the first candidate wins", () => {

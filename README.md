@@ -7,11 +7,11 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 | Package | Description |
 | --- | --- |
 | [`@intentic/graph`](_libs/graph) | Product-agnostic desired-state IR: refs, secrets, readiness, the serializable graph, and the compiler. |
-| [`@intentic/resolvers`](_libs/resolvers) | Computes intent into needs, the option catalog that meets them, and every valid reconciliation-target artifact — then chooses one. |
-| [`@intentic/sdk`](_libs/sdk) | Authoring surface (`i.want.app`) and `defineStack`: build → resolve → compile. |
+| [`@intentic/resolvers`](_libs/resolvers) | Computes intent into needs, the option catalog that meets them, and every valid desired-state artifact — then chooses one. |
+| [`@intentic/sdk`](_libs/sdk) | Authoring surface (`i.want.app`): `defineIntent` → `IntentSet`, `defineStack` → one graph. |
 | [`@intentic/engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
 | [`@intentic/providers`](_libs/providers) | Real reconcile providers over the engine SPI: `host` (SSH/Docker via `ssh2`), `cloudflare` (resolve owned zone → id), `tunnel` (Cloudflare Tunnel + `cloudflared` on the host), `cf-route` (proxied DNS CNAME). |
-| [`@intentic/cli`](_apps/cli) | The runnable product (`bin: intentic`): `resolve` a local `deploy.config.ts` into a reconciliation-target artifact and `apply` it until state reads true; `init` scaffolds the two local git repos. |
+| [`@intentic/cli`](_apps/cli) | The runnable product (`bin: intentic`): `resolve` a local `deploy.config.ts` into a desired-state artifact and `apply` it until state reads true; `init` scaffolds the two local git repos. |
 
 ## Getting started
 
@@ -23,8 +23,8 @@ pnpm libs:watch    # incremental TypeScript build in watch mode
 
 # run the CLI from the repo root (first call builds dist via tsc, then incremental)
 pnpm intentic --help
-pnpm intentic init                   # scaffold intent + reconciliation-target git repos
-pnpm intentic resolve                # deploy.config.ts -> reconciliation-target.json
+pnpm intentic init                   # scaffold intent + desired-state git repos
+pnpm intentic resolve                # deploy.config.ts -> desired-state.json
 pnpm intentic apply                  # execute the artifact until state reads true
 ```
 

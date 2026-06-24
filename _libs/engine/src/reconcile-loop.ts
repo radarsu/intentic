@@ -9,7 +9,7 @@ export interface ConvergeResult {
     readonly outcome: ApplyOutcome;
 }
 
-// Execute a reconciliation-target artifact until state-reading shows it is true. Each iteration applies
+// Execute a desired-state artifact until state-reading shows it is true. Each iteration applies
 // the graph (which gates readiness on every node it touches) then plans it: convergence is when that plan
 // reads all-noop — the framework's own definition of "converged & idempotent". apply is idempotent, so a
 // graph that needed several passes (e.g. a service that only becomes diff-clean once a dependency is live)

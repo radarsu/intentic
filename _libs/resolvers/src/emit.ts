@@ -19,7 +19,7 @@ const supportedOptions = new Set(["forgejo", "komodo", "ssh-linux", "cloudflare-
 // Build the concrete RawNodes for one assignment. The host and Cloudflare are the implicit reconciled
 // inventory: one host node + one cloudflare node, their connection values canonical env secrets filled at
 // the decision/PR step. Every app shares one git/CI/deploy platform on that host, and one Cloudflare
-// Tunnel owns the host's aggregated ingress. The compiler folds the result into one reconciliation-target
+// Tunnel owns the host's aggregated ingress. The compiler folds the result into one desired-state
 // artifact (a DesiredStateGraph).
 export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] => {
     for (const optionId of assignment.byNeed.values()) {

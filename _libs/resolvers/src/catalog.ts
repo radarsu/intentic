@@ -14,7 +14,7 @@ export interface Catalog {
 
 // Today's fixed stack as the default catalog: one option per capability. Adding Gitlab later is a pure
 // data change — a second option providing source-control + docker-registry — which makes
-// generateCandidates yield more than one reconciliation-target artifact.
+// generateCandidates yield more than one desired-state artifact.
 const options: readonly Option[] = [
     { id: "forgejo", provides: ["source-control", "docker-registry"] },
     { id: "komodo", provides: ["infra-control"] },

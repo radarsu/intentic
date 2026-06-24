@@ -1,6 +1,6 @@
 # @intentic/resolvers
 
-Turns an `IntentSet` into reconciliation-target artifacts. Owns the **needs → options → candidates →
+Turns an `IntentSet` into desired-state artifacts. Owns the **needs → options → candidates →
 choose** pipeline and the closed `ResourceType` vocabulary. Depends on `@intentic/graph`; consumed by
 `@intentic/sdk`.
 

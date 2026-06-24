@@ -1,8 +1,8 @@
 import { env } from "@intentic/graph";
-import { defineCandidates } from "@intentic/sdk";
+import { defineIntent } from "@intentic/sdk";
 
 // A self-contained intent config for the cli tests, mirroring examples/deploy.config.ts.
-export const candidates = defineCandidates((i) => {
+export const intent = defineIntent((i) => {
     i.want.app("my-app", {
         environments: {
             staging: { domain: "staging.example.com", branch: "develop", env: { DATABASE_URL: env("STAGING_DATABASE_URL") } },

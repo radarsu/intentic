@@ -2,7 +2,7 @@ import type { SecretRef } from "@intentic/graph";
 import { env } from "@intentic/graph";
 
 // The implicit, reconciled inventory. Intent is now "what you want" only; the host and Cloudflare account
-// are no longer authored. They are resource nodes in the reconciliation-target artifact whose connection
+// are no longer authored. They are resource nodes in the desired-state artifact whose connection
 // values are canonical env secrets, filled during the decision/PR step. There is exactly one of each,
 // shared by every app, and their ids are fixed so the derived graph stays stable.
 export const HOST_ID = "host";

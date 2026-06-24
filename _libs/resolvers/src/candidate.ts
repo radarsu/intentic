@@ -15,7 +15,7 @@ export interface AssignmentPlan {
     readonly byNeed: ReadonlyMap<string, string>;
 }
 
-// One reconciliation-target artifact: an assignment plan compiled into a desired-state graph.
+// One desired-state artifact: an assignment plan compiled into a desired-state graph.
 export interface Candidate {
     readonly key: string;
     readonly chosenOptions: Readonly<Record<string, string>>;
@@ -85,7 +85,7 @@ export const enumerateAssignments = (intent: IntentSet, catalog: Catalog = defau
     return plans;
 };
 
-// All candidate reconciliation-target artifacts for an intent: every valid assignment compiled into a
+// All candidate desired-state artifacts for an intent: every valid assignment compiled into a
 // graph. Only assignments the emitter can build are realizable today (it throws on unsupported options).
 export const generateCandidates = (intent: IntentSet, catalog: Catalog = defaultCatalog): Candidate[] =>
     enumerateAssignments(intent, catalog).map((plan) => ({

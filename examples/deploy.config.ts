@@ -1,13 +1,13 @@
-// Canonical intent file. `intentic resolve` imports this module, reads the exported `candidates`, computes
-// every valid reconciliation-target artifact (one per option combination that meets the needs), and
+// Canonical intent file. `intentic resolve` imports this module, reads the exported `intent`, computes
+// every valid desired-state artifact (one per option combination that meets the needs), and
 // auto-picks one; `intentic apply` then reconciles that artifact until state reads true.
 //
 // `env` comes from its true source, @intentic/graph (the SDK does not re-export it).
 
 import { env } from "@intentic/graph";
-import { defineCandidates } from "@intentic/sdk";
+import { defineIntent } from "@intentic/sdk";
 
-export const candidates = defineCandidates((i) => {
+export const intent = defineIntent((i) => {
     // What I want: an app shipped to two environments. That's it. The tool derives the needs (source
     // control, Docker registry, infra control, deployment target, domain) and the support stack that meets
     // them — choosing among the catalog's options for each. The host it runs on and the Cloudflare it's

@@ -7,9 +7,9 @@ import { CONFIG_FILE } from "./artifact.js";
 const exec = promisify(execFile);
 
 const STARTER_CONFIG = `import { env } from "@intentic/graph";
-import { defineCandidates } from "@intentic/sdk";
+import { defineIntent } from "@intentic/sdk";
 
-export const candidates = defineCandidates((i) => {
+export const intent = defineIntent((i) => {
     i.want.app("my-app", {
         environments: {
             production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },
@@ -18,12 +18,12 @@ export const candidates = defineCandidates((i) => {
 });
 `;
 
-// Scaffold the local control plane: an `intent` repo (holds deploy.config.ts) and a `reconciliation-target`
+// Scaffold the local control plane: an `intent` repo (holds deploy.config.ts) and a `desired-state`
 // repo (holds the artifact `resolve` writes and the status `apply` writes), each its own git repo so the
 // generated target can later become PR-managed.
 export const scaffold = async (dir: string): Promise<{ readonly intentDir: string; readonly targetDir: string }> => {
     const intentDir = join(dir, "intent");
-    const targetDir = join(dir, "reconciliation-target");
+    const targetDir = join(dir, "desired-state");
     await mkdir(intentDir, { recursive: true });
     await mkdir(targetDir, { recursive: true });
     await exec("git", ["init", "-q", intentDir]);

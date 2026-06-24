@@ -4,13 +4,13 @@ import type { DesiredStateGraph } from "@intentic/graph";
 // The file a user authors (intent), the artifact `resolve` writes, and the execution record `apply` writes
 // beside it. The two repos a local control plane is made of hold these.
 export const CONFIG_FILE = "deploy.config.ts";
-export const ARTIFACT_FILE = "reconciliation-target.json";
+export const ARTIFACT_FILE = "desired-state.json";
 export const STATUS_FILE = "status.json";
 
 export const readArtifact = async (path: string): Promise<DesiredStateGraph> => {
     const graph = JSON.parse(await readFile(path, "utf8")) as DesiredStateGraph;
     if (graph.version !== 1) {
-        throw new Error(`${path} is not a reconciliation-target artifact (expected version 1)`);
+        throw new Error(`${path} is not a desired-state artifact (expected version 1)`);
     }
     return graph;
 };
