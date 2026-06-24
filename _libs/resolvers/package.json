@@ -1,12 +1,12 @@
 {
-    "name": "@puristic/deploy-resolvers",
+    "name": "@intentic/resolvers",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/puristic-deploy.git",
+        "url": "git+https://github.com/radarsu/intentic-deploy.git",
         "directory": "_libs/resolvers"
     },
     "files": [
@@ -20,11 +20,11 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             },
             "require": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             }
         }
@@ -36,11 +36,11 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@puristic/deploy-protocol": "workspace:*",
+        "@intentic/graph": "workspace:*",
         "tslib": "catalog:"
     },
     "devDependencies": {
-        "@puristic/tsconfig": "workspace:*",
+        "@intentic/tsconfig": "workspace:*",
         "typescript": "catalog:",
         "vitest": "catalog:"
     }

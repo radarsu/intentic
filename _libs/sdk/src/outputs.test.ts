@@ -1,8 +1,8 @@
-import type { SerializedValue } from "@puristic/deploy-protocol";
+import type { SerializedValue } from "@intentic/graph";
 
-import { env, isRef } from "@puristic/deploy-protocol";
-import type { ResourceType } from "@puristic/deploy-resolvers";
-import { OUTPUTS } from "@puristic/deploy-resolvers";
+import { env, isRef } from "@intentic/graph";
+import type { ResourceType } from "@intentic/resolvers";
+import { OUTPUTS } from "@intentic/resolvers";
 import { expect, test } from "vitest";
 import { graph } from "./deploy.config.js";
 import { defineStack } from "./index.js";

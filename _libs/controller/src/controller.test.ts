@@ -1,8 +1,8 @@
-import { createFakeProviders } from "@puristic/deploy-engine";
-import { env } from "@puristic/deploy-protocol";
-import type { ForgejoApi } from "@puristic/deploy-providers";
-import type { Candidate, IntentSet } from "@puristic/deploy-resolvers";
-import { generateCandidates } from "@puristic/deploy-resolvers";
+import { createFakeProviders } from "@intentic/engine";
+import { env } from "@intentic/graph";
+import type { ForgejoApi } from "@intentic/providers";
+import type { Candidate, IntentSet } from "@intentic/resolvers";
+import { generateCandidates } from "@intentic/resolvers";
 import { expect, test } from "vitest";
 import { artifactFileName, runCycle, statusFileName } from "./controller.js";
 
@@ -17,7 +17,7 @@ const intent: IntentSet = {
 };
 
 const fullEnv = { HOST_SSH_KEY: "k", CLOUDFLARE_API_TOKEN: "k", FORGEJO_ADMIN_PASSWORD: "k", KOMODO_ADMIN_PASSWORD: "k", KOMODO_WEBHOOK_SECRET: "k" };
-const access = { baseUrl: "http://10.0.0.1:3000", user: "puristic", password: "pw" };
+const access = { baseUrl: "http://10.0.0.1:3000", user: "intentic", password: "pw" };
 
 // A forgejo fake that serves a fixed head commit + config source and records every commit written back.
 const fakeForgejo = (head: string | undefined): { api: ForgejoApi; writes: { path: string; content: string }[] } => {

@@ -1,13 +1,13 @@
 {
-    "name": "@puristic/deploy-core",
+    "name": "@intentic/graph",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/puristic-deploy.git",
-        "directory": "_libs/core"
+        "url": "git+https://github.com/radarsu/intentic-deploy.git",
+        "directory": "_libs/graph"
     },
     "files": [
         "dist"
@@ -20,11 +20,11 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             },
             "require": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             }
         }
@@ -36,12 +36,10 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@puristic/deploy-protocol": "workspace:*",
-        "@puristic/deploy-resolvers": "workspace:*",
         "tslib": "catalog:"
     },
     "devDependencies": {
-        "@puristic/tsconfig": "workspace:*",
+        "@intentic/tsconfig": "workspace:*",
         "typescript": "catalog:",
         "vitest": "catalog:"
     }

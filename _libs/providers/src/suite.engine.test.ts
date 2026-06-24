@@ -1,6 +1,6 @@
-import { defineStack } from "@puristic/deploy-core";
-import { apply } from "@puristic/deploy-engine";
-import { env } from "@puristic/deploy-protocol";
+import { defineStack } from "@intentic/sdk";
+import { apply } from "@intentic/engine";
+import { env } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
@@ -32,11 +32,11 @@ const fakeSsh = (): SshExecutor => {
                     return ok("cid");
                 }
                 if (command.includes("docker compose") && command.includes("up -d")) {
-                    started.add("puristic-komodo-core");
+                    started.add("intentic-komodo-core");
                     return ok("up");
                 }
-                if (command.includes("wget -q --spider")) return ok("", started.has("puristic-forgejo") ? 0 : 1);
-                if (command.includes("cat /data/.runner")) return ok(started.has("puristic-forgejo-runner") ? "https://git.example.com" : "");
+                if (command.includes("wget -q --spider")) return ok("", started.has("intentic-forgejo") ? 0 : 1);
+                if (command.includes("cat /data/.runner")) return ok(started.has("intentic-forgejo-runner") ? "https://git.example.com" : "");
                 if (command.includes("runner-token")) return ok(tokenPersisted ? "rtok" : "");
                 return ok();
             },

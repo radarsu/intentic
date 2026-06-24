@@ -1,4 +1,4 @@
-import type { Providers } from "@puristic/deploy-engine";
+import type { Providers } from "@intentic/engine";
 import { createAppProvider } from "./app.js";
 import { createCfRouteProvider } from "./cf-route.js";
 import { createCloudflareProvider } from "./cloudflare.js";

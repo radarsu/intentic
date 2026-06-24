@@ -7,5 +7,6 @@
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],
-    "extends": "@puristic/tsconfig/tsconfig.base.json"
+    "references": [{ "path": "../graph" }, { "path": "../resolvers" }],
+    "extends": "@intentic/tsconfig/tsconfig.base.json"
 }

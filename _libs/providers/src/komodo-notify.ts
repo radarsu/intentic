@@ -1,4 +1,4 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import { parseInputs } from "./inputs.js";
 import type { AlerterConfig, KomodoApi, ResourceTarget } from "./komodo-api.js";

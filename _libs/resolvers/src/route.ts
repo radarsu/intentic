@@ -1,5 +1,5 @@
-import type { SecretRef } from "@puristic/deploy-protocol";
-import { makeRef } from "@puristic/deploy-protocol";
+import type { SecretRef } from "@intentic/graph";
+import { makeRef } from "@intentic/graph";
 import { tunnelId } from "./ids.js";
 import type { ResolvedNode } from "./resource-types.js";
 

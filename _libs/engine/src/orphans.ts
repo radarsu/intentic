@@ -1,5 +1,5 @@
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
-import type { ResourceType } from "@puristic/deploy-resolvers";
+import type { DesiredStateGraph } from "@intentic/graph";
+import type { ResourceType } from "@intentic/resolvers";
 import type { ProviderContext, Providers } from "./provider.js";
 import type { Orphan } from "./types.js";
 

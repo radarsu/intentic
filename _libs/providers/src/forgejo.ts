@@ -1,4 +1,4 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshExecutor, SshSession } from "./ssh.js";
@@ -13,13 +13,13 @@ const forgejoSchema = sshSchema.extend({
 type ForgejoInputs = z.infer<typeof forgejoSchema>;
 const parse = (inputs: ResolvedInputs): ForgejoInputs => parseInputs(forgejoSchema, inputs, "forgejo");
 
-const CONTAINER = "puristic-forgejo";
+const CONTAINER = "intentic-forgejo";
 const IMAGE = "codeberg.org/forgejo/forgejo:15";
 const HTTP_PORT = 3000;
 // The runner registration token is minted once and persisted on the host, then read back every run, so it
 // is a STABLE output (generate-runner-token may rotate, which would otherwise break the stateless contract
 // and re-register the runner each apply).
-const STATE_DIR = "/opt/puristic/forgejo";
+const STATE_DIR = "/opt/intentic/forgejo";
 const TOKEN_FILE = `${STATE_DIR}/runner-token`;
 const READY_TIMEOUT_MS = 120_000;
 const READY_INTERVAL_MS = 3_000;
@@ -95,7 +95,7 @@ export const createForgejoProvider = (executor: SshExecutor = sshExecutor): Prov
             await session.exec(`mkdir -p ${STATE_DIR}`);
             await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
             const run = await session.exec(
-                `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label puristic.id=${ctx.id} ` +
+                `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
                     `-v ${CONTAINER}-data:/data ` +
                     `-e FORGEJO__security__INSTALL_LOCK=true -e FORGEJO__database__DB_TYPE=sqlite3 ` +
                     `-e FORGEJO__server__ROOT_URL=https://${parsed.domain} -e FORGEJO__server__DOMAIN=${parsed.domain} ${IMAGE}`,

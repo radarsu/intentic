@@ -1,12 +1,12 @@
 {
-    "name": "@puristic/deploy-engine",
+    "name": "@intentic/engine",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/puristic-deploy.git",
+        "url": "git+https://github.com/radarsu/intentic-deploy.git",
         "directory": "_libs/engine"
     },
     "files": [
@@ -20,11 +20,11 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             },
             "require": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             }
         }
@@ -36,13 +36,13 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@puristic/deploy-protocol": "workspace:*",
-        "@puristic/deploy-resolvers": "workspace:*",
+        "@intentic/graph": "workspace:*",
+        "@intentic/resolvers": "workspace:*",
         "tslib": "catalog:"
     },
     "devDependencies": {
-        "@puristic/deploy-core": "workspace:*",
-        "@puristic/tsconfig": "workspace:*",
+        "@intentic/sdk": "workspace:*",
+        "@intentic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"

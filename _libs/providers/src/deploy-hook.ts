@@ -1,4 +1,4 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { ForgejoApi, ForgejoHook } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";

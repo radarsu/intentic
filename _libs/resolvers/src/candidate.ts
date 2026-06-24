@@ -1,5 +1,5 @@
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
-import { compile, toNodeMap } from "@puristic/deploy-protocol";
+import type { DesiredStateGraph } from "@intentic/graph";
+import { compile, toNodeMap } from "@intentic/graph";
 import type { Catalog, Option } from "./catalog.js";
 import { defaultCatalog } from "./catalog.js";
 import { emit } from "./emit.js";

@@ -1,5 +1,5 @@
-import { apply } from "@puristic/deploy-engine";
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
+import { apply } from "@intentic/engine";
+import type { DesiredStateGraph } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import { createCfRouteProvider } from "./cf-route.js";
@@ -92,7 +92,7 @@ const graph: DesiredStateGraph = {
             id: "host-tunnel",
             type: "tunnel",
             inputs: {
-                name: "puristic-host",
+                name: "intentic-host",
                 accountId: "acc_123",
                 apiToken: { $secret: { source: "env", key: "CF_TOKEN" } },
                 address: "203.0.113.10",

@@ -12,7 +12,7 @@ const fakeSsh = (opts: { running?: boolean; upFails?: boolean; healthy?: boolean
         exec: async (command) => {
             commands.push(command);
             if (command.includes("docker ps")) {
-                return res(opts.running ? "puristic-komodo-core" : "");
+                return res(opts.running ? "intentic-komodo-core" : "");
             }
             if (command.includes("wget")) {
                 return res("", opts.healthy ? 0 : 1);
@@ -51,7 +51,7 @@ const inputs = {
     domain: "komodo.example.com",
     forgejoUrl: "http://10.0.0.5:3000",
     runnerToken: "tok-123",
-    adminUser: "puristic",
+    adminUser: "intentic",
     adminPassword: "pw",
     webhookSecret: "whsec",
 };
@@ -82,8 +82,8 @@ test("apply writes compose + a once-guarded env, brings the stack up, waits for 
     const ssh = fakeSsh({ healthy: true });
     const result = await createKomodoProvider(ssh.executor).apply(inputs, undefined, ctx());
     expect(result).toEqual({ url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" });
-    expect(ssh.commands.some((c) => c.includes("cat > /opt/puristic/komodo/compose.yaml"))).toBe(true);
-    expect(ssh.commands.some((c) => c.includes("test -f /opt/puristic/komodo/.env") && c.includes("KOMODO_WEBHOOK_SECRET=whsec"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/komodo/compose.yaml"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/komodo/.env") && c.includes("KOMODO_WEBHOOK_SECRET=whsec"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("docker compose -p komodo") && c.includes("up -d"))).toBe(true);
 });
 

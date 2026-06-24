@@ -7,7 +7,7 @@
 // `formatStamp` encoding, while a key/value mechanism (a Docker label) uses STAMP_KEY as the label key
 // and the id as the value directly. parseStamp recovers the id from the single-string form.
 
-export const STAMP_KEY = "puristic.id";
+export const STAMP_KEY = "intentic.id";
 
 export const formatStamp = (id: string): string => `${STAMP_KEY}=${id}`;
 

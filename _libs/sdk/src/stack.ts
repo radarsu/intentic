@@ -1,6 +1,6 @@
-import { makeRef } from "@puristic/deploy-protocol";
-import type { AppIntent, CloudflareInput, CloudflareIntent, EnvironmentInput, HostInput, HostIntent, IntentSet } from "@puristic/deploy-resolvers";
-import { deploymentId, repoId } from "@puristic/deploy-resolvers";
+import { makeRef } from "@intentic/graph";
+import type { AppIntent, CloudflareInput, CloudflareIntent, EnvironmentInput, HostInput, HostIntent, IntentSet } from "@intentic/resolvers";
+import { deploymentId, repoId } from "@intentic/resolvers";
 import type { App, Cloudflare, Deployment, Host, Repo, Stack, WantAppInput } from "./handles.js";
 
 // The builder is a pure intent recorder: i.have.* / i.want.app record what was declared and hand back

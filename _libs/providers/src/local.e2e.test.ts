@@ -1,8 +1,8 @@
 import { fileURLToPath } from "node:url";
-import { defineStack } from "@puristic/deploy-core";
-import type { ApplyOutcome, ReadinessProbe } from "@puristic/deploy-engine";
-import { apply } from "@puristic/deploy-engine";
-import { env } from "@puristic/deploy-protocol";
+import { defineStack } from "@intentic/sdk";
+import type { ApplyOutcome, ReadinessProbe } from "@intentic/engine";
+import { apply } from "@intentic/engine";
+import { env } from "@intentic/graph";
 import { utils } from "ssh2";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,13 +13,13 @@ import { sshExecutor } from "./ssh.js";
 // A real, manual, Tier-1 end-to-end run: boot a Docker-in-Docker "host", reach it over SSH, and let the
 // engine reconcile the whole derived graph against it — Forgejo, the CI runner, Komodo, the repo/app/
 // deploy-hook, plus the real Cloudflare zone/DNS/tunnel. Asserts the graph converges (create) and is
-// idempotent (a second apply is all-noop). Gated behind PURISTIC_E2E because it needs a privileged Docker
+// idempotent (a second apply is all-noop). Gated behind INTENTIC_E2E because it needs a privileged Docker
 // daemon and live Cloudflare credentials, so default `pnpm test` / CI skip it entirely.
 //
-// Required env: PURISTIC_E2E=1, CLOUDFLARE_API_TOKEN (Tunnel+DNS+Zone scopes), CLOUDFLARE_ACCOUNT_ID,
+// Required env: INTENTIC_E2E=1, CLOUDFLARE_API_TOKEN (Tunnel+DNS+Zone scopes), CLOUDFLARE_ACCOUNT_ID,
 // CLOUDFLARE_ZONE (a throwaway zone you own), FORGEJO_ADMIN_PASSWORD, KOMODO_ADMIN_PASSWORD,
 // KOMODO_WEBHOOK_SECRET. The host SSH key is generated per-run; HOST_SSH_KEY is overridden in-process.
-const enabled = process.env["PURISTIC_E2E"] === "1" || process.env["PURISTIC_E2E"] === "true";
+const enabled = process.env["INTENTIC_E2E"] === "1" || process.env["INTENTIC_E2E"] === "true";
 
 const required = (key: string): string => {
     const value = process.env[key];
@@ -140,9 +140,9 @@ describe.skipIf(!enabled)("local SSH+Docker end-to-end (manual, real Cloudflare)
         const session = await sshExecutor.connect({ address: host.getHost(), port: host.getMappedPort(22), user: "root", privateKey });
         const running = (await session.exec("docker ps --format '{{.Names}}'")).stdout;
         await session.dispose();
-        expect(running).toContain("puristic-forgejo");
-        expect(running).toContain("puristic-forgejo-runner");
-        expect(running).toContain("puristic-komodo-core");
+        expect(running).toContain("intentic-forgejo");
+        expect(running).toContain("intentic-forgejo-runner");
+        expect(running).toContain("intentic-komodo-core");
 
         // The real idempotency proof — and the real test of the deployment config-diff.
         const second = await apply(buildGraph(), config);

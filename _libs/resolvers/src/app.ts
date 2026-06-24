@@ -1,5 +1,5 @@
-import type { SecretRef } from "@puristic/deploy-protocol";
-import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
+import type { SecretRef } from "@intentic/graph";
+import { env, httpOk, makeRef } from "@intentic/graph";
 import { adminUsername, deployHookId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
 import type { AppIntent } from "./intent.js";
 import type { PlatformRefs } from "./platform.js";

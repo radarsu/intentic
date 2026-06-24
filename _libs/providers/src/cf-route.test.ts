@@ -66,7 +66,7 @@ test("apply creates a proxied CNAME stamped with the resource id when absent", a
         }),
     );
     expect(await provider.apply(inputs, undefined, ctx())).toEqual({ url: "https://app.example.com" });
-    expect(created).toEqual({ name: "app.example.com", content: "tunnel-abc.cfargotunnel.com", comment: "puristic.id=cf-app-example-com" });
+    expect(created).toEqual({ name: "app.example.com", content: "tunnel-abc.cfargotunnel.com", comment: "intentic.id=cf-app-example-com" });
 });
 
 test("apply updates the existing record by id", async () => {

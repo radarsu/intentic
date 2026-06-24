@@ -1,7 +1,7 @@
-import type { ApplyOutcome, Providers, ReadinessProbe } from "@puristic/deploy-engine";
-import { apply } from "@puristic/deploy-engine";
-import type { ForgejoApi, SshExecutor } from "@puristic/deploy-providers";
-import { createForgejoProvider, forgejoApi, sshExecutor } from "@puristic/deploy-providers";
+import type { ApplyOutcome, Providers, ReadinessProbe } from "@intentic/engine";
+import { apply } from "@intentic/engine";
+import type { ForgejoApi, SshExecutor } from "@intentic/providers";
+import { createForgejoProvider, forgejoApi, sshExecutor } from "@intentic/providers";
 import type { ControlPlaneConfig } from "./control-plane.js";
 import { buildControlPlaneGraph, controlGitId, intentRepoId, targetRepoId } from "./control-plane.js";
 import { createControlRepoProvider } from "./control-repo.js";

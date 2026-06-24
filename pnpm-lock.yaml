@@ -75,16 +75,16 @@ importers:
 
   _libs/controller:
     dependencies:
-      '@puristic/deploy-engine':
+      '@intentic/engine':
         specifier: workspace:*
         version: link:../engine
-      '@puristic/deploy-protocol':
+      '@intentic/graph':
         specifier: workspace:*
-        version: link:../protocol
-      '@puristic/deploy-providers':
+        version: link:../graph
+      '@intentic/providers':
         specifier: workspace:*
         version: link:../providers
-      '@puristic/deploy-resolvers':
+      '@intentic/resolvers':
         specifier: workspace:*
         version: link:../resolvers
       tslib:
@@ -94,34 +94,12 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@puristic/tsconfig':
+      '@intentic/tsconfig':
         specifier: workspace:*
         version: link:../../_tools/tsconfig
       '@types/node':
         specifier: 'catalog:'
         version: 25.5.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/node@25.5.2)(jiti@2.7.0)(yaml@2.9.0)
-
-  _libs/core:
-    dependencies:
-      '@puristic/deploy-protocol':
-        specifier: workspace:*
-        version: link:../protocol
-      '@puristic/deploy-resolvers':
-        specifier: workspace:*
-        version: link:../resolvers
-      tslib:
-        specifier: 'catalog:'
-        version: 2.8.1
-    devDependencies:
-      '@puristic/tsconfig':
-        specifier: workspace:*
-        version: link:../../_tools/tsconfig
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -131,20 +109,20 @@ importers:
 
   _libs/engine:
     dependencies:
-      '@puristic/deploy-protocol':
+      '@intentic/graph':
         specifier: workspace:*
-        version: link:../protocol
-      '@puristic/deploy-resolvers':
+        version: link:../graph
+      '@intentic/resolvers':
         specifier: workspace:*
         version: link:../resolvers
       tslib:
         specifier: 'catalog:'
         version: 2.8.1
     devDependencies:
-      '@puristic/deploy-core':
+      '@intentic/sdk':
         specifier: workspace:*
-        version: link:../core
-      '@puristic/tsconfig':
+        version: link:../sdk
+      '@intentic/tsconfig':
         specifier: workspace:*
         version: link:../../_tools/tsconfig
       '@types/node':
@@ -157,13 +135,13 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/node@25.5.2)(jiti@2.7.0)(yaml@2.9.0)
 
-  _libs/protocol:
+  _libs/graph:
     dependencies:
       tslib:
         specifier: 'catalog:'
         version: 2.8.1
     devDependencies:
-      '@puristic/tsconfig':
+      '@intentic/tsconfig':
         specifier: workspace:*
         version: link:../../_tools/tsconfig
       typescript:
@@ -175,12 +153,12 @@ importers:
 
   _libs/providers:
     dependencies:
-      '@puristic/deploy-engine':
+      '@intentic/engine':
         specifier: workspace:*
         version: link:../engine
-      '@puristic/deploy-protocol':
+      '@intentic/graph':
         specifier: workspace:*
-        version: link:../protocol
+        version: link:../graph
       ssh2:
         specifier: 1.17.0
         version: 1.17.0
@@ -191,10 +169,10 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@puristic/deploy-core':
+      '@intentic/sdk':
         specifier: workspace:*
-        version: link:../core
-      '@puristic/tsconfig':
+        version: link:../sdk
+      '@intentic/tsconfig':
         specifier: workspace:*
         version: link:../../_tools/tsconfig
       '@types/node':
@@ -215,14 +193,36 @@ importers:
 
   _libs/resolvers:
     dependencies:
-      '@puristic/deploy-protocol':
+      '@intentic/graph':
         specifier: workspace:*
-        version: link:../protocol
+        version: link:../graph
       tslib:
         specifier: 'catalog:'
         version: 2.8.1
     devDependencies:
-      '@puristic/tsconfig':
+      '@intentic/tsconfig':
+        specifier: workspace:*
+        version: link:../../_tools/tsconfig
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@25.5.2)(jiti@2.7.0)(yaml@2.9.0)
+
+  _libs/sdk:
+    dependencies:
+      '@intentic/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@intentic/resolvers':
+        specifier: workspace:*
+        version: link:../resolvers
+      tslib:
+        specifier: 'catalog:'
+        version: 2.8.1
+    devDependencies:
+      '@intentic/tsconfig':
         specifier: workspace:*
         version: link:../../_tools/tsconfig
       typescript:

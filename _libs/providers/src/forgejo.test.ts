@@ -18,7 +18,7 @@ const fakeSsh = (opts: FakeOpts = {}): { executor: SshExecutor; commands: string
         exec: async (command) => {
             commands.push(command);
             if (command.includes("docker ps")) {
-                return res(opts.running ? "puristic-forgejo" : "");
+                return res(opts.running ? "intentic-forgejo" : "");
             }
             if (command.includes("wget -q --spider")) {
                 return res("", opts.healthy ? 0 : 1);
@@ -101,7 +101,7 @@ test("apply runs forgejo with INSTALL_LOCK + the stamp label, bootstraps admin, 
     const ssh = fakeSsh({ healthy: true, token: "tok-123" });
     const result = await createForgejoProvider(ssh.executor).apply(inputs, undefined, ctx());
     expect(result).toEqual({ url: "https://git.example.com", internalUrl: "http://10.0.0.5:3000", runnerToken: "tok-123" });
-    expect(ssh.commands.some((c) => c.includes("docker run") && c.includes("INSTALL_LOCK=true") && c.includes("puristic.id=host-git"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("docker run") && c.includes("INSTALL_LOCK=true") && c.includes("intentic.id=host-git"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("admin user create") && c.includes("--password pw"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("generate-runner-token"))).toBe(true);
 });

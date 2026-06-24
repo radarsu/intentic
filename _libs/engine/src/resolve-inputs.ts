@@ -1,4 +1,4 @@
-import type { SerializedValue } from "@puristic/deploy-protocol";
+import type { SerializedValue } from "@intentic/graph";
 import type { OutputStore } from "./store.js";
 
 // Inputs in the compiled graph are SERIALIZED: $ref/$secret are plain objects, NOT the protocol's

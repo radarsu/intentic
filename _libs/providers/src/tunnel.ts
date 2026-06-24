@@ -1,4 +1,4 @@
-import type { Provider, ProviderContext, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ProviderContext, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
@@ -28,7 +28,7 @@ const desiredRules = (parsed: TunnelInputs): IngressRule[] => [
 ];
 
 const cname = (tunnelId: string): string => `${tunnelId}.cfargotunnel.com`;
-const containerName = (tunnelId: string): string => `puristic-tunnel-${tunnelId}`;
+const containerName = (tunnelId: string): string => `intentic-tunnel-${tunnelId}`;
 
 const ingressEqual = (a: readonly IngressRule[], b: readonly IngressRule[]): boolean => {
     if (a.length !== b.length) {

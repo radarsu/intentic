@@ -1,4 +1,4 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ResolvedInputs } from "@intentic/engine";
 import type { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshExecutor, SshSession } from "./ssh.js";

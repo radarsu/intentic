@@ -1,5 +1,5 @@
-import { refKey } from "@puristic/deploy-protocol";
-import type { ResourceType } from "@puristic/deploy-resolvers";
+import { refKey } from "@intentic/graph";
+import type { ResourceType } from "@intentic/resolvers";
 import type { Provider, ProviderContext, Providers } from "./provider.js";
 import type { OutputStore } from "./store.js";
 

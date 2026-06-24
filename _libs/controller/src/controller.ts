@@ -1,9 +1,9 @@
-import type { Providers, ReadinessProbe } from "@puristic/deploy-engine";
-import { reconcile } from "@puristic/deploy-engine";
-import type { ForgejoApi, SshExecutor } from "@puristic/deploy-providers";
-import { createProviders, forgejoApi } from "@puristic/deploy-providers";
-import type { Candidate } from "@puristic/deploy-resolvers";
-import { adminUsername, choose } from "@puristic/deploy-resolvers";
+import type { Providers, ReadinessProbe } from "@intentic/engine";
+import { reconcile } from "@intentic/engine";
+import type { ForgejoApi, SshExecutor } from "@intentic/providers";
+import { createProviders, forgejoApi } from "@intentic/providers";
+import type { Candidate } from "@intentic/resolvers";
+import { adminUsername, choose } from "@intentic/resolvers";
 import { bootstrap } from "./bootstrap.js";
 import type { ControlPlaneConfig } from "./control-plane.js";
 import { controlBranch, intentRepoName, targetRepoName } from "./control-plane.js";

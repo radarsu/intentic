@@ -1,5 +1,5 @@
-import type { Ref } from "@puristic/deploy-protocol";
-import type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput } from "@puristic/deploy-resolvers";
+import type { Ref } from "@intentic/graph";
+import type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput } from "@intentic/resolvers";
 
 // The authoring surface. A developer declares inventory ("what you have" — i.have.*) and the one thing
 // they want ("what you want" — i.want.app); the support stack each app requires is derived by the

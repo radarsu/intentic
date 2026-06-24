@@ -1,6 +1,6 @@
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
-import type { Candidate, IntentSet } from "@puristic/deploy-resolvers";
-import { choose, generateCandidates } from "@puristic/deploy-resolvers";
+import type { DesiredStateGraph } from "@intentic/graph";
+import type { Candidate, IntentSet } from "@intentic/resolvers";
+import { choose, generateCandidates } from "@intentic/resolvers";
 import type { Stack } from "./handles.js";
 import { createStack } from "./stack.js";
 

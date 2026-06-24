@@ -56,7 +56,7 @@ const ctx = (log: (message: string) => void = () => {}) => ({
 const appRule: IngressRule = { hostname: "app.example.com", service: "http://10.0.0.5:3000" };
 const catchAll: IngressRule = { service: "http_status:404" };
 const inputs = {
-    name: "puristic-host",
+    name: "intentic-host",
     accountId: "acct-1",
     apiToken: "token-xyz",
     address: "203.0.113.10",
@@ -74,7 +74,7 @@ test("read returns undefined when the tunnel does not exist", async () => {
 test("read returns the tunnel facts plus connector/ingress detail when it exists", async () => {
     const provider = createTunnelProvider(
         api({ findTunnel: async () => ({ id: "tunnel-abc" }), getTunnelIngress: async () => [appRule, catchAll] }),
-        fakeSsh("puristic-tunnel-tunnel-abc").executor,
+        fakeSsh("intentic-tunnel-tunnel-abc").executor,
     );
     expect(await provider.read(inputs, ctx())).toEqual({
         outputs: { tunnelId: "tunnel-abc", cname: "tunnel-abc.cfargotunnel.com" },

@@ -10,7 +10,7 @@ const fakeSsh = (opts: { running?: boolean; registered?: boolean; runFails?: boo
         exec: async (command) => {
             commands.push(command);
             if (command.includes("docker ps")) {
-                return res(opts.running ? "puristic-forgejo-runner" : "");
+                return res(opts.running ? "intentic-forgejo-runner" : "");
             }
             if (command.includes("cat /data/.runner")) {
                 return res(opts.registered ? '{"address":"https://git.example.com"}' : "");
@@ -71,7 +71,7 @@ test("apply registers against the instance + token and starts the daemon, return
                 c.includes("docker run") &&
                 c.includes("--instance https://git.example.com") &&
                 c.includes("--token tok-123") &&
-                c.includes("puristic.id=host-git-runner"),
+                c.includes("intentic.id=host-git-runner"),
         ),
     ).toBe(true);
 });

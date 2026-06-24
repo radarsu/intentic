@@ -1,4 +1,4 @@
-import { linearize } from "@puristic/deploy-protocol";
+import { linearize } from "@intentic/graph";
 import { expect, test } from "vitest";
 import { expectedGraph } from "./__fixtures__/deploy.graph.js";
 import { graph } from "./deploy.config.js";

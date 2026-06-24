@@ -1,4 +1,4 @@
-import type { Input, Readiness, SecretRef } from "@puristic/deploy-protocol";
+import type { Input, Readiness, SecretRef } from "@intentic/graph";
 
 // The author-supplied data shapes. They reference only protocol primitives so the intent that carries
 // them stays free of any dependency on the authoring handles.

@@ -1,4 +1,4 @@
-# puristic-deploy
+# intentic-deploy
 
 A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 
@@ -6,12 +6,12 @@ A pnpm + Turbo monorepo of TypeScript packages for solo-dev deployment.
 
 | Package | Description |
 | --- | --- |
-| [`@puristic/deploy-protocol`](_libs/protocol) | Product-agnostic desired-state IR: refs, secrets, readiness, the serializable graph, and the compiler. |
-| [`@puristic/deploy-resolvers`](_libs/resolvers) | Computes intent into needs, the option catalog that meets them, and every valid reconciliation-target artifact — then chooses one. |
-| [`@puristic/deploy-core`](_libs/core) | Authoring surface (`i.have` / `i.want`) and `defineStack`: build → resolve → compile. |
-| [`@puristic/deploy-engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
-| [`@puristic/deploy-providers`](_libs/providers) | Real reconcile providers over the engine SPI: `host` (SSH/Docker via `ssh2`), `cloudflare` (resolve owned zone → id), `tunnel` (Cloudflare Tunnel + `cloudflared` on the host), `cf-route` (proxied DNS CNAME). |
-| [`@puristic/deploy-controller`](_libs/controller) | Intent-driven control plane: `bootstrap` a standalone Gitea/Forgejo with the intent + reconciliation-target repos, then `runController` watches the intent repo, computes + auto-picks a candidate, stores it, and reconciles it until state reads true. |
+| [`@intentic/graph`](_libs/graph) | Product-agnostic desired-state IR: refs, secrets, readiness, the serializable graph, and the compiler. |
+| [`@intentic/resolvers`](_libs/resolvers) | Computes intent into needs, the option catalog that meets them, and every valid reconciliation-target artifact — then chooses one. |
+| [`@intentic/sdk`](_libs/sdk) | Authoring surface (`i.have` / `i.want`) and `defineStack`: build → resolve → compile. |
+| [`@intentic/engine`](_libs/engine) | Stateless reconcile engine: `plan` / `apply` a `DesiredStateGraph` onto infra via the Provider SPI. |
+| [`@intentic/providers`](_libs/providers) | Real reconcile providers over the engine SPI: `host` (SSH/Docker via `ssh2`), `cloudflare` (resolve owned zone → id), `tunnel` (Cloudflare Tunnel + `cloudflared` on the host), `cf-route` (proxied DNS CNAME). |
+| [`@intentic/controller`](_libs/controller) | Intent-driven control plane: `bootstrap` a standalone Gitea/Forgejo with the intent + reconciliation-target repos, then `runController` watches the intent repo, computes + auto-picks a candidate, stores it, and reconciles it until state reads true. |
 
 ## Getting started
 
@@ -42,7 +42,7 @@ Zone → Read.
   Cloudflare API and SSHes to the host to check the connector.
 - **No orphan detection for Cloudflare resources** — the engine's `list` SPI receives no per-node
   credentials, so the `tunnel`/`cf-route` providers cannot enumerate stamped resources yet. Records are
-  still stamped (`puristic.id=<id>` in the DNS comment) for a future orphan pass.
+  still stamped (`intentic.id=<id>` in the DNS comment) for a future orphan pass.
 - **Public-health readiness ordering** — the platform services' `readyWhen` gates target public URLs,
   which only resolve once the tunnel + DNS exist; this surfaces when the forgejo/komodo/deployment
   providers land (not yet built).
@@ -62,18 +62,18 @@ runner, Komodo, the repo/app/deploy-hook, plus a **real Cloudflare zone/DNS/tunn
 graph converges (`create`) and a second `apply` is all-`noop` (idempotency), then deletes the Cloudflare
 resources it created. Tier 1 builds no app, so the deployment's runtime health gate is short-circuited.
 
-It is gated behind `PURISTIC_E2E` and **excluded from `pnpm test` / CI** (needs a privileged Docker
+It is gated behind `INTENTIC_E2E` and **excluded from `pnpm test` / CI** (needs a privileged Docker
 daemon and live Cloudflare credentials). Run it with:
 
 ```sh
-PURISTIC_E2E=1 \
+INTENTIC_E2E=1 \
 CLOUDFLARE_API_TOKEN=...      # Account → Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read
 CLOUDFLARE_ACCOUNT_ID=... \
 CLOUDFLARE_ZONE=example.com \ # a throwaway zone you own — DNS records + a tunnel are created and deleted
 FORGEJO_ADMIN_PASSWORD=... \
 KOMODO_ADMIN_PASSWORD=... \
 KOMODO_WEBHOOK_SECRET=... \
-pnpm --filter @puristic/deploy-providers e2e
+pnpm --filter @intentic/providers e2e
 ```
 
 > Networking: providers run nested containers with `--network host`, so the engine reaches services at

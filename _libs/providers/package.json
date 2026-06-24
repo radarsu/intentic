@@ -1,12 +1,12 @@
 {
-    "name": "@puristic/deploy-providers",
+    "name": "@intentic/providers",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/puristic-deploy.git",
+        "url": "git+https://github.com/radarsu/intentic-deploy.git",
         "directory": "_libs/providers"
     },
     "files": [
@@ -20,11 +20,11 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             },
             "require": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             }
         }
@@ -37,15 +37,15 @@
         "e2e": "vitest run local.e2e"
     },
     "dependencies": {
-        "@puristic/deploy-engine": "workspace:*",
-        "@puristic/deploy-protocol": "workspace:*",
+        "@intentic/engine": "workspace:*",
+        "@intentic/graph": "workspace:*",
         "ssh2": "1.17.0",
         "tslib": "catalog:",
         "zod": "catalog:"
     },
     "devDependencies": {
-        "@puristic/deploy-core": "workspace:*",
-        "@puristic/tsconfig": "workspace:*",
+        "@intentic/sdk": "workspace:*",
+        "@intentic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
         "@types/ssh2": "1.15.5",
         "testcontainers": "^11.0.0",

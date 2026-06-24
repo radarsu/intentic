@@ -1,5 +1,5 @@
-import type { ResourceType } from "@puristic/deploy-resolvers";
-import { OUTPUTS } from "@puristic/deploy-resolvers";
+import type { ResourceType } from "@intentic/resolvers";
+import { OUTPUTS } from "@intentic/resolvers";
 import type { Observed, Provider, Providers } from "../provider.js";
 import type { ResolvedInputs } from "../types.js";
 

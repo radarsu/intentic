@@ -1,4 +1,4 @@
-import type { ResourceType } from "@puristic/deploy-resolvers";
+import type { ResourceType } from "@intentic/resolvers";
 import type { Providers } from "./provider.js";
 import type { ReadinessProbe } from "./readiness.js";
 

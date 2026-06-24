@@ -1,6 +1,6 @@
-import type { Provider } from "@puristic/deploy-engine";
-import type { ForgejoApi } from "@puristic/deploy-providers";
-import { forgejoApi, parseInputs } from "@puristic/deploy-providers";
+import type { Provider } from "@intentic/engine";
+import type { ForgejoApi } from "@intentic/providers";
+import { forgejoApi, parseInputs } from "@intentic/providers";
 import { z } from "zod";
 
 const controlRepoSchema = z.object({

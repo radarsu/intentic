@@ -1,5 +1,5 @@
-import { defineStack } from "@puristic/deploy-core";
-import { env, linearize } from "@puristic/deploy-protocol";
+import { defineStack } from "@intentic/sdk";
+import { env, linearize } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import { apply } from "./apply.js";

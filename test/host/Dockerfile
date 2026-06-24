@@ -13,8 +13,8 @@ RUN apk add --no-cache openssh openssh-server openssl iproute2 docker-cli-compos
     && chmod 700 /root/.ssh \
     && printf 'PermitRootLogin prohibit-password\nPubkeyAuthentication yes\n' >> /etc/ssh/sshd_config
 
-COPY entrypoint.sh /usr/local/bin/puristic-host-entrypoint.sh
-RUN chmod +x /usr/local/bin/puristic-host-entrypoint.sh
+COPY entrypoint.sh /usr/local/bin/intentic-host-entrypoint.sh
+RUN chmod +x /usr/local/bin/intentic-host-entrypoint.sh
 
 EXPOSE 22
-ENTRYPOINT ["/usr/local/bin/puristic-host-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/intentic-host-entrypoint.sh"]

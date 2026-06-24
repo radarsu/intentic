@@ -7,7 +7,7 @@ export const runnerId = (hostId: string): string => `${forgejoId(hostId)}-runner
 export const komodoId = (hostId: string): string => `${hostId}-deploy`;
 export const tunnelId = (hostId: string): string => `${hostId}-tunnel`;
 // The human-facing Cloudflare tunnel name (must be stable + unique within the account).
-export const tunnelName = (hostId: string): string => `puristic-${hostId}`;
+export const tunnelName = (hostId: string): string => `intentic-${hostId}`;
 export const repoId = (appId: string): string => `${appId}-repo`;
 export const deploymentId = (appId: string, environment: string): string => `${appId}.${environment}`;
 // CI/CD notification sinks, app-scoped: a Forgejo repo webhook and a Komodo alerter targeting Discord.
@@ -25,4 +25,4 @@ export const deploymentPort = (deploymentId: string): number =>
 // The single admin identity for both Forgejo and Komodo — also the repo owner namespace and the Komodo
 // build's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
 // `forgejo admin user create --username admin` fails.
-export const adminUsername = "puristic";
+export const adminUsername = "intentic";

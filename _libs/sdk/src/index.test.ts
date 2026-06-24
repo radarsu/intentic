@@ -1,6 +1,6 @@
-import type { RawNode } from "@puristic/deploy-protocol";
+import type { RawNode } from "@intentic/graph";
 
-import { compile, env, httpOk, linearize } from "@puristic/deploy-protocol";
+import { compile, env, httpOk, linearize } from "@intentic/graph";
 import { expect, test } from "vitest";
 import type { Host } from "./index.js";
 import { defineStack } from "./index.js";

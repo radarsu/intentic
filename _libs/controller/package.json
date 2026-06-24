@@ -1,19 +1,19 @@
 {
-    "name": "@puristic/deploy-controller",
+    "name": "@intentic/controller",
     "version": "0.0.0",
     "description": "",
     "license": "MIT",
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/puristic-deploy.git",
+        "url": "git+https://github.com/radarsu/intentic-deploy.git",
         "directory": "_libs/controller"
     },
     "files": [
         "dist"
     ],
     "bin": {
-        "puristic": "./dist/cli.js"
+        "intentic": "./dist/cli.js"
     },
     "publishConfig": {
         "access": "public",
@@ -23,11 +23,11 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             },
             "require": {
-                "@puristic/src": "./src/index.ts",
+                "@intentic/src": "./src/index.ts",
                 "default": "./dist/index.js"
             }
         }
@@ -39,15 +39,15 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@puristic/deploy-engine": "workspace:*",
-        "@puristic/deploy-protocol": "workspace:*",
-        "@puristic/deploy-providers": "workspace:*",
-        "@puristic/deploy-resolvers": "workspace:*",
+        "@intentic/engine": "workspace:*",
+        "@intentic/graph": "workspace:*",
+        "@intentic/providers": "workspace:*",
+        "@intentic/resolvers": "workspace:*",
         "tslib": "catalog:",
         "zod": "catalog:"
     },
     "devDependencies": {
-        "@puristic/tsconfig": "workspace:*",
+        "@intentic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"

@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "composite": true,
-        "customConditions": ["@puristic/src"],
+        "customConditions": ["@intentic/src"],
         "declaration": true,
         "declarationMap": true,
         "exactOptionalPropertyTypes": true,

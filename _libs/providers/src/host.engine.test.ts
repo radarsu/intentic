@@ -1,6 +1,6 @@
-import { defineStack } from "@puristic/deploy-core";
-import { apply } from "@puristic/deploy-engine";
-import { env } from "@puristic/deploy-protocol";
+import { defineStack } from "@intentic/sdk";
+import { apply } from "@intentic/engine";
+import { env } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import { createHostProvider } from "./host.js";

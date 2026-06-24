@@ -1,4 +1,4 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshSession } from "./ssh.js";
@@ -16,9 +16,9 @@ const komodoSchema = sshSchema.extend({
 type KomodoInputs = z.infer<typeof komodoSchema>;
 const parse = (inputs: ResolvedInputs): KomodoInputs => parseInputs(komodoSchema, inputs, "komodo");
 
-const CORE = "puristic-komodo-core";
+const CORE = "intentic-komodo-core";
 const CORE_PORT = 9120;
-const STATE_DIR = "/opt/puristic/komodo";
+const STATE_DIR = "/opt/intentic/komodo";
 const READY_TIMEOUT_MS = 90_000;
 const READY_INTERVAL_MS = 3_000;
 
@@ -54,7 +54,7 @@ const composeYaml = (): string =>
         `    ports: [ "${CORE_PORT}:9120" ]`,
         "    env_file: ./.env",
         "    volumes: [ keys:/config/keys ]",
-        `    labels: [ "puristic.id=${CORE}" ]`,
+        `    labels: [ "intentic.id=${CORE}" ]`,
         "  periphery:",
         "    image: ghcr.io/moghtech/komodo-periphery:$COMPOSE_KOMODO_IMAGE_TAG",
         "    restart: unless-stopped",

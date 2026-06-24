@@ -1,10 +1,10 @@
-import type { ForgejoRepo } from "@puristic/deploy-providers";
-import { fakeForgejoApi } from "@puristic/deploy-providers";
+import type { ForgejoRepo } from "@intentic/providers";
+import { fakeForgejoApi } from "@intentic/providers";
 import { expect, test } from "vitest";
 import { createControlRepoProvider } from "./control-repo.js";
 
 const ctx = () => ({ env: {}, log: () => {}, id: "intent-repo", output: () => undefined });
-const inputs = { baseUrl: "http://10.0.0.1:3000", owner: "puristic", name: "intent", private: true, adminUser: "puristic", adminPassword: "pw" };
+const inputs = { baseUrl: "http://10.0.0.1:3000", owner: "intentic", name: "intent", private: true, adminUser: "intentic", adminPassword: "pw" };
 
 test("read returns undefined while the forgejo baseUrl ref is still PENDING", async () => {
     const provider = createControlRepoProvider(fakeForgejoApi({}));
@@ -17,7 +17,7 @@ test("read returns undefined when the repo does not exist yet", async () => {
 });
 
 test("read reports the repo's clone/ssh urls when it exists", async () => {
-    const repo: ForgejoRepo = { cloneUrl: "https://git/puristic/intent.git", sshUrl: "git@git:puristic/intent.git" };
+    const repo: ForgejoRepo = { cloneUrl: "https://git/intentic/intent.git", sshUrl: "git@git:intentic/intent.git" };
     const provider = createControlRepoProvider(fakeForgejoApi({ findRepo: async () => repo }));
     expect(await provider.read(inputs, ctx())).toEqual({ outputs: { cloneUrl: repo.cloneUrl, sshUrl: repo.sshUrl } });
 });

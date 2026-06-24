@@ -1,4 +1,4 @@
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
+import type { DesiredStateGraph } from "@intentic/graph";
 
 // Golden expected output for ../deploy.config.ts — regenerated from the compiled graph. Captures the
 // platform-self-init ordering: the tunnel comes up before the control plane (deps host+cf only, ingress
@@ -57,7 +57,7 @@ export const expectedGraph: DesiredStateGraph = {
                     $ref: "host.internalIp",
                 },
                 domain: "git.example.com",
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -123,7 +123,7 @@ export const expectedGraph: DesiredStateGraph = {
                 runnerToken: {
                     $ref: "host-git.runnerToken",
                 },
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -196,7 +196,7 @@ export const expectedGraph: DesiredStateGraph = {
                     $ref: "host-git.url",
                 },
                 domain: "git.example.com",
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -221,7 +221,7 @@ export const expectedGraph: DesiredStateGraph = {
                     $ref: "host-deploy.url",
                 },
                 gitDomain: "git.example.com",
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -251,7 +251,7 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -303,7 +303,7 @@ export const expectedGraph: DesiredStateGraph = {
                 forgejoUrl: {
                     $ref: "host-git.url",
                 },
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -345,7 +345,7 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -397,7 +397,7 @@ export const expectedGraph: DesiredStateGraph = {
                 forgejoUrl: {
                     $ref: "host-git.url",
                 },
-                adminUser: "puristic",
+                adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "env",
@@ -423,7 +423,7 @@ export const expectedGraph: DesiredStateGraph = {
             id: "host-tunnel",
             type: "tunnel",
             inputs: {
-                name: "puristic-host",
+                name: "intentic-host",
                 accountId: "acc_123",
                 apiToken: {
                     $secret: {

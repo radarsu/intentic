@@ -1,4 +1,4 @@
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
+import type { DesiredStateGraph } from "@intentic/graph";
 import { apply } from "./apply.js";
 import { plan } from "./plan.js";
 import type { ApplyOutcome, EngineConfig } from "./types.js";

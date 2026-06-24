@@ -1,4 +1,4 @@
-import type { Provider, ResolvedInputs } from "@puristic/deploy-engine";
+import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshExecutor, SshSession } from "./ssh.js";
@@ -8,7 +8,7 @@ const runnerSchema = sshSchema.extend({ instanceUrl: z.string(), token: z.string
 type RunnerInputs = z.infer<typeof runnerSchema>;
 const parse = (inputs: ResolvedInputs): RunnerInputs => parseInputs(runnerSchema, inputs, "forgejo-runner");
 
-const CONTAINER = "puristic-forgejo-runner";
+const CONTAINER = "intentic-forgejo-runner";
 const IMAGE = "data.forgejo.org/forgejo/runner:6";
 
 const running = async (session: SshSession): Promise<boolean> => {
@@ -53,7 +53,7 @@ export const createForgejoRunnerProvider = (executor: SshExecutor = sshExecutor)
         try {
             await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
             const run = await session.exec(
-                `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label puristic.id=${ctx.id} ` +
+                `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
                     `-v ${CONTAINER}-data:/data -v /var/run/docker.sock:/var/run/docker.sock ${IMAGE} ` +
                     `sh -c "forgejo-runner register --no-interactive --instance ${parsed.instanceUrl} --token ${parsed.token} && forgejo-runner daemon"`,
             );

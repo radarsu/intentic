@@ -7,6 +7,6 @@
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],
-    "references": [{ "path": "../protocol" }, { "path": "../resolvers" }, { "path": "../engine" }, { "path": "../providers" }],
-    "extends": "@puristic/tsconfig/tsconfig.base.json"
+    "references": [{ "path": "../graph" }, { "path": "../resolvers" }, { "path": "../engine" }, { "path": "../providers" }],
+    "extends": "@intentic/tsconfig/tsconfig.base.json"
 }

@@ -1,4 +1,4 @@
-import { compile, toNodeMap } from "@puristic/deploy-protocol";
+import { compile, toNodeMap } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import type { Provider, Providers } from "./provider.js";

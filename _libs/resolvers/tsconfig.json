@@ -7,6 +7,6 @@
     },
     "include": ["./src/**/*"],
     "exclude": ["./src/**/*.test.ts"],
-    "references": [{ "path": "../protocol" }],
-    "extends": "@puristic/tsconfig/tsconfig.base.json"
+    "references": [{ "path": "../graph" }],
+    "extends": "@intentic/tsconfig/tsconfig.base.json"
 }

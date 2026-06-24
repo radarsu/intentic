@@ -1,4 +1,4 @@
-// The desired-state intermediate representation for @puristic/deploy. This layer is product-agnostic:
+// The desired-state intermediate representation for intentic-deploy. This layer is product-agnostic:
 // it defines refs, secrets, readiness, and the serializable graph, but knows nothing about which kinds
 // of resource exist. A resource node's `type` is an opaque `string` here — the resolver layer owns the
 // closed vocabulary of kinds and guarantees only valid ones are emitted.

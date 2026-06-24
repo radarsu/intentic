@@ -1,8 +1,8 @@
-// Developer-authored deployment declaration for @puristic/deploy-core.
+// Developer-authored deployment declaration for @intentic/sdk.
 // A real consumer imports the package name:
-//   import { defineStack, env } from "@puristic/deploy-core";
+//   import { defineStack, env } from "@intentic/sdk";
 // In-repo we import relatively so it runs under vitest with no resolve condition.
-import { env } from "@puristic/deploy-protocol";
+import { env } from "@intentic/graph";
 import { defineStack } from "./index.js";
 
 export const graph = defineStack((i) => {

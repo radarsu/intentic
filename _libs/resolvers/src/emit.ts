@@ -1,4 +1,4 @@
-import { makeRef } from "@puristic/deploy-protocol";
+import { makeRef } from "@intentic/graph";
 import { resolveApp } from "./app.js";
 import { tunnelId, tunnelName } from "./ids.js";
 import type { CloudflareInput, HostInput } from "./inputs.js";

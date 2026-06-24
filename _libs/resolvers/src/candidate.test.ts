@@ -1,4 +1,4 @@
-import { env } from "@puristic/deploy-protocol";
+import { env } from "@intentic/graph";
 import { expect, test } from "vitest";
 import { enumerateAssignments, generateCandidates } from "./candidate.js";
 import type { Catalog, Option } from "./catalog.js";

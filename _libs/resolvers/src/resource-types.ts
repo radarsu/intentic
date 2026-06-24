@@ -1,4 +1,4 @@
-import type { RawNode } from "@puristic/deploy-protocol";
+import type { RawNode } from "@intentic/graph";
 
 // The closed vocabulary of resource kinds this resolver stack derives. The protocol IR treats a node's
 // `type` as an opaque string; this union is the resolver's authority on which kinds it emits, and the

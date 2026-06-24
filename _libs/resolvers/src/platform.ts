@@ -1,5 +1,5 @@
-import type { SecretRef } from "@puristic/deploy-protocol";
-import { env, httpOk, makeRef } from "@puristic/deploy-protocol";
+import type { SecretRef } from "@intentic/graph";
+import { env, httpOk, makeRef } from "@intentic/graph";
 import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
 import type { HostInput } from "./inputs.js";
 import type { ResolvedNode } from "./resource-types.js";

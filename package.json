@@ -1,11 +1,11 @@
 {
-    "name": "@puristic/root",
+    "name": "@intentic/root",
     "version": "0.0.0",
     "private": true,
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/radarsu/puristic-deploy.git"
+        "url": "git+https://github.com/radarsu/intentic-deploy.git"
     },
     "scripts": {
         "build": "turbo run build",

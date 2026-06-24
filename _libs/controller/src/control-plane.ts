@@ -1,6 +1,6 @@
-import type { DesiredStateGraph, SecretRef } from "@puristic/deploy-protocol";
-import { compile, httpOk, makeRef, toNodeMap } from "@puristic/deploy-protocol";
-import { adminUsername } from "@puristic/deploy-resolvers";
+import type { DesiredStateGraph, SecretRef } from "@intentic/graph";
+import { compile, httpOk, makeRef, toNodeMap } from "@intentic/graph";
+import { adminUsername } from "@intentic/resolvers";
 
 // The standalone control plane: one Forgejo on a dedicated host, holding the intent and
 // reconciliation-target repos. Distinct from the per-host application-plane Forgejo the app resolver

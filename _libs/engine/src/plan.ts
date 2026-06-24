@@ -1,7 +1,7 @@
-import type { DesiredStateGraph } from "@puristic/deploy-protocol";
-import { linearize, refKey } from "@puristic/deploy-protocol";
-import type { ResourceType } from "@puristic/deploy-resolvers";
-import { OUTPUTS } from "@puristic/deploy-resolvers";
+import type { DesiredStateGraph } from "@intentic/graph";
+import { linearize, refKey } from "@intentic/graph";
+import type { ResourceType } from "@intentic/resolvers";
+import { OUTPUTS } from "@intentic/resolvers";
 import { collectOrphans } from "./orphans.js";
 import { makeContext, requireProvider } from "./reconcile.js";
 import { resolveInputs } from "./resolve-inputs.js";
