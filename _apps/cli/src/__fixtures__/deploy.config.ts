@@ -10,9 +10,7 @@ export const intent = defineIntent((i) => {
     });
 
     const cf = i.have.cloudflare("cf", {
-        accountId: "acc_123",
         apiToken: env("CLOUDFLARE_API_TOKEN"),
-        zone: "example.com",
     });
 
     i.want.app("my-app", {

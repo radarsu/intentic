@@ -8,3 +8,4 @@ export type { PlatformRefs } from "./platform.js";
 export { resolvePlatform } from "./platform.js";
 export { resolveService } from "./service.js";
 export { resolveState } from "./state.js";
+export { collectDomains, selectZone } from "./zone.js";

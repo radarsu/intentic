@@ -34,18 +34,28 @@ test("forgejo findRepo throws a boundary error when the response is the wrong sh
 });
 
 test("cloudflare getZone parses a well-formed envelope", async () => {
-    stubFetch({ success: true, errors: [], result: [{ id: "zone-1" }] });
-    expect(await cloudflareApi.getZone({ accountId: "a", apiToken: "t", zone: "example.com" })).toEqual({ id: "zone-1" });
+    stubFetch({ success: true, errors: [], result: [{ id: "zone-1", account: { id: "acct-1" } }] });
+    expect(await cloudflareApi.getZone({ apiToken: "t", zone: "example.com" })).toEqual({ id: "zone-1", accountId: "acct-1" });
 });
 
 test("cloudflare getZone throws a boundary error when the result item lacks an id", async () => {
     stubFetch({ success: true, errors: [], result: [{}] });
-    await expect(cloudflareApi.getZone({ accountId: "a", apiToken: "t", zone: "example.com" })).rejects.toThrow(/returned an unexpected response/);
+    await expect(cloudflareApi.getZone({ apiToken: "t", zone: "example.com" })).rejects.toThrow(/returned an unexpected response/);
+});
+
+test("cloudflare listZones parses the zone list with each zone's account", async () => {
+    stubFetch({
+        success: true,
+        errors: [],
+        result: [{ id: "zone-1", name: "example.com", account: { id: "acct-1" } }],
+        result_info: { total_pages: 1 },
+    });
+    expect(await cloudflareApi.listZones({ apiToken: "t" })).toEqual([{ id: "zone-1", name: "example.com", accountId: "acct-1" }]);
 });
 
 test("cloudflare surfaces an API error envelope (success:false) as a failed call", async () => {
     stubFetch({ success: false, errors: [{ code: 1003, message: "invalid zone" }], result: null });
-    await expect(cloudflareApi.getZone({ accountId: "a", apiToken: "t", zone: "example.com" })).rejects.toThrow(/failed.*invalid zone/);
+    await expect(cloudflareApi.getZone({ apiToken: "t", zone: "example.com" })).rejects.toThrow(/failed.*invalid zone/);
 });
 
 test("komodo getAlerter parses a well-formed alerter config", async () => {

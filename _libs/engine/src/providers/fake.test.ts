@@ -22,6 +22,7 @@ test("read is undefined before apply and defined after, with deterministic outpu
         internalUrl: "https://host-git.fake.test/internalUrl",
         runnerToken: "host-git::runnerToken",
         gitToken: "host-git::gitToken",
+        packagesToken: "host-git::packagesToken",
     });
     expect(await forgejo.read({}, ctx)).toEqual({ outputs: produced });
     expect(world.has("host-git")).toBe(true);

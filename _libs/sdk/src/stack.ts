@@ -44,7 +44,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         }
         claim(id);
         intent.cloudflare = { id, input };
-        return Object.freeze({ ...makeRef(id), zoneId: makeRef<string>(id, "zoneId") }) as Cloudflare;
+        return Object.freeze({ ...makeRef(id), zoneId: makeRef<string>(id, "zoneId"), accountId: makeRef<string>(id, "accountId") }) as Cloudflare;
     };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {

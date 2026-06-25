@@ -15,6 +15,7 @@ const fakeSsh = (): SshExecutor => {
     const started = new Set<string>();
     let tokenPersisted = false;
     let gitTokenPersisted = false;
+    let packagesTokenPersisted = false;
     const ok = (stdout = "", code = 0): SshResult => ({ stdout, stderr: "", code });
     return {
         connect: async () => ({
@@ -26,6 +27,10 @@ const fakeSsh = (): SshExecutor => {
                     return ok("rtok");
                 }
                 if (command.includes("generate-access-token")) {
+                    if (command.includes("write:package")) {
+                        packagesTokenPersisted = true;
+                        return ok("ptok");
+                    }
                     gitTokenPersisted = true;
                     return ok("gtok");
                 }
@@ -44,6 +49,7 @@ const fakeSsh = (): SshExecutor => {
                 }
                 if (command.includes("wget -q --spider")) return ok("", started.has("intentic-forgejo") ? 0 : 1);
                 if (command.includes("cat /data/.runner")) return ok(started.has("intentic-forgejo-runner") ? "http://10.0.0.5:3000" : "");
+                if (command.includes("packages-token")) return ok(packagesTokenPersisted ? "ptok" : "");
                 if (command.includes("git-token")) return ok(gitTokenPersisted ? "gtok" : "");
                 if (command.includes("runner-token")) return ok(tokenPersisted ? "rtok" : "");
                 return ok();
@@ -59,7 +65,8 @@ const fakeCloudflare = (): CloudflareApi => {
     let ingress: IngressRule[] | undefined;
     let seq = 0;
     return {
-        getZone: async () => ({ id: "zone-123" }),
+        getZone: async () => ({ id: "zone-123", accountId: "acct-1" }),
+        listZones: async () => [{ id: "zone-123", name: "example.com", accountId: "acct-1" }],
         findTunnel: async ({ name }) => {
             const id = tunnels.get(name);
             return id === undefined ? undefined : { id };
@@ -177,14 +184,14 @@ const fullEnv = {
 const buildGraph = () =>
     defineStack((i) => {
         const host = i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
-        const cf = i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
+        const cf = i.have.cloudflare("cf", { apiToken: env("CLOUDFLARE_API_TOKEN") });
         i.want.app("my-app", {
             on: host,
             expose: cf,
             notify: { discord: env("DISCORD_WEBHOOK") },
             environments: { production: { domain: "app.example.com", branch: "main" } },
         });
-    });
+    }, "example.com");
 
 // Drive the real registry entirely off in-memory fakes — same wiring the e2e harness uses with real deps.
 const realProviders = () =>

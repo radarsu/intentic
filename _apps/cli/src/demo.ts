@@ -1,7 +1,6 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -38,7 +37,6 @@ const APP_BODY = "intentic-demo-live";
 const appPort = deploymentPort(deploymentId(APP, ENV));
 
 const zone = process.env["CLOUDFLARE_ZONE"] ?? "intentic.dev";
-const accountId = process.env["CLOUDFLARE_ACCOUNT_ID"] ?? "14aaba5ad087e7ed506d1470b14489ab";
 const sshPort = Number(process.env["DEMO_SSH_PORT"] ?? "2222");
 // Forgejo (3000) and Komodo (9120) are also published straight to localhost so the stack can be browsed
 // and the app repo seeded WITHOUT waiting on public DNS — the tunnel/public URLs come up alongside.
@@ -99,7 +97,7 @@ const readToken = async (): Promise<string> => {
     return match[1].replace(/\\/g, "").trim();
 };
 
-const deployConfig = (withEnv: boolean): string => `import { env } from "@intentic/graph";
+const deployConfig = (): string => `import { env } from "@intentic/graph";
 import { defineIntent } from "@intentic/sdk";
 
 export const intent = defineIntent((i) => {
@@ -111,20 +109,14 @@ export const intent = defineIntent((i) => {
     });
 
     const cf = i.have.cloudflare("cf", {
-        accountId: ${JSON.stringify(accountId)},
         apiToken: env("CLOUDFLARE_API_TOKEN"),
-        zone: ${JSON.stringify(zone)},
     });
 
     i.want.app(${JSON.stringify(APP)}, {
         on: host,
         expose: cf,
-        environments: ${
-            withEnv
-                ? `{
+        environments: {
             ${ENV}: { domain: ${JSON.stringify(`app.${zone}`)}, branch: "main", env: { PORT: ${JSON.stringify(String(appPort))} } },
-        }`
-                : "{}"
         },
     });
 });
@@ -212,7 +204,10 @@ const up = async (): Promise<void> => {
         }
     }
 
-    const workspace = await mkdtemp(join(tmpdir(), "intentic-demo-"));
+    // Bootstrap into the repo's own gitignored scratch dirs (intent/, desired-state/) instead of a throwaway
+    // /tmp workspace, so the generated .secrets.json lands at desired-state/.secrets.json — exactly where
+    // `pnpm intentic adopt` (default repo-root paths) reads the Forgejo admin password from.
+    const workspace = repoRoot;
     const configPath = join(workspace, "intent", "deploy.config.ts");
     const artifactPath = join(workspace, "desired-state", "desired-state.json");
 
@@ -223,11 +218,9 @@ const up = async (): Promise<void> => {
         JSON.stringify(
             {
                 zone,
-                accountId,
                 apiToken,
                 container: CONTAINER,
                 sshPort,
-                workspace,
                 urls: { git: GIT_URL, komodo: KOMODO_URL, app: APP_URL },
                 local: { git: `http://127.0.0.1:${forgejoPort}`, komodo: `http://127.0.0.1:${komodoPort}` },
             },
@@ -238,10 +231,10 @@ const up = async (): Promise<void> => {
 
     log("▶ scaffolding the intent (init --link) …");
     await runCli("init", "--dir", workspace, "--link");
-    await writeFile(configPath, deployConfig(false));
+    await writeFile(configPath, deployConfig());
     await writeFile(join(workspace, "desired-state", ".env"), envFile(privateKey, apiToken));
 
-    log("▶ phase 1 — resolve + apply (Forgejo + Komodo + tunnel) …");
+    log("▶ resolve + apply — Forgejo + Komodo + tunnel + the app's CI/CD wiring …");
     await runCli("resolve", "--config", configPath, "--out", artifactPath);
     await runCli("apply", "--artifact", artifactPath, "--maxIterations", "8");
 
@@ -273,13 +266,9 @@ const up = async (): Promise<void> => {
             content: DOCKERFILE,
             message: "seed demo app",
         });
-        // intentic only WIRES CI/CD here — it commits the Forgejo Actions workflow + repo secrets and registers
-        // the Komodo deployment. It does NOT build or deploy. Committing the workflow triggers the Action, which
-        // builds the seeded Dockerfile, pushes it to the registry, and tells Komodo to roll it out.
-        log("▶ phase 2 — resolve + apply: wire CI/CD + the Komodo deployment (intentic does not build/deploy) …");
-        await writeFile(configPath, deployConfig(true));
-        await runCli("resolve", "--config", configPath, "--out", artifactPath);
-        await runCli("apply", "--artifact", artifactPath, "--maxIterations", "8");
+        // intentic only WIRES CI/CD — the apply above committed the Forgejo Actions workflow + repo secrets and
+        // registered the Komodo deployment; it does NOT build or deploy. CI seeded a placeholder Dockerfile, so
+        // pushing the real one above triggers the Action: build -> push to the registry -> Komodo rolls it out.
         log(`▶ CI builds + pushes the image and Komodo rolls it out — polling http://127.0.0.1:${appPort} (up to 5 min) …`);
         for (let i = 0; i < 60 && !appDeployed; i++) {
             const hit = (await ssh(`wget -q -T 5 -O- http://127.0.0.1:${appPort} 2>/dev/null || true`)).trim();
@@ -312,6 +301,7 @@ const up = async (): Promise<void> => {
     log(`    Komodo pw : ${komodoPassword}`);
     log(`    (saved in ${join(workspace, "desired-state", ".secrets.json")})`);
     log(`  SSH into the host:  ssh -p ${sshPort} root@127.0.0.1   (key in ${join(workspace, "desired-state", ".env")})`);
+    log("  Push the control-plane repos to Forgejo:  pnpm intentic adopt   (once git DNS is live)");
     log("  Tear it all down :  pnpm demo:down");
     log("  Note: keep this machine + Docker running; the public URLs share the");
     log("        tunnel name 'intentic-host', so don't run the e2e at the same time.");
@@ -320,9 +310,7 @@ const up = async (): Promise<void> => {
 
 interface DemoState {
     readonly zone: string;
-    readonly accountId: string;
     readonly apiToken: string;
-    readonly workspace?: string;
 }
 
 const down = async (): Promise<void> => {
@@ -330,23 +318,26 @@ const down = async (): Promise<void> => {
         .then((text) => JSON.parse(text) as DemoState)
         .catch(() => ({}));
     const zoneName = state.zone ?? zone;
-    const account = state.accountId ?? accountId;
     const apiToken = state.apiToken ?? (await readToken());
 
     log(`▶ removing the demo host container (${CONTAINER}) …`);
     await quiet("docker", ["rm", "-f", CONTAINER]);
 
     log("▶ deleting the Cloudflare tunnel + DNS records …");
-    const tunnel = await cloudflareApi.findTunnel({ accountId: account, apiToken, name: TUNNEL }).catch(() => undefined);
-    if (tunnel !== undefined) {
-        await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/cfd_tunnel/${tunnel.id}/connections`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${apiToken}` },
-        }).catch(() => {});
-        await cloudflareApi.deleteTunnel({ accountId: account, apiToken, tunnelId: tunnel.id }).catch((error) => log(`  tunnel: ${String(error)}`));
-    }
-    const cfZone = await cloudflareApi.getZone({ accountId: account, apiToken, zone: zoneName }).catch(() => undefined);
+    // Account + zone id both come from resolving the zone name (the same discovery resolve does), so the
+    // teardown needs only the zone name + token — no separately-configured account.
+    const cfZone = await cloudflareApi.getZone({ apiToken, zone: zoneName }).catch(() => undefined);
     if (cfZone !== undefined) {
+        const tunnel = await cloudflareApi.findTunnel({ accountId: cfZone.accountId, apiToken, name: TUNNEL }).catch(() => undefined);
+        if (tunnel !== undefined) {
+            await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfZone.accountId}/cfd_tunnel/${tunnel.id}/connections`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${apiToken}` },
+            }).catch(() => {});
+            await cloudflareApi
+                .deleteTunnel({ accountId: cfZone.accountId, apiToken, tunnelId: tunnel.id })
+                .catch((error) => log(`  tunnel: ${String(error)}`));
+        }
         for (const name of [`git.${zoneName}`, `komodo.${zoneName}`, `app.${zoneName}`]) {
             const record = await cloudflareApi.findDnsRecord({ apiToken, zoneId: cfZone.id, name }).catch(() => undefined);
             if (record !== undefined) {
@@ -357,11 +348,10 @@ const down = async (): Promise<void> => {
         }
     }
 
-    if (state.workspace !== undefined) {
-        await rm(state.workspace, { recursive: true, force: true }).catch(() => {});
-    }
+    // The workspace is now the repo root (intent/ + desired-state/ are gitignored scratch dirs holding the
+    // generated .secrets.json) — deliberately left in place so `intentic adopt` can still run after teardown.
     await rm(stateDir, { recursive: true, force: true }).catch(() => {});
-    log("✅ demo torn down — host container, tunnel, and DNS records removed.");
+    log("✅ demo torn down — host container, tunnel, and DNS records removed (intent/ + desired-state/ kept).");
 };
 
 const mode = process.argv[2];

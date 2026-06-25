@@ -16,6 +16,7 @@ export interface Host extends Ref<"host"> {
 
 export interface Cloudflare extends Ref<"cloudflare"> {
     readonly zoneId: Ref<string>;
+    readonly accountId: Ref<string>;
 }
 
 // --- The app, its source repo, and its environments ---

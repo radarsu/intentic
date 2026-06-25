@@ -12,7 +12,8 @@ export const defineIntent = (declare: (stack: Stack) => void): IntentSet => {
     return intent;
 };
 
-// One-shot: intent → needs → the desired-state graph the resolvers derive.
-export const defineStack = (declare: (stack: Stack) => void): DesiredStateGraph => resolveState(defineIntent(declare));
+// One-shot: intent → needs → the desired-state graph the resolvers derive. `zone` is the Cloudflare zone the
+// apps are exposed under (the CLI discovers it from the API token; tests/fixtures pass it directly).
+export const defineStack = (declare: (stack: Stack) => void, zone?: string): DesiredStateGraph => resolveState(defineIntent(declare), zone);
 
 export type { App, Cloudflare, Deployment, Have, Host, Repo, Service, Stack, Want, WantAppInput, WantServiceInput } from "./handles.js";

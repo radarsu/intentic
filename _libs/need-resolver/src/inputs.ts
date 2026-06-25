@@ -12,12 +12,11 @@ export interface HostInput {
     port?: number;
 }
 
-// The Cloudflare account an app is exposed through: account id + zone are literals (the zone's hostnames
-// are baked into the derived graph), the API token is a secret.
+// The Cloudflare account an app is exposed through. Only the API token is authored: the zone is discovered
+// from the token (the authored domains pick which of the token's zones to use) and the owning account is
+// resolved from that zone, so neither is declared here.
 export interface CloudflareInput {
-    accountId: string;
     apiToken: SecretRef;
-    zone: string;
 }
 
 export interface EnvironmentInput {

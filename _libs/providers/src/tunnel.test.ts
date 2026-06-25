@@ -9,6 +9,7 @@ const NOT_USED = async (): Promise<never> => {
 };
 const api = (overrides: Partial<CloudflareApi>): CloudflareApi => ({
     getZone: NOT_USED,
+    listZones: NOT_USED,
     findTunnel: NOT_USED,
     createTunnel: NOT_USED,
     getTunnelToken: NOT_USED,

@@ -9,8 +9,9 @@ import { defineIntent } from "@intentic/sdk";
 
 export const intent = defineIntent((i) => {
     // What I have: the host the apps run on (its SSH connection) and the Cloudflare account they're exposed
-    // through (account + DNS zone). address/user/accountId/zone are authored literals; the SSH key and API
-    // token are env-sourced secrets.
+    // through. address/user are authored literals and the SSH key + API token are env-sourced secrets; the DNS
+    // zone and the account that owns it are discovered from the API token (the app domains pick which of the
+    // token's zones to use), so neither is authored here.
     const host = i.have.host("host", {
         address: "203.0.113.10",
         user: "deploy",
@@ -18,9 +19,7 @@ export const intent = defineIntent((i) => {
     });
 
     const cf = i.have.cloudflare("cf", {
-        accountId: "acc_123",
         apiToken: env("CLOUDFLARE_API_TOKEN"),
-        zone: "example.com",
     });
 
     // What I want (a shared service): SignOz for observability, deployed onto the host and exposed at its own

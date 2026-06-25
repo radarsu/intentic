@@ -7,7 +7,7 @@ import { defineStack, type Stack } from "./index.js";
 // The authored inventory the stack tests wire their apps to (on: host, expose: cf).
 const inventory = (i: Stack) => ({
     host: i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") }),
-    cf: i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" }),
+    cf: i.have.cloudflare("cf", { apiToken: env("CLOUDFLARE_API_TOKEN") }),
 });
 
 test("env builds an env-sourced secret ref", () => {
@@ -23,7 +23,7 @@ test("want.app derives its support stack: the host carries the authored connecti
     const graph = defineStack((i) => {
         const { host, cf } = inventory(i);
         i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
-    });
+    }, "example.com");
 
     // The forgejo node is derived from want.app, wired to the host, with a zone-derived domain + default health gate.
     expect(graph.resources["host-git"]?.inputs["server"]).toEqual({ $ref: "host" });
@@ -39,7 +39,7 @@ test("duplicate resource id throws", () => {
             const { host, cf } = inventory(i);
             i.want.app("dup", { on: host, expose: cf, environments: { prod: { domain: "a.example.com", branch: "main" } } });
             i.want.app("dup", { on: host, expose: cf, environments: { prod: { domain: "b.example.com", branch: "main" } } });
-        }),
+        }, "example.com"),
     ).toThrow('duplicate resource id: "dup"');
 });
 
@@ -56,7 +56,7 @@ test("linearize derives a topological order (dependency before dependent)", () =
     const graph = defineStack((i) => {
         const { host, cf } = inventory(i);
         i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
-    });
+    }, "example.com");
 
     const order = linearize(graph);
     expect(order[0]).toBe("host");
@@ -68,7 +68,7 @@ test("want.service derives a signoz node + route, and want.app's observe wires t
         const { host, cf } = inventory(i);
         const obs = i.want.service("obs", { kind: "signoz", on: host, expose: cf, domain: "signoz.example.com" });
         i.want.app("app", { on: host, expose: cf, observe: obs, environments: { prod: { domain: "app.example.com", branch: "main" } } });
-    });
+    }, "example.com");
 
     // The service is deployed onto the host and routed, but not built through the app platform.
     expect(graph.resources["obs"]?.type).toBe("signoz");
@@ -87,7 +87,7 @@ test("apps share one derived platform", () => {
         const { host, cf } = inventory(i);
         i.want.app("app-one", { on: host, expose: cf, environments: { prod: { domain: "one.example.com", branch: "main" } } });
         i.want.app("app-two", { on: host, expose: cf, environments: { prod: { domain: "two.example.com", branch: "main" } } });
-    });
+    }, "example.com");
 
     // One shared Forgejo + Komodo for the host, not one per app.
     const types = Object.values(graph.resources).map((node) => node.type);

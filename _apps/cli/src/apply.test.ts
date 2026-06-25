@@ -12,7 +12,7 @@ import { loadIntent } from "./resolve.js";
 const example = fileURLToPath(new URL("./__fixtures__/deploy.config.ts", import.meta.url));
 
 // Every secret the example references: the host SSH key and Cloudflare API token plus the app secrets.
-// The host address/user and Cloudflare account/zone are authored literals, so they are not here.
+// The host address/user are authored literals and the Cloudflare zone/account are discovered, not here.
 const fullEnv = {
     HOST_SSH_KEY: "k",
     CLOUDFLARE_API_TOKEN: "k",
@@ -24,7 +24,7 @@ const fullEnv = {
 
 describe("the local resolve → write → read → apply pipeline", () => {
     it("resolves to an artifact that reconciles to convergence with fake providers", async () => {
-        const graph = resolveState(await loadIntent(example));
+        const graph = resolveState(await loadIntent(example), "example.com");
         const dir = await mkdtemp(join(tmpdir(), "intentic-cli-"));
         const path = join(dir, "desired-state.json");
         await writeArtifact(path, graph);
@@ -38,7 +38,7 @@ describe("the local resolve → write → read → apply pipeline", () => {
     });
 
     it("derives access info from the real resolved graph and writes a secret-free access.md", async () => {
-        const graph = resolveState(await loadIntent(example));
+        const graph = resolveState(await loadIntent(example), "example.com");
         const { providers } = createFakeProviders();
         // A distinctive password value so the no-leak assertion below is meaningful (vs the "k" stubs).
         const sentinel = "S3NTINEL_DO_NOT_LEAK";

@@ -23,7 +23,7 @@ import {
 } from "./artifact.js";
 import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
-import { loadIntent } from "./resolve.js";
+import { discoverZone, loadIntent } from "./resolve.js";
 import { collectSecrets, secretRef, writeEnvExample } from "./secrets.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
@@ -59,12 +59,16 @@ const resolveCommand = buildCommand<ResolveFlags>({
     },
     async func(this: CommandContext, flags: ResolveFlags) {
         const intent = await loadIntent(flags.config ?? CONFIG_PATH);
-        const graph = resolveState(intent);
         const out = flags.out ?? ARTIFACT_PATH;
         const dir = dirname(out);
+        const zone = await discoverZone(intent, dir);
+        const graph = resolveState(intent, zone);
         await writeArtifact(out, graph);
         const count = Object.keys(graph.resources).length;
         this.process.stdout.write(`resolved desired state (${count} resources) → ${out}\n`);
+        if (zone !== undefined) {
+            this.process.stdout.write(`discovered Cloudflare zone "${zone}" from the API token\n`);
+        }
         // The resolver classifies each secret: `env` ones the user must supply (only knowable from the graph,
         // since the resolver injects platform secrets the authored config never names) → .env.example; the
         // `generated` ones (Forgejo/Komodo admin) intentic creates and owns itself → .secrets.json, written

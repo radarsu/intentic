@@ -53,7 +53,12 @@ test("read returns undefined and logs when forgejo is unreachable", async () => 
             },
         }),
     );
-    expect(await provider.read(inputs, ctx((m) => logs.push(m)))).toBeUndefined();
+    expect(
+        await provider.read(
+            inputs,
+            ctx((m) => logs.push(m)),
+        ),
+    ).toBeUndefined();
     expect(logs.some((m) => m.includes("not reachable"))).toBe(true);
 });
 

@@ -9,7 +9,7 @@ import { emit } from "./emit.js";
 
 // The authored inventory every test intent wires its apps to (on: "host", expose: "cf").
 const host: HostIntent = { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } };
-const cloudflare: CloudflareIntent = { id: "cf", input: { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" } };
+const cloudflare: CloudflareIntent = { id: "cf", input: { apiToken: env("CLOUDFLARE_API_TOKEN") } };
 
 // The full single-combination assignment for an intent under the default catalog — the one combo emit
 // supports today.
@@ -43,7 +43,7 @@ test("emit derives the full support stack for a two-environment app", () => {
         ],
     };
 
-    expect(emit(intent, assign(intent)).map((node) => node.id)).toEqual([
+    expect(emit(intent, assign(intent), "example.com").map((node) => node.id)).toEqual([
         "host",
         "cf",
         "host-git",
@@ -73,7 +73,7 @@ test("apps share one derived platform", () => {
         ],
     };
 
-    const types = emit(intent, assign(intent)).map((node) => node.type);
+    const types = emit(intent, assign(intent), "example.com").map((node) => node.type);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
     // One tunnel for the shared host, across all apps.
@@ -89,7 +89,7 @@ test("an unsupported option assignment throws", () => {
     };
     const byNeed = new Map(assign(intent).byNeed);
     byNeed.set("source-control:host", "gitlab");
-    expect(() => emit(intent, { byNeed })).toThrow('unsupported option "gitlab"');
+    expect(() => emit(intent, { byNeed }, "example.com")).toThrow('unsupported option "gitlab"');
 });
 
 test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to the app's stack", () => {
@@ -108,7 +108,7 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
         ],
     };
 
-    const nodes = emit(intent, assign(intent));
+    const nodes = emit(intent, assign(intent), "example.com");
     const forgejoNotify = nodes.find((node) => node.id === "app-repo-notify");
     const komodoNotify = nodes.find((node) => node.id === "app-notify");
 
@@ -130,7 +130,7 @@ test("an app without notify derives no notification sinks", () => {
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
-    const types = emit(intent, assign(intent)).map((node) => node.type);
+    const types = emit(intent, assign(intent), "example.com").map((node) => node.type);
     expect(types.filter((type) => type === "forgejo-notify")).toHaveLength(0);
     expect(types.filter((type) => type === "komodo-notify")).toHaveLength(0);
 });
@@ -158,7 +158,7 @@ test("notification sinks are derived per app, while the platform stays shared pe
         ],
     };
 
-    const types = emit(intent, assign(intent)).map((node) => node.type);
+    const types = emit(intent, assign(intent), "example.com").map((node) => node.type);
     expect(types.filter((type) => type === "forgejo-notify")).toHaveLength(2);
     expect(types.filter((type) => type === "komodo-notify")).toHaveLength(2);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
@@ -173,7 +173,7 @@ test("a services-only intent emits the service + its route + tunnel, but no app 
         apps: [],
     };
 
-    const nodes = emit(intent, assign(intent));
+    const nodes = emit(intent, assign(intent), "example.com");
     expect(nodes.map((node) => node.id)).toEqual(["host", "cf", "obs", "cf-signoz-example-com", "host-tunnel"]);
     const signoz = nodes.find((node) => node.id === "obs");
     expect(signoz?.type).toBe("signoz");
@@ -201,7 +201,7 @@ test("an app's observe injects the service's OTLP endpoint into each deployment 
         ],
     };
 
-    const deployment = emit(intent, assign(intent)).find((node) => node.id === "app.prod");
+    const deployment = emit(intent, assign(intent), "example.com").find((node) => node.id === "app.prod");
     // OTLP wiring is spread before the author's env, so an explicit DATABASE_URL survives alongside it.
     expect(deployment?.inputs["env"]).toEqual({
         OTEL_EXPORTER_OTLP_ENDPOINT: makeRef("obs", "otlpEndpoint"),
@@ -219,7 +219,7 @@ test("an app without observe carries no OTLP env and no service dependency", () 
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
-    const deployment = emit(intent, assign(intent)).find((node) => node.id === "app.prod");
+    const deployment = emit(intent, assign(intent), "example.com").find((node) => node.id === "app.prod");
     expect(deployment?.inputs["env"]).toBeUndefined();
     expect(deployment?.explicitDependsOn).toEqual(["app.prod-ci", "cf-komodo-example-com"]);
 });
@@ -232,5 +232,19 @@ test("observing an undeclared service throws", () => {
         apps: [{ id: "app", on: "host", expose: "cf", observe: "ghost", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
-    expect(() => emit(intent, assign(intent))).toThrow('app "app" observes unknown service "ghost"');
+    expect(() => emit(intent, assign(intent), "example.com")).toThrow('app "app" observes unknown service "ghost"');
+});
+
+test("the cloudflare node carries only token + discovered zone, and the tunnel reads the account from it via a ref", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        services: [],
+        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    const nodes = emit(intent, assign(intent), "example.com");
+    expect(nodes.find((node) => node.id === "cf")?.inputs).toEqual({ apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
+    // accountId is resolved by the cloudflare provider and read by the tunnel through a ref, never authored.
+    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["accountId"]).toEqual(makeRef("cf", "accountId"));
 });

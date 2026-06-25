@@ -36,10 +36,11 @@ const required = (key: string): string => {
     return value;
 };
 
-// The owned Cloudflare zone (authored as a literal in the config) + the account the token belongs to. Read
-// from env so the suite can target any zone WITHOUT a catch-all redirect, falling back to a sensible default.
+// The Cloudflare zone this suite deploys under. The config no longer authors it — the CLI discovers it from
+// the app domains + token — but the harness still needs it to build the expected public hostnames and to
+// purge DNS on teardown. Read from env so the suite can target any zone you own (the account is discovered
+// from the token); use a token scoped to this zone so the platform-only phase (no app domains) can resolve it.
 const ZONE = process.env["CLOUDFLARE_ZONE"] ?? "atlas-protocol.com";
-const ACCOUNT_ID = process.env["CLOUDFLARE_ACCOUNT_ID"] ?? "14aaba5ad087e7ed506d1470b14489ab";
 const ADMIN = "intentic"; // the platform admin user + repo owner (adminUsername in the resolver)
 const APP = "app";
 const ENV = "production";
@@ -65,7 +66,7 @@ EXPOSE 8080
 CMD ["sh","-c","httpd -f -v -p \${PORT} -h /www"]
 `;
 
-const config = (address: string, port: number, withEnv: boolean): string => `import { env } from "@intentic/graph";
+const config = (address: string, port: number): string => `import { env } from "@intentic/graph";
 import { defineIntent } from "@intentic/sdk";
 
 export const intent = defineIntent((i) => {
@@ -77,20 +78,14 @@ export const intent = defineIntent((i) => {
     });
 
     const cf = i.have.cloudflare("cf", {
-        accountId: ${JSON.stringify(ACCOUNT_ID)},
         apiToken: env("CLOUDFLARE_API_TOKEN"),
-        zone: ${JSON.stringify(ZONE)},
     });
 
     i.want.app(${JSON.stringify(APP)}, {
         on: host,
         expose: cf,
-        environments: ${
-            withEnv
-                ? `{
+        environments: {
             ${ENV}: { domain: ${JSON.stringify(APP_DOMAIN)}, branch: "main", env: { PORT: ${JSON.stringify(String(appPort))} } },
-        }`
-                : "{}"
         },
     });
 });
@@ -131,20 +126,21 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         // connections, so the connector must be gone before we purge the tunnel below.
         await host?.stop().catch(() => {});
 
-        // Purge the live Cloudflare resources this run created — the engine has no destroy path.
-        const tunnel = await cloudflareApi.findTunnel({ accountId: ACCOUNT_ID, apiToken, name: "intentic-host" }).catch(() => undefined);
-        if (tunnel !== undefined) {
-            // Force-close any lingering connections (cloudflared just died with the host) so the delete sticks.
-            await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/connections`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${apiToken}` },
-            }).catch(() => {});
-            await cloudflareApi
-                .deleteTunnel({ accountId: ACCOUNT_ID, apiToken, tunnelId: tunnel.id })
-                .catch((error) => console.warn(`tunnel cleanup: ${String(error)}`));
-        }
-        const zone = await cloudflareApi.getZone({ accountId: ACCOUNT_ID, apiToken, zone: ZONE }).catch(() => undefined);
+        // Purge the live Cloudflare resources this run created — the engine has no destroy path. The account id
+        // comes back from resolving the zone (the same discovery the CLI does), so it is not configured here.
+        const zone = await cloudflareApi.getZone({ apiToken, zone: ZONE }).catch(() => undefined);
         if (zone !== undefined) {
+            const tunnel = await cloudflareApi.findTunnel({ accountId: zone.accountId, apiToken, name: "intentic-host" }).catch(() => undefined);
+            if (tunnel !== undefined) {
+                // Force-close any lingering connections (cloudflared just died with the host) so the delete sticks.
+                await fetch(`https://api.cloudflare.com/client/v4/accounts/${zone.accountId}/cfd_tunnel/${tunnel.id}/connections`, {
+                    method: "DELETE",
+                    headers: { Authorization: `Bearer ${apiToken}` },
+                }).catch(() => {});
+                await cloudflareApi
+                    .deleteTunnel({ accountId: zone.accountId, apiToken, tunnelId: tunnel.id })
+                    .catch((error) => console.warn(`tunnel cleanup: ${String(error)}`));
+            }
             for (const name of [GIT_DOMAIN, KOMODO_DOMAIN, APP_DOMAIN]) {
                 const record = await cloudflareApi.findDnsRecord({ apiToken, zoneId: zone.id, name }).catch(() => undefined);
                 if (record !== undefined) {
@@ -183,7 +179,7 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
     // Poll a public URL through the tunnel until it answers from the origin (not a Cloudflare edge error),
     // then return the final status + body. Edge/tunnel-not-ready responses (5xx + the cloudflared error page)
     // are retried until the deadline since DNS + connector propagation takes seconds.
-    const pollUrl = async (url: string, timeoutMs: number): Promise<{ status: number; body: string }> => {
+    const pollUrl = async (url: string, timeoutMs: number, bodyIncludes?: string): Promise<{ status: number; body: string }> => {
         const deadline = Date.now() + timeoutMs;
         let last: { status: number; body: string } | undefined;
         for (;;) {
@@ -195,7 +191,9 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
                 const body = (await response.text()).slice(0, 4000);
                 last = { status: response.status, body };
                 const edgeDown = [502, 521, 522, 523, 525, 530].includes(response.status) || /Error 10\d\d|Argo Tunnel|cloudflare/i.test(body);
-                if (!edgeDown) {
+                // When a body marker is required (the app must serve its real content, not CI's seeded
+                // placeholder), keep polling until it appears; otherwise any live-origin response is enough.
+                if (!edgeDown && (bodyIncludes === undefined || body.includes(bodyIncludes))) {
                     return last;
                 }
             } catch {
@@ -218,11 +216,11 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         const configPath = join(tmp, "intent", "deploy.config.ts");
         const artifactPath = join(tmp, "desired-state", "desired-state.json");
 
-        // 2. Author the platform-only intent (no environments yet) + the secrets the apply resolves.
-        await writeFile(configPath, config(address, port, false));
+        // 2. Author the intent (host + Cloudflare + the app's production environment) + the secrets apply resolves.
+        await writeFile(configPath, config(address, port));
         await writeFile(join(tmp, "desired-state", ".env"), envFile(privateKey));
 
-        // 3. Resolve + apply: brings up Forgejo + runner + Komodo on the host and the Cloudflare tunnel/routes.
+        // 3. Resolve + apply: brings up Forgejo + runner + Komodo + the tunnel/routes, and wires the app's CI/CD.
         await intentic("resolve", "--config", configPath, "--out", artifactPath);
         await intentic("apply", "--artifact", artifactPath, "--maxIterations", "8");
 
@@ -256,15 +254,13 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
             message: "seed e2e app",
         });
 
-        // 5. Author the environment and re-apply: intentic only WIRES CI/CD + the Komodo deployment (it does
-        // NOT build or deploy). The Dockerfile pushed above already lives on main, so committing the workflow
-        // triggers the Forgejo Action: build -> push to the registry -> notify Komodo, which rolls it out.
-        await writeFile(configPath, config(address, port, true));
-        await intentic("resolve", "--config", configPath, "--out", artifactPath);
-        await intentic("apply", "--artifact", artifactPath, "--maxIterations", "8");
+        // 5. The app's CI/CD was already wired by the apply above (Forgejo Actions workflow + Komodo deployment);
+        // CI seeded a placeholder Dockerfile, so pushing the real one above triggers the Action: build -> push to
+        // the registry -> notify Komodo, which rolls it out, replacing the placeholder.
 
-        // CI builds + pushes and Komodo deploys asynchronously, so allow generous time for the first rollout.
-        const app = await pollUrl(`https://${APP_DOMAIN}`, 300_000);
+        // CI builds + pushes and Komodo deploys asynchronously, and the placeholder may serve briefly first, so
+        // poll until the app serves its real body (allow generous time for the first rollout).
+        const app = await pollUrl(`https://${APP_DOMAIN}`, 300_000, APP_BODY);
         expect(app.status).toBe(200);
         expect(app.body).toContain(APP_BODY);
 

@@ -100,11 +100,14 @@ test("apply writes compose + a once-guarded env, brings the stack up, waits for 
     // The docker-registry account lets Komodo pull the private app images CI pushes to the Forgejo registry.
     expect(
         ssh.commands.some(
-            (c) => c.includes("cat > /opt/intentic/komodo/config.toml") && c.includes('domain = "localhost:3000"') && c.includes('token = "ptok-789"'),
+            (c) =>
+                c.includes("cat > /opt/intentic/komodo/config.toml") && c.includes('domain = "localhost:3000"') && c.includes('token = "ptok-789"'),
         ),
     ).toBe(true);
     // The resource poll interval is baked into the once-guarded .env so auto_update can roll out new images.
-    expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/komodo/.env") && c.includes("KOMODO_RESOURCE_POLL_INTERVAL=OneMinute"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/komodo/.env") && c.includes("KOMODO_RESOURCE_POLL_INTERVAL=OneMinute"))).toBe(
+        true,
+    );
     expect(ssh.commands.some((c) => c.includes("docker compose -p komodo") && c.includes("up -d"))).toBe(true);
 });
 

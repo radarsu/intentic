@@ -7,7 +7,7 @@ import type { ResourceType } from "./resource-types.js";
 // {$ref:"id.output"} targets — providers never declare their own outputs.
 export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object.freeze({
     host: ["internalIp", "publicIp"],
-    cloudflare: ["zoneId"],
+    cloudflare: ["zoneId", "accountId"],
     "cf-route": ["url"],
     tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken", "gitToken", "packagesToken"],

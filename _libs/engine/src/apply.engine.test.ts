@@ -7,7 +7,8 @@ import { plan } from "./plan.js";
 import { createFakeProviders } from "./providers/fake.js";
 
 // The full secret set the example declaration references. The host SSH key and Cloudflare API token are
-// secrets; the host address/user and Cloudflare account/zone are authored literals, so they are not here.
+// secrets; the host address/user are authored literals and the Cloudflare zone/account are discovered, so
+// they are not here.
 const fullEnv = {
     HOST_SSH_KEY: "k",
     CLOUDFLARE_API_TOKEN: "k",
@@ -21,7 +22,7 @@ const fullEnv = {
 const buildGraph = () =>
     defineStack((i) => {
         const host = i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
-        const cf = i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
+        const cf = i.have.cloudflare("cf", { apiToken: env("CLOUDFLARE_API_TOKEN") });
         i.want.app("my-app", {
             on: host,
             expose: cf,
@@ -30,7 +31,7 @@ const buildGraph = () =>
                 production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },
             },
         });
-    });
+    }, "example.com");
 
 const trueProbe = async () => true;
 const silent = () => {};
@@ -40,7 +41,7 @@ test("apply creates every resource in dependency order, then is idempotent", asy
     const { providers } = createFakeProviders();
 
     const first = await apply(graph, { providers, env: fullEnv, probe: trueProbe, log: silent });
-    expect(first.steps).toHaveLength(16);
+    expect(first.steps).toHaveLength(15);
     expect(first.steps.every((step) => step.action === "create")).toBe(true);
     expect(first.steps.map((step) => step.id)).toEqual(linearize(graph));
     expect(Object.keys(first.outputs).sort()).toEqual(Object.keys(graph.resources).sort());

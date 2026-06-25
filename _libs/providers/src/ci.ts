@@ -36,7 +36,7 @@ const DOCKERFILE_PATH = "Dockerfile";
 
 // A minimal, immediately-buildable starter committed ONLY when the repo has no Dockerfile, so a fresh repo is
 // live with a placeholder until the author pushes their real Dockerfile (busybox httpd on $PORT, matching the
-// deterministic PORT the deployment injects). \${PORT} is escaped so it stays literal in the committed file.
+// deterministic PORT the deployment injects).
 const starterDockerfile = (): string =>
     [
         "# intentic starter Dockerfile — replace with your app's real build.",
@@ -44,7 +44,7 @@ const starterDockerfile = (): string =>
         "RUN mkdir -p /www && printf '%s' 'intentic: replace this Dockerfile with your app' > /www/index.html",
         "ENV PORT=8080",
         "EXPOSE 8080",
-        'CMD ["sh","-c","httpd -f -v -p ${PORT} -h /www"]',
+        'CMD ["sh","-c","httpd -f -v -p $PORT -h /www"]',
         "",
     ].join("\n");
 
@@ -147,10 +147,22 @@ export const createCiProvider = (api: ForgejoApi = forgejoApi): Provider => ({
         // build; never clobber the author's real Dockerfile.
         const dockerfile = await api.readFile({ ...repo, branch: parsed.branch, path: DOCKERFILE_PATH });
         if (dockerfile === undefined) {
-            await api.commitFile({ ...repo, branch: parsed.branch, path: DOCKERFILE_PATH, content: starterDockerfile(), message: "intentic: starter Dockerfile" });
+            await api.commitFile({
+                ...repo,
+                branch: parsed.branch,
+                path: DOCKERFILE_PATH,
+                content: starterDockerfile(),
+                message: "intentic: starter Dockerfile",
+            });
         }
         // Commit the workflow LAST so its first run already sees the Dockerfile + secrets.
-        await api.commitFile({ ...repo, branch: parsed.branch, path: workflowPath(parsed.tag), content: workflowYaml(parsed), message: "intentic: ci workflow" });
+        await api.commitFile({
+            ...repo,
+            branch: parsed.branch,
+            path: workflowPath(parsed.tag),
+            content: workflowYaml(parsed),
+            message: "intentic: ci workflow",
+        });
         return {};
     },
 });

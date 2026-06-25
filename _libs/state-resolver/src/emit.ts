@@ -21,7 +21,7 @@ const supportedOptions = new Set(["forgejo", "komodo", "ssh-linux", "cloudflare-
 // node + one cloudflare node carrying the connection the author declared with i.have.host / i.have.cloudflare.
 // Every app shares one git/CI/deploy platform on that host, and one Cloudflare Tunnel owns the host's
 // aggregated ingress. The compiler folds the result into one desired-state artifact (a DesiredStateGraph).
-export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] => {
+export const emit = (intent: IntentSet, assignment: Assignment, zone: string | undefined): ResolvedNode[] => {
     for (const optionId of assignment.byNeed.values()) {
         if (!supportedOptions.has(optionId)) {
             throw new Error(`unsupported option "${optionId}"; the emitter only implements ${[...supportedOptions].join("/")}`);
@@ -37,8 +37,12 @@ export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] 
     if (host === undefined || cloudflare === undefined) {
         throw new Error("intent declares apps/services but no host/Cloudflare; declare them with i.have.host and i.have.cloudflare");
     }
+    if (zone === undefined) {
+        throw new Error(
+            "intent exposes apps/services through Cloudflare but no zone was provided; the CLI discovers it from the API token before resolving",
+        );
+    }
 
-    const zone = cloudflare.input.zone;
     const apiToken = cloudflare.input.apiToken;
     const ssh = {
         address: host.input.address,
@@ -56,7 +60,7 @@ export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] 
         {
             id: cloudflare.id,
             type: "cloudflare",
-            inputs: { accountId: cloudflare.input.accountId, apiToken, zone },
+            inputs: { apiToken, zone },
             explicitDependsOn: [],
         },
     ];
@@ -97,7 +101,7 @@ export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] 
         type: "tunnel",
         inputs: {
             name: tunnelName(host.id),
-            accountId: cloudflare.input.accountId,
+            accountId: makeRef(cloudflare.id, "accountId"),
             apiToken,
             ...ssh,
             internalIp: makeRef(host.id, "internalIp"),

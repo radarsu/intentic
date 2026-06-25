@@ -17,7 +17,8 @@ const fakeCloudflare = (): CloudflareApi => {
     let ingress: IngressRule[] | undefined;
     let seq = 0;
     return {
-        getZone: async () => ({ id: "zone-123" }),
+        getZone: async () => ({ id: "zone-123", accountId: "acct-1" }),
+        listZones: async () => [{ id: "zone-123", name: "example.com", accountId: "acct-1" }],
         findTunnel: async ({ name }) => {
             const id = tunnels.get(name);
             return id === undefined ? undefined : { id };
@@ -85,7 +86,7 @@ const graph: DesiredStateGraph = {
         cf: {
             id: "cf",
             type: "cloudflare",
-            inputs: { accountId: "acc_123", apiToken: { $secret: { source: "env", key: "CF_TOKEN" } }, zone: "example.com" },
+            inputs: { apiToken: { $secret: { source: "env", key: "CF_TOKEN" } }, zone: "example.com" },
             dependsOn: [],
         },
         "host-tunnel": {
@@ -93,7 +94,7 @@ const graph: DesiredStateGraph = {
             type: "tunnel",
             inputs: {
                 name: "intentic-host",
-                accountId: "acc_123",
+                accountId: { $ref: "cf.accountId" },
                 apiToken: { $secret: { source: "env", key: "CF_TOKEN" } },
                 address: "203.0.113.10",
                 user: "deploy",
@@ -137,7 +138,7 @@ test("the engine wires host -> cloudflare -> tunnel -> cf-route, then is idempot
         { id: "host-tunnel", type: "tunnel", action: "create" },
         { id: "cf-app-example-com", type: "cf-route", action: "create" },
     ]);
-    expect(first.outputs["cf"]).toEqual({ zoneId: "zone-123" });
+    expect(first.outputs["cf"]).toEqual({ zoneId: "zone-123", accountId: "acct-1" });
     expect(first.outputs["host-tunnel"]).toEqual({ tunnelId: "tunnel-0", cname: "tunnel-0.cfargotunnel.com" });
     expect(first.outputs["cf-app-example-com"]).toEqual({ url: "https://app.example.com" });
     expect(first.orphans).toEqual([]);

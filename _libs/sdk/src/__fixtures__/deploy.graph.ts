@@ -1,9 +1,9 @@
 import type { DesiredStateGraph } from "@intentic/graph";
 
 // Golden expected output for ../deploy.config.ts — regenerated from the compiled graph. Captures the
-// platform-self-init ordering: the tunnel comes up before the control plane (deps host+cf only, ingress
-// as {hostname,port} built from the host internal ip), deployments carry a deterministic port input, and
-// the control-plane nodes (repo/app/deployment/deploy-hook/notify) depend on their public cf-route.
+// platform-self-init ordering (the tunnel comes up before the control plane that reaches Forgejo/Komodo
+// through its public routes) and the CI/CD wiring: per-environment `ci` nodes (a Forgejo Actions workflow +
+// repo secrets) and Komodo `deployment` nodes pointed at the registry image — no Komodo Build, no deploy-hook.
 // Guarded by the topo-order, ref-edge, and secret tests.
 export const expectedGraph: DesiredStateGraph = {
     version: 1,
@@ -27,7 +27,6 @@ export const expectedGraph: DesiredStateGraph = {
             id: "cf",
             type: "cloudflare",
             inputs: {
-                accountId: "acc_123",
                 apiToken: {
                     $secret: {
                         source: "env",
@@ -130,15 +129,13 @@ export const expectedGraph: DesiredStateGraph = {
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
-                webhookSecret: {
-                    $secret: {
-                        source: "generated",
-                        key: "KOMODO_WEBHOOK_SECRET",
-                    },
-                },
                 gitAccount: "intentic",
                 gitToken: {
                     $ref: "host-git.gitToken",
+                },
+                registry: "localhost:3000",
+                packagesToken: {
+                    $ref: "host-git.packagesToken",
                 },
             },
             dependsOn: ["host", "host-git"],
@@ -210,42 +207,47 @@ export const expectedGraph: DesiredStateGraph = {
             },
             dependsOn: ["host-git", "cf-git-example-com"],
         },
-        "my-app": {
-            id: "my-app",
-            type: "app",
+        "my-app.staging-ci": {
+            id: "my-app.staging-ci",
+            type: "ci",
             inputs: {
-                source: {
-                    $ref: "my-app-repo.cloneUrl",
-                },
-                repoName: "my-app",
-                deployer: {
-                    $ref: "host-deploy",
-                },
-                komodoUrl: {
-                    $ref: "host-deploy.url",
-                },
-                gitInternalUrl: {
-                    $ref: "host-git.internalUrl",
+                forgejoUrl: {
+                    $ref: "host-git.url",
                 },
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
                         source: "generated",
+                        key: "FORGEJO_ADMIN_PASSWORD",
+                    },
+                },
+                komodoPassword: {
+                    $secret: {
+                        source: "generated",
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
+                repoName: "my-app",
+                branch: "develop",
+                registry: "localhost:3000",
+                tag: "staging",
+                packagesToken: {
+                    $ref: "host-git.packagesToken",
+                },
+                komodoUrl: {
+                    $ref: "host-deploy.internalUrl",
+                },
+                deployment: "my-app.staging",
             },
-            dependsOn: ["host-deploy", "cf-komodo-example-com", "my-app-repo", "host-git"],
+            dependsOn: ["host-git", "cf-git-example-com", "host-deploy", "my-app-repo"],
         },
         "my-app.staging": {
             id: "my-app.staging",
             type: "deployment",
             inputs: {
-                app: {
-                    $ref: "my-app",
-                },
-                name: "staging",
-                branch: "develop",
+                repoName: "my-app",
+                registry: "localhost:3000",
+                tag: "staging",
                 domain: "staging.example.com",
                 internalIp: {
                     $ref: "host.internalIp",
@@ -270,14 +272,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
             },
-            dependsOn: ["my-app", "cf-komodo-example-com", "host", "host-deploy"],
-            readyWhen: {
-                check: "httpOk",
-                url: {
-                    $ref: "my-app.staging.internalUrl",
-                },
-                timeout: "240s",
-            },
+            dependsOn: ["my-app.staging-ci", "cf-komodo-example-com", "host", "host-deploy"],
         },
         "cf-staging-example-com": {
             id: "cf-staging-example-com",
@@ -299,9 +294,9 @@ export const expectedGraph: DesiredStateGraph = {
             },
             dependsOn: ["cf", "host-tunnel"],
         },
-        "my-app.staging-deploy-hook": {
-            id: "my-app.staging-deploy-hook",
-            type: "deploy-hook",
+        "my-app.production-ci": {
+            id: "my-app.production-ci",
+            type: "ci",
             inputs: {
                 forgejoUrl: {
                     $ref: "host-git.url",
@@ -313,29 +308,33 @@ export const expectedGraph: DesiredStateGraph = {
                         key: "FORGEJO_ADMIN_PASSWORD",
                     },
                 },
-                repoName: "my-app",
-                komodoUrl: {
-                    $ref: "host-deploy.url",
-                },
-                branch: "develop",
-                secret: {
+                komodoPassword: {
                     $secret: {
                         source: "generated",
-                        key: "KOMODO_WEBHOOK_SECRET",
+                        key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
+                repoName: "my-app",
+                branch: "main",
+                registry: "localhost:3000",
+                tag: "production",
+                packagesToken: {
+                    $ref: "host-git.packagesToken",
+                },
+                komodoUrl: {
+                    $ref: "host-deploy.internalUrl",
+                },
+                deployment: "my-app.production",
             },
-            dependsOn: ["my-app-repo", "my-app.staging", "cf-git-example-com", "host-git", "host-deploy"],
+            dependsOn: ["host-git", "cf-git-example-com", "host-deploy", "my-app-repo"],
         },
         "my-app.production": {
             id: "my-app.production",
             type: "deployment",
             inputs: {
-                app: {
-                    $ref: "my-app",
-                },
-                name: "production",
-                branch: "main",
+                repoName: "my-app",
+                registry: "localhost:3000",
+                tag: "production",
                 domain: "app.example.com",
                 internalIp: {
                     $ref: "host.internalIp",
@@ -360,14 +359,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
             },
-            dependsOn: ["my-app", "cf-komodo-example-com", "host", "host-deploy"],
-            readyWhen: {
-                check: "httpOk",
-                url: {
-                    $ref: "my-app.production.internalUrl",
-                },
-                timeout: "240s",
-            },
+            dependsOn: ["my-app.production-ci", "cf-komodo-example-com", "host", "host-deploy"],
         },
         "cf-app-example-com": {
             id: "cf-app-example-com",
@@ -389,40 +381,14 @@ export const expectedGraph: DesiredStateGraph = {
             },
             dependsOn: ["cf", "host-tunnel"],
         },
-        "my-app.production-deploy-hook": {
-            id: "my-app.production-deploy-hook",
-            type: "deploy-hook",
-            inputs: {
-                forgejoUrl: {
-                    $ref: "host-git.url",
-                },
-                adminUser: "intentic",
-                adminPassword: {
-                    $secret: {
-                        source: "generated",
-                        key: "FORGEJO_ADMIN_PASSWORD",
-                    },
-                },
-                repoName: "my-app",
-                komodoUrl: {
-                    $ref: "host-deploy.url",
-                },
-                branch: "main",
-                secret: {
-                    $secret: {
-                        source: "generated",
-                        key: "KOMODO_WEBHOOK_SECRET",
-                    },
-                },
-            },
-            dependsOn: ["my-app-repo", "my-app.production", "cf-git-example-com", "host-git", "host-deploy"],
-        },
         "host-tunnel": {
             id: "host-tunnel",
             type: "tunnel",
             inputs: {
                 name: "intentic-host",
-                accountId: "acc_123",
+                accountId: {
+                    $ref: "cf.accountId",
+                },
                 apiToken: {
                     $secret: {
                         source: "env",

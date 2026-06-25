@@ -10,13 +10,13 @@ describe("loadIntent", () => {
     it("loads an intent that resolves to a compiled graph", async () => {
         const intent = await loadIntent(example);
         expect(intent.apps.length).toBeGreaterThan(0);
-        const graph = resolveState(intent);
+        const graph = resolveState(intent, "example.com");
         expect(graph.version).toBe(1);
         expect(Object.keys(graph.resources).length).toBeGreaterThan(0);
     });
 
     it("classifies secrets: externals are user-supplied, platform admin secrets are intentic-generated", async () => {
-        const graph = resolveState(await loadIntent(example));
+        const graph = resolveState(await loadIntent(example), "example.com");
         // FORGEJO_ADMIN_PASSWORD / KOMODO_ADMIN_PASSWORD are injected by the resolver's platform layer and
         // marked generated; the externals stay env (intentic can't invent them).
         expect(collectSecrets(graph)).toEqual({

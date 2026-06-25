@@ -22,13 +22,13 @@ test("public handles' output refs match OUTPUTS exactly", () => {
 
     defineStack((i) => {
         const host = i.have.host("host", { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") });
-        const cf = i.have.cloudflare("cf", { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" });
+        const cf = i.have.cloudflare("cf", { apiToken: env("CLOUDFLARE_API_TOKEN") });
         const app = i.want.app("app", { on: host, expose: cf, environments: { prod: { domain: "app.example.com", branch: "main" } } });
         handles["host"] = host;
         handles["cloudflare"] = cf;
         handles["repo"] = app.repo;
         handles["deployment"] = app.environments["prod"];
-    });
+    }, "example.com");
 
     // The App handle is the author's composite (repo + environments), not a resource type, so it is not walked
     // here. host/cloudflare are author-facing handles (i.have.*); repo/deployment are nested on the app handle.

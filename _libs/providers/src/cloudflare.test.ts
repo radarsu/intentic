@@ -8,6 +8,7 @@ const NOT_USED = async (): Promise<never> => {
 };
 const api = (overrides: Partial<CloudflareApi>): CloudflareApi => ({
     getZone: NOT_USED,
+    listZones: NOT_USED,
     findTunnel: NOT_USED,
     createTunnel: NOT_USED,
     getTunnelToken: NOT_USED,
@@ -30,11 +31,11 @@ const ctx = (log: (message: string) => void = () => {}) => ({
     },
 });
 
-const inputs = { accountId: "acct-1", apiToken: "token-xyz", zone: "example.com" };
+const inputs = { apiToken: "token-xyz", zone: "example.com" };
 
-test("read resolves the owned zone to its id", async () => {
-    const provider = createCloudflareProvider(api({ getZone: async () => ({ id: "zone-abc" }) }));
-    expect(await provider.read(inputs, ctx())).toEqual({ outputs: { zoneId: "zone-abc" } });
+test("read resolves the owned zone to its id and account", async () => {
+    const provider = createCloudflareProvider(api({ getZone: async () => ({ id: "zone-abc", accountId: "acct-1" }) }));
+    expect(await provider.read(inputs, ctx())).toEqual({ outputs: { zoneId: "zone-abc", accountId: "acct-1" } });
 });
 
 test("read returns undefined and logs when the zone is not found", async () => {
@@ -60,9 +61,9 @@ test("read propagates an API error", async () => {
     await expect(provider.read(inputs, ctx())).rejects.toThrow(/403/);
 });
 
-test("apply returns the zone id when found", async () => {
-    const provider = createCloudflareProvider(api({ getZone: async () => ({ id: "zone-abc" }) }));
-    expect(await provider.apply(inputs, undefined, ctx())).toEqual({ zoneId: "zone-abc" });
+test("apply returns the zone id and account when found", async () => {
+    const provider = createCloudflareProvider(api({ getZone: async () => ({ id: "zone-abc", accountId: "acct-1" }) }));
+    expect(await provider.apply(inputs, undefined, ctx())).toEqual({ zoneId: "zone-abc", accountId: "acct-1" });
 });
 
 test("apply throws when the owned zone does not exist", async () => {
@@ -75,21 +76,21 @@ test("diff is always noop for an owned zone", () => {
     expect(provider.diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
 });
 
-test("the account and token flow through to getZone", async () => {
-    let captured: { accountId: string; apiToken: string; zone: string } | undefined;
+test("the token and zone flow through to getZone", async () => {
+    let captured: { apiToken: string; zone: string } | undefined;
     const provider = createCloudflareProvider(
         api({
             getZone: async (args) => {
                 captured = args;
-                return { id: "z" };
+                return { id: "z", accountId: "a" };
             },
         }),
     );
     await provider.read(inputs, ctx());
-    expect(captured).toEqual({ accountId: "acct-1", apiToken: "token-xyz", zone: "example.com" });
+    expect(captured).toEqual({ apiToken: "token-xyz", zone: "example.com" });
 });
 
 test("malformed inputs are rejected", async () => {
     const provider = createCloudflareProvider(api({}));
-    await expect(provider.read({ accountId: "a", zone: "z" }, ctx())).rejects.toThrow(/cloudflare inputs malformed/);
+    await expect(provider.read({ zone: "z" }, ctx())).rejects.toThrow(/cloudflare inputs malformed/);
 });

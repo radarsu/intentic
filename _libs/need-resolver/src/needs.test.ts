@@ -5,7 +5,7 @@ import type { CloudflareIntent, HostIntent, IntentSet } from "./intent.js";
 import { resolveNeeds } from "./needs.js";
 
 const host: HostIntent = { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } };
-const cloudflare: CloudflareIntent = { id: "cf", input: { accountId: "acc_123", apiToken: env("CLOUDFLARE_API_TOKEN"), zone: "example.com" } };
+const cloudflare: CloudflareIntent = { id: "cf", input: { apiToken: env("CLOUDFLARE_API_TOKEN") } };
 
 test("an app derives the four host capabilities plus a domain", () => {
     const intent: IntentSet = {

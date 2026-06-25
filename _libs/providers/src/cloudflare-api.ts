@@ -14,12 +14,17 @@ const ingressRuleSchema = z.object({ hostname: z.string().optional(), service: z
 // fake; the default `cloudflareApi` below talks to api.cloudflare.com over native fetch. Auth flows
 // per-call (the bearer token is a resolved node input), never baked into the adapter at construction.
 export interface CloudflareApi {
-    // Resolve an OWNED zone by name within an account; undefined if no such zone exists.
+    // Resolve an OWNED zone by name; undefined if no such zone exists. The account that owns it comes back
+    // with the zone (a zone name is globally unique across Cloudflare), so callers need not supply it.
     readonly getZone: (args: {
-        readonly accountId: string;
         readonly apiToken: string;
         readonly zone: string;
-    }) => Promise<{ readonly id: string } | undefined>;
+    }) => Promise<{ readonly id: string; readonly accountId: string } | undefined>;
+    // Every zone the token can see, with the account that owns each. Used to discover which zone the authored
+    // domains live under — the token is the only Cloudflare credential the author supplies.
+    readonly listZones: (args: {
+        readonly apiToken: string;
+    }) => Promise<{ readonly id: string; readonly name: string; readonly accountId: string }[]>;
     // Find a cloudflared tunnel by exact name (excluding soft-deleted); undefined if none.
     readonly findTunnel: (args: {
         readonly accountId: string;
@@ -86,11 +91,14 @@ const envelopeSchema = z.object({
     success: z.boolean(),
     errors: z.array(z.object({ code: z.number(), message: z.string() })),
     result: z.unknown(),
+    // Present on list endpoints; carries the page count so callers can paginate.
+    result_info: z.object({ total_pages: z.number() }).optional(),
 });
 
-const call = async <S extends z.ZodType>(apiToken: string, path: string, resultSchema: S, init?: RequestInit): Promise<z.infer<S>> => {
-    const method = init?.method ?? "GET";
-    const label = `Cloudflare API ${method} ${path}`;
+// Fetch + validate the success envelope, throwing transport/API errors. Returns the whole envelope so list
+// callers can read result_info (pagination) alongside result.
+const request = async (apiToken: string, path: string, init?: RequestInit): Promise<z.infer<typeof envelopeSchema>> => {
+    const label = `Cloudflare API ${init?.method ?? "GET"} ${path}`;
     const response = await fetch(`${BASE}${path}`, {
         ...init,
         headers: {
@@ -103,21 +111,45 @@ const call = async <S extends z.ZodType>(apiToken: string, path: string, resultS
         const detail = envelope.errors.map((error) => `${error.code} ${error.message}`).join("; ");
         throw new Error(`${label} failed (HTTP ${response.status}): ${detail}`);
     }
-    return parseResponse(resultSchema, envelope.result, label);
+    return envelope;
+};
+
+const call = async <S extends z.ZodType>(apiToken: string, path: string, resultSchema: S, init?: RequestInit): Promise<z.infer<S>> => {
+    const envelope = await request(apiToken, path, init);
+    return parseResponse(resultSchema, envelope.result, `Cloudflare API ${init?.method ?? "GET"} ${path}`);
 };
 
 export const cloudflareApi: CloudflareApi = {
-    getZone: async ({ accountId, apiToken, zone }) => {
+    getZone: async ({ apiToken, zone }) => {
         const zones = await call(
             apiToken,
-            `/zones?name=${encodeURIComponent(zone)}&account.id=${encodeURIComponent(accountId)}`,
-            z.array(z.object({ id: z.string() })),
+            `/zones?name=${encodeURIComponent(zone)}`,
+            z.array(z.object({ id: z.string(), account: z.object({ id: z.string() }) })),
         );
         const found = zones[0];
         if (found === undefined) {
             return undefined;
         }
-        return { id: found.id };
+        return { id: found.id, accountId: found.account.id };
+    },
+    listZones: async ({ apiToken }) => {
+        const zones: { id: string; name: string; accountId: string }[] = [];
+        let page = 1;
+        let totalPages = 1;
+        do {
+            const envelope = await request(apiToken, `/zones?per_page=50&page=${page}`);
+            const parsed = parseResponse(
+                z.array(z.object({ id: z.string(), name: z.string(), account: z.object({ id: z.string() }) })),
+                envelope.result,
+                `Cloudflare API GET /zones?per_page=50&page=${page}`,
+            );
+            for (const zone of parsed) {
+                zones.push({ id: zone.id, name: zone.name, accountId: zone.account.id });
+            }
+            totalPages = envelope.result_info?.total_pages ?? 1;
+            page += 1;
+        } while (page <= totalPages);
+        return zones;
     },
     findTunnel: async ({ accountId, apiToken, name }) => {
         const tunnels = await call(
