@@ -15,6 +15,12 @@ const fakeSsh = (opts: { running?: boolean; registered?: boolean; runFails?: boo
             if (command.includes("cat /data/.runner")) {
                 return res(opts.registered ? '{"address":"https://git.example.com"}' : "");
             }
+            if (command.includes("command -v docker")) {
+                return res("/usr/local/bin/docker");
+            }
+            if (command.includes("docker-buildx")) {
+                return res("/usr/local/libexec/docker/cli-plugins/docker-buildx");
+            }
             if (command.includes("docker run")) {
                 return res("id", opts.runFails ? 1 : 0);
             }
@@ -69,11 +75,14 @@ test("apply registers against the instance + token and starts the daemon, return
         ssh.commands.some(
             (c) =>
                 c.includes("docker run") &&
+                c.includes("--config /config.yaml") &&
                 c.includes("--instance https://git.example.com") &&
                 c.includes("--token tok-123") &&
                 c.includes("intentic.id=host-git-runner"),
         ),
     ).toBe(true);
+    // The runner config wires the host docker into job containers (socket auto-mounted + the host CLI/buildx bind-mounted).
+    expect(ssh.commands.some((c) => c.includes("config.yaml") && c.includes("docker_host: automount") && c.includes("docker-buildx"))).toBe(true);
 });
 
 test("apply throws when docker run exits non-zero", async () => {

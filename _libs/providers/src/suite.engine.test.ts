@@ -34,6 +34,8 @@ const fakeSsh = (): SshExecutor => {
                     gitTokenPersisted = true;
                     return ok("gtok");
                 }
+                if (command.includes("command -v docker")) return ok("/usr/local/bin/docker");
+                if (command.includes("docker-buildx")) return ok("/usr/local/libexec/docker/cli-plugins/docker-buildx");
                 const label = /docker ps --filter "label=intentic.id=([^"]+)"/.exec(command);
                 if (label?.[1] !== undefined) return ok(started.has(label[1]) ? "komodo-core-1" : "");
                 const ps = /docker ps --filter "name=\^([^$]+)\$"/.exec(command);

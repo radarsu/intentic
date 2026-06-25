@@ -269,12 +269,13 @@ const up = async (): Promise<void> => {
         // intentic only WIRES CI/CD — the apply above committed the Forgejo Actions workflow + repo secrets and
         // registered the Komodo deployment; it does NOT build or deploy. CI seeded a placeholder Dockerfile, so
         // pushing the real one above triggers the Action: build -> push to the registry -> Komodo rolls it out.
-        log(`▶ CI builds + pushes the image and Komodo rolls it out — polling http://127.0.0.1:${appPort} (up to 5 min) …`);
-        for (let i = 0; i < 60 && !appDeployed; i++) {
+        log(`▶ CI builds + pushes the image and Komodo rolls it out — polling http://127.0.0.1:${appPort} …`);
+        const deadline = Date.now() + 5 * 60_000;
+        while (!appDeployed && Date.now() < deadline) {
             const hit = (await ssh(`wget -q -T 5 -O- http://127.0.0.1:${appPort} 2>/dev/null || true`)).trim();
             appDeployed = hit.includes(APP_BODY);
             if (!appDeployed) {
-                await sleep(5000);
+                await sleep(2000);
             }
         }
         log(appDeployed ? `✅ app deployed by CI/CD — serving "${APP_BODY}" on the host` : `⚠ app not live yet on :${appPort} (CI/CD may still be running)`);
@@ -302,7 +303,8 @@ const up = async (): Promise<void> => {
     log(`    (saved in ${join(workspace, "desired-state", ".secrets.json")})`);
     log(`  SSH into the host:  ssh -p ${sshPort} root@127.0.0.1   (key in ${join(workspace, "desired-state", ".env")})`);
     log("  Push the control-plane repos to Forgejo:  pnpm intentic adopt   (once git DNS is live)");
-    log("  Tear it all down :  pnpm demo:down");
+    log("  Stop (reuses tunnel + DNS, fast re-up) :  pnpm demo:down");
+    log("  Full teardown (also removes tunnel+DNS):  pnpm demo:clear");
     log("  Note: keep this machine + Docker running; the public URLs share the");
     log("        tunnel name 'intentic-host', so don't run the e2e at the same time.");
     log("════════════════════════════════════════════════════════════════════");
@@ -313,7 +315,20 @@ interface DemoState {
     readonly apiToken: string;
 }
 
+// Stop the demo without touching Cloudflare: remove the host container (which kills the cloudflared
+// connector). The tunnel + DNS records are LEFT intact, so the next `up` reuses the tunnel by name and the
+// records already point at it — the connector reconnects in seconds with no DNS delete/recreate, so resolvers
+// never cache NXDOMAIN (which would make the domains look dead for up to the zone's negative-TTL). Use `clear`
+// to also purge the Cloudflare tunnel + DNS.
 const down = async (): Promise<void> => {
+    log(`▶ stopping the demo host container (${CONTAINER}) — leaving the Cloudflare tunnel + DNS for a fast re-up …`);
+    await quiet("docker", ["rm", "-f", CONTAINER]);
+    log("✅ demo stopped. `pnpm demo:up` reconnects in seconds (tunnel + DNS reused); `pnpm demo:clear` tears down Cloudflare too.");
+};
+
+// Full teardown: remove the host container AND purge the live Cloudflare resources this demo created (the
+// tunnel + DNS records), then drop the local state.
+const clear = async (): Promise<void> => {
     const state: Partial<DemoState> = await readFile(stateFile, "utf8")
         .then((text) => JSON.parse(text) as DemoState)
         .catch(() => ({}));
@@ -348,10 +363,10 @@ const down = async (): Promise<void> => {
         }
     }
 
-    // The workspace is now the repo root (intent/ + desired-state/ are gitignored scratch dirs holding the
-    // generated .secrets.json) — deliberately left in place so `intentic adopt` can still run after teardown.
+    // intent/ + desired-state/ are gitignored scratch dirs holding the generated .secrets.json — left in place
+    // so `intentic adopt` can still run after teardown.
     await rm(stateDir, { recursive: true, force: true }).catch(() => {});
-    log("✅ demo torn down — host container, tunnel, and DNS records removed (intent/ + desired-state/ kept).");
+    log("✅ demo cleared — host container, tunnel, and DNS records removed (intent/ + desired-state/ kept).");
 };
 
 const mode = process.argv[2];
@@ -359,7 +374,9 @@ if (mode === "up") {
     await up();
 } else if (mode === "down") {
     await down();
+} else if (mode === "clear" || mode === "clean") {
+    await clear();
 } else {
-    log("usage: demo <up|down>");
+    log("usage: demo <up|down|clear>");
     process.exit(1);
 }

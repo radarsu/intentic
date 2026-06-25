@@ -120,7 +120,7 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         "KOMODO_FIRST_SERVER_ADDRESS=https://periphery:8120",
         // How often Komodo polls a deployment's registry tag for a new digest; with auto_update set, a CI push
         // goes live within this window even if the workflow's notify step is unavailable.
-        "KOMODO_RESOURCE_POLL_INTERVAL=OneMinute",
+        "KOMODO_RESOURCE_POLL_INTERVAL=1-min",
     ]
         .map((line) => `'${line}'`)
         .join(" ");

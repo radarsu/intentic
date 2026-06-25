@@ -202,7 +202,7 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
             if (Date.now() >= deadline) {
                 throw new Error(`${url} never returned a live-origin response; last=${JSON.stringify(last)}`);
             }
-            await new Promise((resolve) => setTimeout(resolve, 5_000));
+            await new Promise((resolve) => setTimeout(resolve, 2_000));
         }
     };
 

@@ -105,9 +105,7 @@ test("apply writes compose + a once-guarded env, brings the stack up, waits for 
         ),
     ).toBe(true);
     // The resource poll interval is baked into the once-guarded .env so auto_update can roll out new images.
-    expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/komodo/.env") && c.includes("KOMODO_RESOURCE_POLL_INTERVAL=OneMinute"))).toBe(
-        true,
-    );
+    expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/komodo/.env") && c.includes("KOMODO_RESOURCE_POLL_INTERVAL=1-min"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("docker compose -p komodo") && c.includes("up -d"))).toBe(true);
 });
 
