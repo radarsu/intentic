@@ -1,5 +1,4 @@
 import { execFile, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -8,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { cloudflareApi, forgejoApi, sshExecutor } from "@intentic/providers";
 import { deploymentId, deploymentPort } from "@intentic/state-resolver";
+import { readGeneratedSecrets } from "./generated-secrets.js";
 
 // ssh2 is CommonJS; under raw Node ESM `import { utils }` can't be resolved as a named export, so load it
 // through createRequire (the keygen is the only piece we need).
@@ -128,12 +128,11 @@ export const intent = defineIntent((i) => {
 });
 `;
 
-const envFile = (privateKey: string, forgejoPassword: string, komodoPassword: string, webhookSecret: string, apiToken: string): string =>
+// Only the externals intentic can't invent; the Forgejo/Komodo admin passwords are intentic-generated into
+// desired-state/.secrets.json by resolve/apply (we read them back below to sign in).
+const envFile = (privateKey: string, apiToken: string): string =>
     `HOST_SSH_KEY="${privateKey}"
 CLOUDFLARE_API_TOKEN=${apiToken}
-FORGEJO_ADMIN_PASSWORD=${forgejoPassword}
-KOMODO_ADMIN_PASSWORD=${komodoPassword}
-KOMODO_WEBHOOK_SECRET=${webhookSecret}
 `;
 
 // A trivial buildable app: busybox httpd serving a known body on $PORT (Komodo sets PORT to appPort).
@@ -160,9 +159,9 @@ const up = async (): Promise<void> => {
     const apiToken = await readToken();
     const keys = utils.generateKeyPairSync("ed25519");
     privateKey = keys.private;
-    const forgejoPassword = randomBytes(16).toString("hex");
-    const komodoPassword = randomBytes(16).toString("hex");
-    const webhookSecret = randomBytes(16).toString("hex");
+    // Filled after the platform apply, from the secrets intentic generated into desired-state/.secrets.json.
+    let forgejoPassword = "";
+    let komodoPassword = "";
 
     log(`▶ building the demo host image (${CONTAINER}) from test/host …`);
     await run("docker", ["build", "-t", CONTAINER, join(repoRoot, "test/host")]);
@@ -229,7 +228,6 @@ const up = async (): Promise<void> => {
                 workspace,
                 urls: { git: GIT_URL, komodo: KOMODO_URL, app: APP_URL },
                 local: { git: `http://127.0.0.1:${forgejoPort}`, komodo: `http://127.0.0.1:${komodoPort}` },
-                admin: { user: ADMIN, forgejo: forgejoPassword, komodo: komodoPassword },
             },
             null,
             2,
@@ -239,11 +237,17 @@ const up = async (): Promise<void> => {
     log("▶ scaffolding the intent (init --link) …");
     await runCli("init", "--dir", workspace, "--link");
     await writeFile(configPath, deployConfig(false));
-    await writeFile(join(workspace, "desired-state", ".env"), envFile(privateKey, forgejoPassword, komodoPassword, webhookSecret, apiToken));
+    await writeFile(join(workspace, "desired-state", ".env"), envFile(privateKey, apiToken));
 
     log("▶ phase 1 — resolve + apply (Forgejo + Komodo + tunnel) …");
     await runCli("resolve", "--config", configPath, "--out", artifactPath);
     await runCli("apply", "--artifact", artifactPath, "--maxIterations", "8");
+
+    // Read the admin passwords intentic generated (resolve wrote desired-state/.secrets.json), so the rest of
+    // the demo signs in with exactly what bootstrapped Forgejo/Komodo.
+    const secrets = await readGeneratedSecrets(join(workspace, "desired-state"));
+    forgejoPassword = secrets["FORGEJO_ADMIN_PASSWORD"] ?? "";
+    komodoPassword = secrets["KOMODO_ADMIN_PASSWORD"] ?? "";
 
     const running = await ssh("docker ps --format '{{.Names}}'");
     for (const name of ["intentic-forgejo", "intentic-forgejo-runner", "komodo-core"]) {
@@ -291,10 +295,11 @@ const up = async (): Promise<void> => {
     log("  Local (instant, no DNS needed):");
     log(`    Forgejo : http://127.0.0.1:${forgejoPort}`);
     log(`    Komodo  : http://127.0.0.1:${komodoPort}`);
-    log("  Admin login (generated this run):");
+    log("  Admin login (intentic-generated):");
     log(`    user     : ${ADMIN}`);
     log(`    Forgejo pw: ${forgejoPassword}`);
     log(`    Komodo pw : ${komodoPassword}`);
+    log(`    (saved in ${join(workspace, "desired-state", ".secrets.json")})`);
     log(`  SSH into the host:  ssh -p ${sshPort} root@127.0.0.1   (key in ${join(workspace, "desired-state", ".env")})`);
     log("  Tear it all down :  pnpm demo:down");
     log("  Note: keep this machine + Docker running; the public URLs share the");

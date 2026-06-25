@@ -17,7 +17,8 @@ Built on [stricli](https://github.com/bloomberg/stricli) with generated `--help`
 - `intentic init [--dir .]` — scaffold the `intent` and `desired-state` git repos (intent seeded
   with a starter `deploy.config.ts`).
 - `intentic resolve [--config deploy.config.ts] [--out desired-state.json]` —
-  load the intent, resolve it to a `DesiredStateGraph`, and write it. Pure: no secrets, no infra access.
+  load the intent, resolve it to a `DesiredStateGraph`, and write it, along with `.env.example` (the
+  user-supplied secrets) and `.secrets.json` (the intentic-generated ones). No infra access.
 - `intentic plan [--artifact desired-state.json]` — read-only preview of what `apply` would
   create/update.
 - `intentic apply [--artifact desired-state.json] [--max-iterations 5]` — reconcile the artifact
@@ -36,11 +37,12 @@ Secrets split by who provides them:
   `.env` beside the artifact (or the ambient environment). The required set is more than what your
   `deploy.config.ts` names, so `resolve` derives it from the graph and writes `desired-state/.env.example`.
 - **intentic-generated** (`source: generated`) — admin credentials for the services intentic itself
-  provisions: `FORGEJO_ADMIN_PASSWORD`, `KOMODO_ADMIN_PASSWORD`, `KOMODO_WEBHOOK_SECRET`. `plan`/`apply`
-  generate each one (shell-safe hex) the first time and persist it to gitignored
-  `desired-state/.secrets.json`, reusing it forever after (Forgejo/Komodo bake the password in on first
-  init and won't re-key, so it must be stable). The chosen Forgejo/Komodo password is what you log in
-  with, as user `intentic`. Setting one of these in `.env` overrides generation (pins your own value).
+  provisions: `FORGEJO_ADMIN_PASSWORD`, `KOMODO_ADMIN_PASSWORD`, `KOMODO_WEBHOOK_SECRET`. `resolve`
+  generates each one (shell-safe hex) the first time and persists it to gitignored
+  `desired-state/.secrets.json`, reusing it forever after (`plan`/`apply` reuse it too; Forgejo/Komodo
+  bake the password in on first init and won't re-key, so it must be stable). intentic **owns** this
+  file — it's authoritative, so put platform keys here, not in `.env`; to pin your own value, edit
+  `.secrets.json`. The Forgejo/Komodo password is what you log in with, as user `intentic`.
 
 Both `.env` and `.secrets.json` are gitignored, so no secret lands in the PR-managed repo.
 

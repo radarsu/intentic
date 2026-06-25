@@ -9,6 +9,7 @@ import { deploymentId, deploymentPort } from "@intentic/state-resolver";
 import { utils } from "ssh2";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { readGeneratedSecrets } from "./generated-secrets.js";
 
 // The realistic Tier-1 run: boot a Docker-in-Docker "host", then drive the REAL CLI (pnpm intentic
 // init/resolve/apply) exactly as an operator would — scaffold, author a deploy.config.ts pointed at the
@@ -18,8 +19,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // live at app.<zone>. Gated behind INTENTIC_E2E because it needs a privileged Docker daemon + live Cloudflare
 // credentials (with DNS-edit + tunnel-edit scopes) on a zone you own, so default `pnpm test` / CI skip it.
 //
-// Required env: INTENTIC_E2E=1, CLOUDFLARE_API_TOKEN, FORGEJO_ADMIN_PASSWORD, KOMODO_ADMIN_PASSWORD,
-// KOMODO_WEBHOOK_SECRET. The host SSH key is generated per-run and written into the .env the CLI loads.
+// Required env: INTENTIC_E2E=1, CLOUDFLARE_API_TOKEN. The host SSH key is generated per-run and written into
+// the .env the CLI loads; the Forgejo/Komodo admin passwords are intentic-generated (read back from
+// desired-state/.secrets.json to sign in).
 const enabled = process.env["INTENTIC_E2E"] === "1" || process.env["INTENTIC_E2E"] === "true";
 
 const exec = promisify(execFile);
@@ -95,9 +97,6 @@ export const intent = defineIntent((i) => {
 const envFile = (privateKey: string): string =>
     `HOST_SSH_KEY="${privateKey}"
 CLOUDFLARE_API_TOKEN=${required("CLOUDFLARE_API_TOKEN")}
-FORGEJO_ADMIN_PASSWORD=${required("FORGEJO_ADMIN_PASSWORD")}
-KOMODO_ADMIN_PASSWORD=${required("KOMODO_ADMIN_PASSWORD")}
-KOMODO_WEBHOOK_SECRET=${required("KOMODO_WEBHOOK_SECRET")}
 `;
 
 describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + DinD)", () => {
@@ -108,9 +107,6 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
 
     beforeAll(async () => {
         apiToken = required("CLOUDFLARE_API_TOKEN");
-        required("FORGEJO_ADMIN_PASSWORD");
-        required("KOMODO_ADMIN_PASSWORD");
-        required("KOMODO_WEBHOOK_SECRET");
 
         const keys = utils.generateKeyPairSync("ed25519");
         privateKey = keys.private;
@@ -228,6 +224,9 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         await intentic("resolve", "--config", configPath, "--out", artifactPath);
         await intentic("apply", "--artifact", artifactPath, "--maxIterations", "8");
 
+        // The admin password intentic generated (in desired-state/.secrets.json) — what bootstrapped Forgejo.
+        const forgejoPassword = (await readGeneratedSecrets(join(tmp, "desired-state")))["FORGEJO_ADMIN_PASSWORD"] ?? "";
+
         // The platform containers actually came up on the host.
         const running = await sshRun("docker ps --format '{{.Names}}'");
         expect(running).toContain("intentic-forgejo");
@@ -246,7 +245,7 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         await forgejoApi.commitFile({
             baseUrl: `https://${GIT_DOMAIN}`,
             user: ADMIN,
-            password: required("FORGEJO_ADMIN_PASSWORD"),
+            password: forgejoPassword,
             owner: ADMIN,
             name: APP,
             branch: "main",

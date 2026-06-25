@@ -64,15 +64,16 @@ const resolveCommand = buildCommand<ResolveFlags>({
         this.process.stdout.write(`resolved desired state (${count} resources) → ${out}\n`);
         // The resolver classifies each secret: `env` ones the user must supply (only knowable from the graph,
         // since the resolver injects platform secrets the authored config never names) → .env.example; the
-        // `generated` ones (Forgejo/Komodo admin) intentic creates itself on apply. Resolve only announces
-        // them — generation happens in plan/apply, which load `.env` first so an explicit override is honored.
+        // `generated` ones (Forgejo/Komodo admin) intentic creates and owns itself → .secrets.json, written
+        // here so it exists right after resolve (apply/plan reuse it).
         const { env: envKeys, generated } = collectSecrets(graph);
         if (envKeys.length > 0) {
             await writeEnvExample(join(dir, `${ENV_FILE}.example`), envKeys);
             this.process.stdout.write(`set these in ${ENV_FILE} before apply (see ${ENV_FILE}.example): ${envKeys.join(", ")}\n`);
         }
         if (generated.length > 0) {
-            this.process.stdout.write(`intentic generates these on apply (stored in .secrets.json): ${generated.join(", ")}\n`);
+            await ensureGeneratedSecrets(dir, generated, process.env);
+            this.process.stdout.write(`generated these (stored in .secrets.json): ${generated.join(", ")}\n`);
         }
     },
 });
