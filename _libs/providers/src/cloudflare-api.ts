@@ -91,8 +91,10 @@ const envelopeSchema = z.object({
     success: z.boolean(),
     errors: z.array(z.object({ code: z.number(), message: z.string() })),
     result: z.unknown(),
-    // Present on list endpoints; carries the page count so callers can paginate.
-    result_info: z.object({ total_pages: z.number() }).optional(),
+    // Pagination metadata, present in varying shapes on list endpoints — left unknown so the shared
+    // success-envelope check never trips on an endpoint whose result_info omits total_pages (cfd_tunnel,
+    // dns_records). listZones extracts the page count from it defensively.
+    result_info: z.unknown().optional(),
 });
 
 // Fetch + validate the success envelope, throwing transport/API errors. Returns the whole envelope so list
@@ -146,7 +148,7 @@ export const cloudflareApi: CloudflareApi = {
             for (const zone of parsed) {
                 zones.push({ id: zone.id, name: zone.name, accountId: zone.account.id });
             }
-            totalPages = envelope.result_info?.total_pages ?? 1;
+            totalPages = z.object({ total_pages: z.number() }).safeParse(envelope.result_info).data?.total_pages ?? 1;
             page += 1;
         } while (page <= totalPages);
         return zones;

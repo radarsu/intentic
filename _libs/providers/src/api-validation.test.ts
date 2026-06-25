@@ -53,6 +53,13 @@ test("cloudflare listZones parses the zone list with each zone's account", async
     expect(await cloudflareApi.listZones({ apiToken: "t" })).toEqual([{ id: "zone-1", name: "example.com", accountId: "acct-1" }]);
 });
 
+test("cloudflare tolerates a result_info without total_pages on a non-paginated call", async () => {
+    // Real cfd_tunnel / dns_records list responses carry a result_info that omits total_pages; the shared
+    // success envelope must not reject them — only listZones reads total_pages.
+    stubFetch({ success: true, errors: [], result: [{ id: "tunnel-1" }], result_info: { count: 1, page: 1, per_page: 50, total_count: 1 } });
+    expect(await cloudflareApi.findTunnel({ accountId: "a", apiToken: "t", name: "intentic-host" })).toEqual({ id: "tunnel-1" });
+});
+
 test("cloudflare surfaces an API error envelope (success:false) as a failed call", async () => {
     stubFetch({ success: false, errors: [{ code: 1003, message: "invalid zone" }], result: null });
     await expect(cloudflareApi.getZone({ apiToken: "t", zone: "example.com" })).rejects.toThrow(/failed.*invalid zone/);
