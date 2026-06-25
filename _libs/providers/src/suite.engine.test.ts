@@ -116,27 +116,16 @@ const fakeForgejoApi = (): ForgejoApi => {
             files.set(`${name}@${branch}`, "");
             files.set(`${name}@${branch}:${path}`, content);
         },
+        setRepoSecret: async () => {},
     };
 };
 
 const fakeKomodoApi = (): KomodoApi => {
-    const builds = new Map<string, string>();
     const deployments = new Map<string, { id: string; config: DeploymentConfig }>();
     const alerters = new Map<string, { id: string; config: AlerterConfig }>();
     let seq = 0;
-    let builtAt = 0;
     return {
         login: async () => "jwt",
-        listBuilds: async () => [...builds].map(([name, id]) => ({ id, name })),
-        createBuild: async ({ name }) => {
-            builds.set(name, `b-${seq++}`);
-        },
-        updateBuild: async () => {},
-        listBuilders: async () => [{ id: "builder-1", name: "Local" }],
-        createBuilder: async () => {},
-        runBuild: async () => {},
-        // Each poll reports a newer build so runBuildAndWait sees the image land on its next check.
-        getBuild: async () => ({ lastBuiltAt: (builtAt += 1), remoteError: undefined }),
         listDeployments: async () => [...deployments].map(([name, value]) => ({ id: value.id, name })),
         getDeployment: async ({ deployment }) => {
             const value = deployments.get(deployment);
@@ -155,7 +144,6 @@ const fakeKomodoApi = (): KomodoApi => {
                 }
             }
         },
-        deploy: async () => {},
         listAlerters: async () => [...alerters].map(([name, value]) => ({ id: value.id, name })),
         getAlerter: async ({ id }) => {
             for (const value of alerters.values()) {
@@ -183,7 +171,6 @@ const fullEnv = {
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
-    KOMODO_WEBHOOK_SECRET: "k",
     DISCORD_WEBHOOK: "https://discord.test/wh",
 };
 
@@ -225,7 +212,7 @@ test("the full provider suite reconciles a notify-enabled app end-to-end, then i
             expect(action, `expected ${id} to be created`).toBe("create");
         }
     }
-    // The whole derived suite is present: git/CI, deploy, repo, app, deployment, routes, notify, deploy-hook.
+    // The whole derived suite is present: git/CI, deploy, repo, ci, deployment, routes, notify.
     expect([...byId.keys()].sort()).toEqual(
         [
             "host",
@@ -236,10 +223,9 @@ test("the full provider suite reconciles a notify-enabled app end-to-end, then i
             "cf-git-example-com",
             "cf-komodo-example-com",
             "my-app-repo",
-            "my-app",
+            "my-app.production-ci",
             "my-app.production",
             "cf-app-example-com",
-            "my-app.production-deploy-hook",
             "my-app-repo-notify",
             "my-app-notify",
             "host-tunnel",

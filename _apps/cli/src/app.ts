@@ -6,22 +6,25 @@ import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
 import { collectAccess, formatAccessSummary, writeAccessFile } from "./access.js";
+import { adoptRepos } from "./adopt.js";
 import {
     ACCESS_FILE,
     ARTIFACT_PATH,
     CONFIG_FILE,
     CONFIG_PATH,
     ENV_FILE,
+    INTENT_DIR,
     loadEnvFile,
     readArtifact,
     STATUS_FILE,
+    TARGET_DIR,
     writeArtifact,
     writeStatus,
 } from "./artifact.js";
-import { ensureGeneratedSecrets } from "./generated-secrets.js";
+import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
 import { loadIntent } from "./resolve.js";
-import { collectSecrets, writeEnvExample } from "./secrets.js";
+import { collectSecrets, secretRef, writeEnvExample } from "./secrets.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -149,9 +152,53 @@ const apply = buildCommand<ApplyFlags>({
     },
 });
 
+const adopt = buildCommand<{ artifact?: string }>({
+    docs: { brief: "Push the local intent and desired-state repos to the provisioned Forgejo" },
+    parameters: {
+        flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_PATH})` } },
+    },
+    async func(this: CommandContext, flags: { artifact?: string }) {
+        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const artifact = flags.artifact ?? ARTIFACT_PATH;
+        const targetDir = dirname(artifact);
+        // The scaffold layout: the intent repo is a sibling of the desired-state repo (`init` makes both).
+        const intentDir = join(dirname(targetDir), INTENT_DIR);
+        loadEnvFile(targetDir);
+        const graph = await readArtifact(artifact);
+        // Forgejo is what hosts the repos; its node carries the public domain + admin identity we push with.
+        const forgejo = Object.values(graph.resources).find((node) => node.type === "forgejo");
+        if (forgejo === undefined) {
+            throw new Error("no forgejo resource in the artifact — run `intentic apply` first");
+        }
+        const domain = forgejo.inputs["domain"];
+        const user = forgejo.inputs["adminUser"];
+        if (typeof domain !== "string" || typeof user !== "string") {
+            throw new Error("forgejo resource is missing its domain/adminUser inputs");
+        }
+        const ref = secretRef(forgejo.inputs["adminPassword"]);
+        if (ref === undefined) {
+            throw new Error("forgejo resource is missing its adminPassword secret");
+        }
+        const password = ref.source === "generated" ? (await readGeneratedSecrets(targetDir))[ref.key] : process.env[ref.key];
+        if (password === undefined || password === "") {
+            throw new Error(`forgejo admin password (${ref.source} secret ${ref.key}) is not available`);
+        }
+        await adoptRepos({
+            baseUrl: `https://${domain}`,
+            user,
+            password,
+            repos: [
+                { dir: intentDir, name: INTENT_DIR },
+                { dir: targetDir, name: TARGET_DIR },
+            ],
+            log,
+        });
+    },
+});
+
 export const app = buildApplication(
     buildRouteMap({
-        routes: { init, resolve: resolveCommand, plan: planCommand, apply },
+        routes: { init, resolve: resolveCommand, plan: planCommand, apply, adopt },
         docs: { brief: "intentic — intent-driven deployment" },
     }),
     {

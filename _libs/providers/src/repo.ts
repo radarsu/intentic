@@ -65,6 +65,7 @@ export const createRepoProvider = (api: ForgejoApi = forgejoApi): Provider => ({
                 owner: parsed.adminUser,
                 name: parsed.name,
                 private: parsed.private,
+                autoInit: true,
             });
         }
         return outputsFor(parsed);

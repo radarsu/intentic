@@ -42,16 +42,6 @@ export type AlerterConfig = z.infer<typeof alerterConfigSchema>;
 // on success, {"type":"Totp"|"Passkey",...} when 2FA is required.
 const listItemSchema = z.object({ id: z.string(), name: z.string() });
 const loginSchema = z.object({ type: z.string(), data: z.object({ jwt: z.string() }).optional() });
-// The slice of GetBuild the deployment provider polls to know a RunBuild has finished: last_built_at is 0
-// until the first successful build and advances on each subsequent one; remote_error carries a git-fetch
-// failure so a stuck build's timeout message is actionable.
-const buildStatusSchema = z.object({
-    info: z.object({ last_built_at: z.number().default(0), remote_error: z.string().nullish() }).passthrough(),
-});
-export interface BuildStatus {
-    readonly lastBuiltAt: number;
-    readonly remoteError: string | undefined;
-}
 const getAlerterSchema = z.object({ config: alerterConfigSchema });
 const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
 
@@ -59,38 +49,12 @@ const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
 // providers are unit-testable with a fake; the default `komodoApi` below talks to a Komodo Core over
 // native fetch. Auth is a JWT minted per provider call via local-admin login (never baked in). Build and
 // deployment configs are provider-built and passed through opaquely (their exact v2 JSON shapes are
-// confirmed at integration time); the alerter config is typed because the notify provider diffs it.
+// confirmed at integration time); the alerter config is typed because the notify provider diffs it. Builds
+// are gone — CI builds + pushes the image and the workflow's notify step triggers Deploy, so this surface is
+// just login + deployment reconciliation + alerters.
 export interface KomodoApi {
     // POST /auth/LoginLocalUser {username,password} -> jwt (local auth must be enabled).
     readonly login: (args: { readonly baseUrl: string; readonly username: string; readonly password: string }) => Promise<string>;
-    readonly listBuilds: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
-    readonly createBuild: (args: {
-        readonly baseUrl: string;
-        readonly jwt: string;
-        readonly name: string;
-        readonly config: Readonly<Record<string, unknown>>;
-    }) => Promise<void>;
-    readonly updateBuild: (args: {
-        readonly baseUrl: string;
-        readonly jwt: string;
-        readonly id: string;
-        readonly config: Readonly<Record<string, unknown>>;
-    }) => Promise<void>;
-    readonly listBuilders: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
-    // A Build needs a Builder attached or RunBuild errors "Must attach builder"; a Server builder builds on
-    // the named server's Periphery.
-    readonly createBuilder: (args: {
-        readonly baseUrl: string;
-        readonly jwt: string;
-        readonly name: string;
-        readonly config: Readonly<Record<string, unknown>>;
-    }) => Promise<void>;
-    // execute/RunBuild {build} — builds the image. RunBuild returns once the build STARTS (it runs async on
-    // the builder), and execute/Deploy does NOT build; it only pulls + runs. So a create/update must RunBuild,
-    // wait for the image via getBuild, then Deploy.
-    readonly runBuild: (args: { readonly baseUrl: string; readonly jwt: string; readonly build: string }) => Promise<void>;
-    // read/GetBuild {build} -> the build's status; last_built_at advances when a RunBuild produces an image.
-    readonly getBuild: (args: { readonly baseUrl: string; readonly jwt: string; readonly build: string }) => Promise<BuildStatus>;
     readonly listDeployments: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
     // read/GetDeployment {deployment: <id or name>} -> the authored config slice the provider diffs.
     readonly getDeployment: (args: { readonly baseUrl: string; readonly jwt: string; readonly deployment: string }) => Promise<DeploymentConfig>;
@@ -106,8 +70,6 @@ export interface KomodoApi {
         readonly id: string;
         readonly config: Readonly<Record<string, unknown>>;
     }) => Promise<void>;
-    // execute/Deploy {deployment: <id or name>} — triggers the deployment.
-    readonly deploy: (args: { readonly baseUrl: string; readonly jwt: string; readonly deployment: string }) => Promise<void>;
     readonly listAlerters: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
     readonly getAlerter: (args: { readonly baseUrl: string; readonly jwt: string; readonly id: string }) => Promise<AlerterConfig>;
     readonly createAlerter: (args: {
@@ -176,26 +138,6 @@ export const komodoApi: KomodoApi = {
         }
         return result.data.jwt;
     },
-    listBuilds: async ({ baseUrl, jwt }) =>
-        project(await read({ baseUrl, module: "read", type: "ListBuilds", params: {}, jwt }, z.array(listItemSchema))),
-    createBuild: async ({ baseUrl, jwt, name, config }) => {
-        await post({ baseUrl, module: "write", type: "CreateBuild", params: { name, config }, jwt });
-    },
-    updateBuild: async ({ baseUrl, jwt, id, config }) => {
-        await post({ baseUrl, module: "write", type: "UpdateBuild", params: { id, config }, jwt });
-    },
-    listBuilders: async ({ baseUrl, jwt }) =>
-        project(await read({ baseUrl, module: "read", type: "ListBuilders", params: {}, jwt }, z.array(listItemSchema))),
-    createBuilder: async ({ baseUrl, jwt, name, config }) => {
-        await post({ baseUrl, module: "write", type: "CreateBuilder", params: { name, config }, jwt });
-    },
-    runBuild: async ({ baseUrl, jwt, build }) => {
-        await post({ baseUrl, module: "execute", type: "RunBuild", params: { build }, jwt });
-    },
-    getBuild: async ({ baseUrl, jwt, build }) => {
-        const result = await read({ baseUrl, module: "read", type: "GetBuild", params: { build }, jwt }, buildStatusSchema);
-        return { lastBuiltAt: result.info.last_built_at, remoteError: result.info.remote_error ?? undefined };
-    },
     listDeployments: async ({ baseUrl, jwt }) =>
         project(await read({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt }, z.array(listItemSchema))),
     getDeployment: async ({ baseUrl, jwt, deployment }) =>
@@ -205,9 +147,6 @@ export const komodoApi: KomodoApi = {
     },
     updateDeployment: async ({ baseUrl, jwt, id, config }) => {
         await post({ baseUrl, module: "write", type: "UpdateDeployment", params: { id, config }, jwt });
-    },
-    deploy: async ({ baseUrl, jwt, deployment }) => {
-        await post({ baseUrl, module: "execute", type: "Deploy", params: { deployment }, jwt });
     },
     listAlerters: async ({ baseUrl, jwt }) =>
         project(await read({ baseUrl, module: "read", type: "ListAlerters", params: {}, jwt }, z.array(listItemSchema))),

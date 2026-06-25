@@ -25,7 +25,7 @@ export const forgejoHookSchema = z.object({
 });
 export type ForgejoHook = z.infer<typeof forgejoHookSchema>;
 
-// The slice of the Forgejo v4 API the repo/notify/deploy-hook providers use, injected so the providers
+// The slice of the Forgejo v4 API the repo/ci/notify providers use, injected so the providers
 // are unit-testable with a fake; the default `forgejoApi` below talks to a Forgejo instance over native
 // fetch. Auth flows per-call as HTTP Basic with the admin user + password (both resolved node inputs),
 // never baked into the adapter at construction.
@@ -38,7 +38,8 @@ export interface ForgejoApi {
         readonly owner: string;
         readonly name: string;
     }) => Promise<ForgejoRepo | undefined>;
-    // Create a repo owned by `owner` (admin-for-user), initialized so it can be cloned immediately.
+    // Create a repo owned by `owner` (admin-for-user). `autoInit` makes Forgejo write an initial commit (so an
+    // app repo can be cloned immediately); pass false to get an EMPTY repo when local history will be pushed in.
     readonly createRepo: (args: {
         readonly baseUrl: string;
         readonly user: string;
@@ -46,6 +47,7 @@ export interface ForgejoApi {
         readonly owner: string;
         readonly name: string;
         readonly private: boolean;
+        readonly autoInit: boolean;
     }) => Promise<ForgejoRepo>;
     // Every webhook on a repo, for stateless re-attribution (matched by type + config.url).
     readonly listHooks: (args: {
@@ -108,6 +110,17 @@ export interface ForgejoApi {
         readonly content: string;
         readonly message: string;
     }) => Promise<void>;
+    // Create or replace a repo Actions secret (consumed by the CI workflow). Forgejo takes the PLAINTEXT value
+    // as `data` (unlike GitHub's libsodium sealed box), create-or-replaced in place with a single PUT.
+    readonly setRepoSecret: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly secretName: string;
+        readonly data: string;
+    }) => Promise<void>;
 }
 
 const authHeader = (user: string, password: string): string => `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
@@ -147,9 +160,9 @@ export const forgejoApi: ForgejoApi = {
         }
         return toRepo(parseResponse(rawRepoSchema, await (await ok(response, "GET", path)).json(), `Forgejo API GET ${path}`));
     },
-    createRepo: async ({ baseUrl, user, password, owner, name, private: isPrivate }) => {
+    createRepo: async ({ baseUrl, user, password, owner, name, private: isPrivate, autoInit }) => {
         const path = `/admin/users/${encodeURIComponent(owner)}/repos`;
-        const response = await request({ method: "POST", baseUrl, path, user, password, body: { name, private: isPrivate, auto_init: true } });
+        const response = await request({ method: "POST", baseUrl, path, user, password, body: { name, private: isPrivate, auto_init: autoInit } });
         return toRepo(parseResponse(rawRepoSchema, await (await ok(response, "POST", path)).json(), `Forgejo API POST ${path}`));
     },
     listHooks: async ({ baseUrl, user, password, owner, name }) => {
@@ -199,5 +212,10 @@ export const forgejoApi: ForgejoApi = {
             "PUT",
             path,
         );
+    },
+    setRepoSecret: async ({ baseUrl, user, password, owner, name, secretName, data }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/secrets/${encodeURIComponent(secretName)}`;
+        // PUT is create-or-replace; Forgejo accepts the plaintext value as `data`. 201 (created) / 204 (updated) both ok().
+        await ok(await request({ method: "PUT", baseUrl, path, user, password, body: { data } }), "PUT", path);
     },
 };

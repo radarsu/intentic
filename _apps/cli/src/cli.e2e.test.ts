@@ -15,9 +15,11 @@ import { readGeneratedSecrets } from "./generated-secrets.js";
 // init/resolve/apply) exactly as an operator would — scaffold, author a deploy.config.ts pointed at the
 // DinD host's mapped SSH port, fill desired-state/.env, resolve, apply. Phase 1 stands up the platform
 // (Forgejo + runner + Komodo) and exposes git.<zone>/komodo.<zone> through a real Cloudflare tunnel. Then we
-// push a tiny Dockerfile to the app repo and, in phase 2, author an environment so apply builds + deploys it
-// live at app.<zone>. Gated behind INTENTIC_E2E because it needs a privileged Docker daemon + live Cloudflare
-// credentials (with DNS-edit + tunnel-edit scopes) on a zone you own, so default `pnpm test` / CI skip it.
+// push a tiny Dockerfile to the app repo and, in phase 2, author an environment so apply WIRES CI/CD (a
+// Forgejo Actions workflow + a Komodo registry deployment) — intentic does not build or deploy. The workflow
+// then builds + pushes the image and Komodo rolls it out live at app.<zone>. Gated behind INTENTIC_E2E because
+// it needs a privileged Docker daemon + live Cloudflare credentials (with DNS-edit + tunnel-edit scopes) on a
+// zone you own, so default `pnpm test` / CI skip it.
 //
 // Required env: INTENTIC_E2E=1, CLOUDFLARE_API_TOKEN. The host SSH key is generated per-run and written into
 // the .env the CLI loads; the Forgejo/Komodo admin passwords are intentic-generated (read back from
@@ -53,8 +55,8 @@ const hostContext = join(repoRoot, "test", "host");
 // app.<zone> to it.
 const appPort = deploymentPort(deploymentId(APP, ENV));
 
-// A trivial buildable app: busybox httpd serving a known body on $PORT. Komodo's build clones this, builds
-// the image, and the deployment runs it with PORT set to the resolver's deterministic port.
+// A trivial buildable app: busybox httpd serving a known body on $PORT. The Forgejo Action builds this into
+// an image and pushes it to the registry; Komodo deploys it with PORT set to the resolver's deterministic port.
 const APP_BODY = "intentic-e2e-live";
 const DOCKERFILE = `FROM busybox
 RUN mkdir -p /www && printf '%s' '${APP_BODY}' > /www/index.html
@@ -254,18 +256,20 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
             message: "seed e2e app",
         });
 
-        // 5. Author the environment and re-apply: Komodo builds the repo and deploys it live on app.<zone>.
+        // 5. Author the environment and re-apply: intentic only WIRES CI/CD + the Komodo deployment (it does
+        // NOT build or deploy). The Dockerfile pushed above already lives on main, so committing the workflow
+        // triggers the Forgejo Action: build -> push to the registry -> notify Komodo, which rolls it out.
         await writeFile(configPath, config(address, port, true));
         await intentic("resolve", "--config", configPath, "--out", artifactPath);
         await intentic("apply", "--artifact", artifactPath, "--maxIterations", "8");
 
-        // The app container is running and serving on its deterministic host port.
-        const appRunning = await sshRun("docker ps --format '{{.Names}}'");
-        expect(appRunning).toMatch(/komodo|app/i);
-
-        // The deployed app is reachable at its own public hostname and serves our content.
-        const app = await pollUrl(`https://${APP_DOMAIN}`, 240_000);
+        // CI builds + pushes and Komodo deploys asynchronously, so allow generous time for the first rollout.
+        const app = await pollUrl(`https://${APP_DOMAIN}`, 300_000);
         expect(app.status).toBe(200);
         expect(app.body).toContain(APP_BODY);
+
+        // By now Komodo has run the app container on the host.
+        const appRunning = await sshRun("docker ps --format '{{.Names}}'");
+        expect(appRunning).toMatch(/komodo|app/i);
     }, 1_500_000);
 });

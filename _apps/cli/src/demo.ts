@@ -16,10 +16,12 @@ const { utils } = createRequire(import.meta.url)("ssh2") as {
 };
 
 // A PERSISTENT local demo of the whole intentic flow: boots a long-lived Docker-in-Docker "host" on this
-// machine, drives the real CLI (init/resolve/apply) to stand up Forgejo + Komodo + a real app behind a
-// Cloudflare tunnel, prints the live URLs + generated admin logins, and LEAVES everything running so the
-// services can actually be browsed. `demo down` tears it all back down (host container + tunnel + DNS).
-// This is a dev harness — not a shipped `intentic` command — and reuses exactly what the e2e proved.
+// machine, drives the real CLI (init/resolve/apply) to stand up Forgejo + Komodo behind a Cloudflare tunnel
+// and to WIRE the app's CI/CD (Forgejo Actions workflow + a Komodo registry deployment). intentic itself
+// never builds or deploys the app — pushing the Dockerfile triggers the Action, which builds + pushes the
+// image and Komodo rolls it out. Prints the live URLs + generated admin logins and LEAVES everything running
+// so the services can be browsed. `demo down` tears it all back down (host container + tunnel + DNS). This is
+// a dev harness — not a shipped `intentic` command — and reuses exactly what the e2e proved.
 
 const exec = promisify(execFile);
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -257,7 +259,7 @@ const up = async (): Promise<void> => {
     }
     log(`✅ platform up — host containers: ${running.split("\n").filter(Boolean).join(", ")}`);
 
-    log("▶ seeding the app repo (intentic/app @ main) …");
+    log("▶ seeding the app repo (intentic/app @ main) with a Dockerfile …");
     let appDeployed = false;
     try {
         await forgejoApi.commitFile({
@@ -271,13 +273,22 @@ const up = async (): Promise<void> => {
             content: DOCKERFILE,
             message: "seed demo app",
         });
-        log("▶ phase 2 — resolve + apply (build + deploy the app) …");
+        // intentic only WIRES CI/CD here — it commits the Forgejo Actions workflow + repo secrets and registers
+        // the Komodo deployment. It does NOT build or deploy. Committing the workflow triggers the Action, which
+        // builds the seeded Dockerfile, pushes it to the registry, and tells Komodo to roll it out.
+        log("▶ phase 2 — resolve + apply: wire CI/CD + the Komodo deployment (intentic does not build/deploy) …");
         await writeFile(configPath, deployConfig(true));
         await runCli("resolve", "--config", configPath, "--out", artifactPath);
         await runCli("apply", "--artifact", artifactPath, "--maxIterations", "8");
-        const hit = (await ssh(`wget -q -T 5 -O- http://127.0.0.1:${appPort}`)).trim();
-        appDeployed = hit.includes(APP_BODY);
-        log(appDeployed ? `✅ app deployed — serving "${APP_BODY}" on the host` : `⚠ app deploy did not answer yet on :${appPort}`);
+        log(`▶ CI builds + pushes the image and Komodo rolls it out — polling http://127.0.0.1:${appPort} (up to 5 min) …`);
+        for (let i = 0; i < 60 && !appDeployed; i++) {
+            const hit = (await ssh(`wget -q -T 5 -O- http://127.0.0.1:${appPort} 2>/dev/null || true`)).trim();
+            appDeployed = hit.includes(APP_BODY);
+            if (!appDeployed) {
+                await sleep(5000);
+            }
+        }
+        log(appDeployed ? `✅ app deployed by CI/CD — serving "${APP_BODY}" on the host` : `⚠ app not live yet on :${appPort} (CI/CD may still be running)`);
     } catch (error) {
         log(`⚠ app phase skipped (platform stays up): ${String(error)}`);
     }

@@ -1,10 +1,9 @@
 import type { Providers } from "@intentic/engine";
-import { createAppProvider } from "./app.js";
 import { createCfRouteProvider, type DnsPropagationWait } from "./cf-route.js";
+import { createCiProvider } from "./ci.js";
 import { createCloudflareProvider } from "./cloudflare.js";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
-import { createDeployHookProvider } from "./deploy-hook.js";
 import { createDeploymentProvider } from "./deployment.js";
 import { createForgejoProvider } from "./forgejo.js";
 import type { ForgejoApi } from "./forgejo-api.js";
@@ -51,11 +50,10 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "forgejo-runner": createForgejoRunnerProvider(ssh),
         komodo: createKomodoProvider(ssh),
         repo: createRepoProvider(forgejo),
-        app: createAppProvider(komodo),
+        ci: createCiProvider(forgejo),
         deployment: createDeploymentProvider(komodo),
         "forgejo-notify": createForgejoNotifyProvider(forgejo),
         "komodo-notify": createKomodoNotifyProvider(komodo),
-        "deploy-hook": createDeployHookProvider(forgejo),
         signoz: createSignozProvider(ssh),
     };
 };

@@ -1,17 +1,17 @@
 import type { SecretRef } from "@intentic/graph";
-import { generated, httpOk, makeRef } from "@intentic/graph";
+import { generated, makeRef } from "@intentic/graph";
 import type { AppIntent } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { adminUsername, deployHookId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
+import { adminUsername, ciId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, registryAuthority, repoId } from "./ids.js";
 import type { PlatformRefs } from "./platform.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
-// The app resolver: everything shipping an app from source beyond the shared platform — a repo, the app
-// node wired to the repo + deploy orchestrator, and per environment a deployment, its Cloudflare route, and
-// a push-to-deploy webhook. The config nodes (repo/app/deployment/notify/deploy-hook) talk to the Forgejo
-// or Komodo HTTP API, so each carries the backend `url` ref + the admin password it logs in with. The
-// deployment gates on its host-internal url so readiness passes before the tunnel + DNS routes exist.
+// The app resolver: everything shipping an app beyond the shared platform — a repo, and per environment a CI
+// node (commits the build-and-deploy workflow + repo secrets), a Komodo deployment pointed at the registry
+// image, and its Cloudflare route. intentic does NOT build or deploy: the CI workflow builds + pushes the
+// image on a developer push and Komodo rolls it out. The config nodes (repo/ci/deployment/notify) talk to the
+// Forgejo or Komodo HTTP API, so each carries the backend `url` ref + the admin password it logs in with.
 // Returns each environment's ingress pair so the caller can aggregate the host's tunnel ingress.
 export const resolveApp = (
     intent: AppIntent,
@@ -22,6 +22,10 @@ export const resolveApp = (
     const repo = repoId(intent.id);
     const forgejoUrl = makeRef<string>(platform.forgejo, "url");
     const komodoUrl = makeRef<string>(platform.deploy, "url");
+    // The CI workflow's notify step runs ON the host (runner is --network host), so it reaches Komodo at its
+    // internal url directly — the public url would hairpin through the tunnel and depend on DNS being live.
+    const komodoInternalUrl = makeRef<string>(platform.deploy, "internalUrl");
+    const packagesToken = makeRef<string>(platform.forgejo, "packagesToken");
     const forgejoAdmin = { adminUser: adminUsername, adminPassword: generated("FORGEJO_ADMIN_PASSWORD") };
     const komodoAdmin = { adminUser: adminUsername, adminPassword: generated("KOMODO_ADMIN_PASSWORD") };
     // Telemetry wiring: when the app observes a service, every deployment exports OTLP to that service's
@@ -39,21 +43,6 @@ export const resolveApp = (
             // Calls the public git URL, so it must run after git's DNS + tunnel route is live.
             explicitDependsOn: [platform.forgejo, platform.gitRoute],
         },
-        {
-            id: intent.id,
-            type: "app",
-            inputs: {
-                source: makeRef<string>(repo, "cloneUrl"),
-                repoName: intent.id,
-                deployer: makeRef(platform.deploy),
-                komodoUrl,
-                // Komodo clones the repo from INSIDE the host, so it builds from Forgejo's internal url (the
-                // public git.<zone> name does not resolve there); see gitProvider in providers/inputs.ts.
-                gitInternalUrl: makeRef<string>(platform.forgejo, "internalUrl"),
-                ...komodoAdmin,
-            },
-            explicitDependsOn: [platform.deploy, platform.komodoRoute, repo],
-        },
     ];
     const ingress: IngressPair[] = [];
 
@@ -61,13 +50,35 @@ export const resolveApp = (
         const id = deploymentId(intent.id, name);
         const port = deploymentPort(id);
         const env = otel !== undefined || environment.env !== undefined ? { ...otel, ...environment.env } : undefined;
+        const ci = ciId(intent.id, name);
+        // CI/CD wiring: commits the Forgejo Actions workflow (build -> push registry image -> notify Komodo) +
+        // the registry-push and Komodo-login repo secrets, and seeds a starter Dockerfile if the repo has none.
+        nodes.push({
+            id: ci,
+            type: "ci",
+            inputs: {
+                forgejoUrl,
+                ...forgejoAdmin,
+                komodoPassword: komodoAdmin.adminPassword,
+                repoName: intent.id,
+                branch: environment.branch,
+                registry: registryAuthority,
+                tag: name,
+                packagesToken,
+                komodoUrl: komodoInternalUrl,
+                deployment: id,
+            },
+            // Commits via the public git URL (waits on git's route) and bakes Komodo's internal url into the
+            // workflow (waits on Komodo being up).
+            explicitDependsOn: [platform.forgejo, platform.gitRoute, platform.deploy, repo],
+        });
         nodes.push({
             id,
             type: "deployment",
             inputs: {
-                app: makeRef(intent.id),
-                name,
-                branch: environment.branch,
+                repoName: intent.id,
+                registry: registryAuthority,
+                tag: name,
                 domain: environment.domain,
                 internalIp: makeRef<string>(intent.on, "internalIp"),
                 port,
@@ -75,29 +86,15 @@ export const resolveApp = (
                 ...komodoAdmin,
                 ...(env !== undefined ? { env } : {}),
             },
-            explicitDependsOn: [intent.id, platform.komodoRoute, ...(intent.observe !== undefined ? [intent.observe] : [])],
-            // A cold clone+build+run on the host can take well over a minute; give the build room before the gate fails.
-            readyWhen: environment.readyWhen ?? httpOk(makeRef<string>(id, "internalUrl"), { timeout: "240s" }),
+            // Depends on ci so the workflow + secrets exist first; the route gates Komodo reachability. No
+            // default readyWhen: apply only registers the deployment (it does not go live until CI pushes an
+            // image), so an httpOk gate would hang forever — honour only an author-supplied one.
+            explicitDependsOn: [ci, platform.komodoRoute, ...(intent.observe !== undefined ? [intent.observe] : [])],
+            ...(environment.readyWhen !== undefined ? { readyWhen: environment.readyWhen } : {}),
         });
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
         nodes.push(exposure.route);
         ingress.push(exposure.ingress);
-        // Push-to-deploy: a Forgejo repo webhook that calls Komodo's deploy listener for this environment
-        // when its branch is pushed; the shared secret is what Komodo validates the incoming hook against.
-        nodes.push({
-            id: deployHookId(intent.id, name),
-            type: "deploy-hook",
-            inputs: {
-                forgejoUrl,
-                ...forgejoAdmin,
-                repoName: intent.id,
-                komodoUrl,
-                branch: environment.branch,
-                secret: generated("KOMODO_WEBHOOK_SECRET"),
-            },
-            // Registers a Forgejo webhook via the public git URL, so it waits on git's route.
-            explicitDependsOn: [repo, id, platform.gitRoute],
-        });
     }
 
     // CI/CD notifications: when the author asks for them, derive the two native Discord sinks — a Forgejo
@@ -115,7 +112,7 @@ export const resolveApp = (
             id: komodoNotifyId(intent.id),
             type: "komodo-notify",
             inputs: { komodoUrl, ...komodoAdmin, targets, webhook: intent.notify.discord, events: ["deploy"] },
-            explicitDependsOn: [platform.deploy, platform.komodoRoute, intent.id, ...targets],
+            explicitDependsOn: [platform.deploy, platform.komodoRoute, ...targets],
         });
     }
 

@@ -11,5 +11,5 @@ test("rejects an undeclared output", () => {
 });
 
 test("a kind with no outputs rejects any produced output", () => {
-    expect(() => validateOutputs("app", { anything: 1 }, "my-app")).toThrow();
+    expect(() => validateOutputs("ci", { anything: 1 }, "my-app.production-ci")).toThrow();
 });

@@ -54,3 +54,10 @@ export const gitProvider = (forgejoUrl: string): { domain: string; https: boolea
     domain: forgejoUrl.replace(/^https?:\/\//, "").replace(/\/+$/, ""),
     https: forgejoUrl.startsWith("https://"),
 });
+
+// The registry image coordinate the CI workflow PUSHES and the Komodo deployment PULLS. Both MUST agree
+// byte-for-byte (Komodo pulls exactly what CI pushed), so the single derivation lives here. `owner` is the
+// Forgejo admin (the repo + package namespace); `tag` is the environment name so co-located environments
+// publish to distinct tags on the same repo.
+export const registryImage = (args: { registry: string; owner: string; repoName: string; tag: string }): string =>
+    `${args.registry}/${args.owner}/${args.repoName}:${args.tag}`;

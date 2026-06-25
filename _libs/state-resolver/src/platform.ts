@@ -2,7 +2,7 @@ import type { SecretRef } from "@intentic/graph";
 import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
+import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, registryAuthority, runnerId } from "./ids.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
@@ -82,12 +82,14 @@ export const resolvePlatform = (
                 runnerToken: makeRef<string>(forgejo, "runnerToken"),
                 adminUser: adminUsername,
                 adminPassword: generated("KOMODO_ADMIN_PASSWORD"),
-                // Shared with each deploy-hook so Komodo validates the incoming push webhook's signature.
-                webhookSecret: generated("KOMODO_WEBHOOK_SECRET"),
-                // The admin's token + account, so Komodo can clone the private app repos for builds. The git
-                // provider domain is derived from forgejoUrl above (the internal http://<ip>:3000 authority).
+                // The admin's token + account, so Komodo can clone the private app repos. The git provider
+                // domain is derived from forgejoUrl above (the internal http://<ip>:3000 authority).
                 gitAccount: adminUsername,
                 gitToken: makeRef<string>(forgejo, "gitToken"),
+                // The Forgejo built-in registry + the admin's packages token, written as a [[docker_registry]]
+                // account so Komodo can pull the private app images CI pushes.
+                registry: registryAuthority,
+                packagesToken: makeRef<string>(forgejo, "packagesToken"),
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(deploy, "internalUrl"), { timeout: "90s" }),

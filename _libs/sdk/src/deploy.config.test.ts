@@ -21,11 +21,11 @@ test("derived order is a valid topological linearization of the bootstrap", () =
     // It is a permutation of the resource ids (nothing dropped or duplicated).
     expect([...order].sort()).toEqual(Object.keys(graph.resources).sort());
 
-    // Sanity on the headline phases: host -> git -> app, and the platform tunnel comes up before the
-    // control plane that reaches Forgejo/Komodo through its public routes.
+    // Sanity on the headline phases: host -> git -> app deployment, and the platform tunnel comes up before
+    // the control plane that reaches Forgejo/Komodo through its public routes.
     expect(at("host")).toBeLessThan(at("host-git"));
-    expect(at("host-git")).toBeLessThan(at("my-app"));
-    expect(at("host-tunnel")).toBeLessThan(at("my-app"));
+    expect(at("host-git")).toBeLessThan(at("my-app.production"));
+    expect(at("host-tunnel")).toBeLessThan(at("my-app.production"));
 });
 
 test("a ref edge serializes correctly", () => {

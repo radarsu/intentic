@@ -93,7 +93,7 @@ test("apps share one derived platform", () => {
     const types = Object.values(graph.resources).map((node) => node.type);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
-    // Both apps deploy through the same orchestrator.
-    expect(graph.resources["app-one"]?.inputs["deployer"]).toEqual({ $ref: "host-deploy" });
-    expect(graph.resources["app-two"]?.inputs["deployer"]).toEqual({ $ref: "host-deploy" });
+    // Both apps' deployments target the same orchestrator (host-deploy).
+    expect(graph.resources["app-one.prod"]?.inputs["komodoUrl"]).toEqual({ $ref: "host-deploy.url" });
+    expect(graph.resources["app-two.prod"]?.inputs["komodoUrl"]).toEqual({ $ref: "host-deploy.url" });
 });

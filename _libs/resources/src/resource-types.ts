@@ -13,11 +13,10 @@ export type ResourceType =
     | "control-repo"
     | "forgejo-runner"
     | "komodo"
-    | "app"
+    | "ci"
     | "deployment"
     | "forgejo-notify"
     | "komodo-notify"
-    | "deploy-hook"
     | "signoz";
 
 // A RawNode whose kind is constrained to this stack's vocabulary. Resolvers build ResolvedNodes so an

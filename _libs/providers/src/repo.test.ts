@@ -66,7 +66,7 @@ test("apply creates the repo when absent and returns re-derived urls", async () 
         }),
     );
     expect(await provider.apply(inputs, undefined, ctx())).toEqual(derived);
-    expect(created).toMatchObject({ owner: "admin", name: "my-app", private: true });
+    expect(created).toMatchObject({ owner: "admin", name: "my-app", private: true, autoInit: true });
 });
 
 test("apply does not create when the repo already exists", async () => {

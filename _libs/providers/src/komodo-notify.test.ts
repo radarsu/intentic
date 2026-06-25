@@ -7,13 +7,10 @@ const NOT_USED = async (): Promise<never> => {
 };
 const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
     login: async () => "jwt",
-    listBuilds: NOT_USED,
-    createBuild: NOT_USED,
-    updateBuild: NOT_USED,
     listDeployments: NOT_USED,
+    getDeployment: NOT_USED,
     createDeployment: NOT_USED,
     updateDeployment: NOT_USED,
-    deploy: NOT_USED,
     listAlerters: NOT_USED,
     getAlerter: NOT_USED,
     createAlerter: NOT_USED,

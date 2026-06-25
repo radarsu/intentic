@@ -1,9 +1,8 @@
-export { createAppProvider } from "./app.js";
 export { createCfRouteProvider } from "./cf-route.js";
+export { createCiProvider } from "./ci.js";
 export { createCloudflareProvider } from "./cloudflare.js";
 export type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
 export { cloudflareApi } from "./cloudflare-api.js";
-export { createDeployHookProvider } from "./deploy-hook.js";
 export { createDeploymentProvider } from "./deployment.js";
 export { createForgejoProvider } from "./forgejo.js";
 export { fakeForgejoApi } from "./forgejo-api.fake.js";

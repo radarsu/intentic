@@ -39,6 +39,10 @@ export const intent = defineIntent((i) => {
 // resolver injects platform secrets the authored config never names).
 const TARGET_GITIGNORE = `${ENV_FILE}\n${SECRETS_FILE}\n`;
 
+// The intent repo is a self-contained TS project; `init` runs `pnpm install` in it, producing a
+// node_modules/ that must stay out of the repo.
+const INTENT_GITIGNORE = "node_modules/\n";
+
 // A standalone TS project for the one config file: type-strip-importable by `resolve`, type-checked in an
 // editor against the @intentic/* packages' shipped declarations (no build of the intent repo itself).
 const STARTER_TSCONFIG = `${JSON.stringify(
@@ -83,6 +87,7 @@ export const scaffold = async (dir: string, version: string, link: boolean): Pro
     await writeFile(join(intentDir, CONFIG_FILE), STARTER_CONFIG);
     await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
     await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
+    await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);
     await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
     await exec("pnpm", ["install", "--ignore-workspace"], { cwd: intentDir });
     return { intentDir, targetDir };

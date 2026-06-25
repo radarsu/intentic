@@ -15,5 +15,6 @@ export const fakeForgejoApi = (overrides: Partial<ForgejoApi> = {}): ForgejoApi 
     latestCommit: notUsed,
     readFile: notUsed,
     commitFile: notUsed,
+    setRepoSecret: notUsed,
     ...overrides,
 });

@@ -11,13 +11,16 @@ const komodoSchema = sshSchema.extend({
     runnerToken: z.string(),
     adminUser: z.string(),
     adminPassword: z.string(),
-    webhookSecret: z.string(),
-    // The host git provider Komodo authenticates to when cloning the admin's private app repos for a Build.
+    // The host git provider Komodo authenticates to when cloning the admin's private app repos.
     // forgejoUrl is the INTERNAL Forgejo url (http://<internalIp>:3000); Komodo clones the repos from inside
     // the host's Docker, so the git-provider account is registered against this internal authority (the public
     // git.<zone> name does not resolve there). gitAccount/gitToken are the admin + its scoped read token.
     gitAccount: z.string(),
     gitToken: z.string(),
+    // The Forgejo built-in container registry (e.g. "localhost:3000") Komodo PULLS app images from, with the
+    // admin's packages token — written as a [[docker_registry]] account so a private image can be pulled.
+    registry: z.string(),
+    packagesToken: z.string(),
 });
 type KomodoInputs = z.infer<typeof komodoSchema>;
 const parse = (inputs: ResolvedInputs): KomodoInputs => parseInputs(komodoSchema, inputs, "komodo");
@@ -78,8 +81,10 @@ const composeYaml = (): string =>
         "",
     ].join("\n");
 
-// The git-provider account Komodo uses to clone the admin's private app repos. git_provider accounts cannot
-// be configured via env in Komodo v2 — only via this config file (or the UI/API) — so it is mounted into Core.
+// The provider accounts Komodo uses against the host's Forgejo: a git_provider (to clone private app repos)
+// and a docker_registry (to pull the private app images CI pushes). Neither can be configured via env in
+// Komodo v2 — only via this config file (or the UI/API) — so both are mounted into Core. The docker_registry
+// domain is the registry authority the deployment's image_registry_account selects.
 const configToml = (parsed: KomodoInputs): string => {
     const git = gitProvider(parsed.forgejoUrl);
     return [
@@ -88,12 +93,15 @@ const configToml = (parsed: KomodoInputs): string => {
         `https = ${git.https}`,
         `accounts = [{ username = "${parsed.gitAccount}", token = "${parsed.gitToken}" }]`,
         "",
+        "[[docker_registry]]",
+        `domain = "${parsed.registry}"`,
+        `accounts = [{ username = "${parsed.adminUser}", token = "${parsed.packagesToken}" }]`,
+        "",
     ].join("\n");
 };
 
-// Write the compose file + git-provider config.toml (always) and the .env (once — Core/Periphery secrets
-// must survive restarts). The webhook secret is the operator's KOMODO_WEBHOOK_SECRET (shared with the
-// deploy-hooks); passkey/jwt/db secrets are host-generated once and never surface as outputs.
+// Write the compose file + provider config.toml (always) and the .env (once — Core/Periphery secrets must
+// survive restarts). passkey/jwt/db secrets are host-generated once and never surface as outputs.
 const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<void> => {
     await session.exec(`mkdir -p ${STATE_DIR}`);
     await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml()}COMPOSE_EOF`);
@@ -110,13 +118,15 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         "KOMODO_DATABASE_ADDRESS=ferretdb:27017",
         "KOMODO_FIRST_SERVER_NAME=Local",
         "KOMODO_FIRST_SERVER_ADDRESS=https://periphery:8120",
+        // How often Komodo polls a deployment's registry tag for a new digest; with auto_update set, a CI push
+        // goes live within this window even if the workflow's notify step is unavailable.
+        "KOMODO_RESOURCE_POLL_INTERVAL=OneMinute",
     ]
         .map((line) => `'${line}'`)
         .join(" ");
     const generated = [
         `echo "KOMODO_HOST=https://${parsed.domain}"`,
         `echo "KOMODO_INIT_ADMIN_PASSWORD=${parsed.adminPassword}"`,
-        `echo "KOMODO_WEBHOOK_SECRET=${parsed.webhookSecret}"`,
         `echo "KOMODO_PASSKEY=$(openssl rand -hex 32)"`,
         `echo "KOMODO_JWT_SECRET=$(openssl rand -hex 32)"`,
         'echo "KOMODO_DATABASE_USERNAME=komodo"',

@@ -1,6 +1,6 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { parseInputs } from "./inputs.js";
+import { parseInputs, registryImage } from "./inputs.js";
 import type { DeploymentConfig, KomodoApi } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 
@@ -11,8 +11,11 @@ const deploymentSchema = z.object({
     komodoUrl: z.string(),
     adminUser: z.string(),
     adminPassword: z.string(),
-    app: z.string(),
-    branch: z.string(),
+    repoName: z.string(),
+    // The Forgejo built-in registry authority (e.g. "localhost:3000") + the image tag (= environment name);
+    // image = registry/<adminUser>/<repoName>:<tag>, matching exactly what the CI workflow pushes.
+    registry: z.string(),
+    tag: z.string(),
     domain: z.string(),
     internalIp: z.string(),
     // The deterministic host port the deployment publishes, computed by the resolver (deploymentPort) so it
@@ -23,32 +26,6 @@ const deploymentSchema = z.object({
 type DeploymentInputs = z.infer<typeof deploymentSchema>;
 const parse = (inputs: ResolvedInputs): DeploymentInputs => parseInputs(deploymentSchema, inputs, "deployment");
 
-const BUILD_TIMEOUT_MS = 180_000;
-const BUILD_INTERVAL_MS = 3_000;
-
-// RunBuild returns as soon as the build STARTS (it runs async on the builder), but execute/Deploy only runs
-// an already-built image — so deploying right after RunBuild races an image that does not exist yet and
-// silently runs nothing (the deployment never converges). Capture the build's last_built_at, kick the build,
-// and poll until it advances (a fresh image exists) before returning; time out with the build's git-fetch
-// error if it never produces one.
-const runBuildAndWait = async (api: KomodoApi, baseUrl: string, jwt: string, build: string): Promise<void> => {
-    const before = (await api.getBuild({ baseUrl, jwt, build })).lastBuiltAt;
-    await api.runBuild({ baseUrl, jwt, build });
-    const deadline = Date.now() + BUILD_TIMEOUT_MS;
-    for (;;) {
-        const status = await api.getBuild({ baseUrl, jwt, build });
-        if (status.lastBuiltAt > before) {
-            return;
-        }
-        if (Date.now() >= deadline) {
-            throw new Error(
-                `komodo build "${build}" did not finish within ${BUILD_TIMEOUT_MS}ms${status.remoteError ? `: ${status.remoteError}` : ""}`,
-            );
-        }
-        await new Promise((resolve) => setTimeout(resolve, BUILD_INTERVAL_MS));
-    }
-};
-
 const outputsFor = (parsed: DeploymentInputs): Record<string, unknown> => ({
     url: `https://${parsed.domain}`,
     internalUrl: `http://${parsed.internalIp}:${parsed.port}`,
@@ -56,15 +33,20 @@ const outputsFor = (parsed: DeploymentInputs): Record<string, unknown> => ({
 
 const deploymentConfig = (parsed: DeploymentInputs): Record<string, unknown> => ({
     server_id: SERVER,
-    image: { type: "Build", params: { build_id: parsed.app } },
-    branch: parsed.branch,
+    // A registry Image (NOT a Komodo Build) — CI builds + pushes it; Komodo only pulls + runs it.
+    image: { type: "Image", params: { image: registryImage({ registry: parsed.registry, owner: parsed.adminUser, repoName: parsed.repoName, tag: parsed.tag }) } },
+    // Selects the [[docker_registry]] account komodo.ts writes (domain = registry, username = adminUser) so
+    // Komodo can pull the private image.
+    image_registry_account: parsed.adminUser,
+    // Komodo watches the tag's manifest digest (poll_for_updates) and redeploys when it changes (auto_update),
+    // so a CI push of a new image goes live without intentic deploying anything.
+    poll_for_updates: true,
+    auto_update: true,
     // Komodo's CreateDeployment rejects the "host:container" string form; it wants the struct form. Ignored
     // at runtime under the default host network, but the published port is the host port either way.
     ports: [{ local: String(parsed.port), container: String(parsed.port) }],
     environment: Object.entries(parsed.env).map(([variable, value]) => ({ variable, value: String(value) })),
     restart: "unless-stopped",
-    // So a build triggered by the push webhook (Komodo's build listener) redeploys this environment.
-    redeploy_on_build: true,
 });
 
 // Collapse Komodo's env to a stable, order-independent set of canonical "K=V" lines. Komodo stores it as a
@@ -90,12 +72,11 @@ const desiredKey = (parsed: DeploymentInputs): string =>
     JSON.stringify(normalizeEnv(Object.entries(parsed.env).map(([variable, value]) => ({ variable, value: String(value) }))));
 const observedKey = (config: DeploymentConfig): string => JSON.stringify(normalizeEnv(config.environment));
 
-// One Komodo Deployment per environment (named <app>.<env> = ctx.id), built from the app's Build on the
-// environment's branch and exposed on a deterministic host port. read returns undefined until Komodo is up
-// (komodoUrl PENDING) or unreachable, otherwise it surfaces the deployment's current config. diff converges
-// on that config alone — runtime liveness is owned by the push->Komodo deploy loop, not the provisioner —
-// so a stopped-but-unchanged deployment is a noop. apply create-or-updates and triggers the deploy, which
-// now fires only on a genuine create or config change.
+// One Komodo Deployment per environment (named <app>.<env> = ctx.id), pulled from the registry image CI
+// pushes and exposed on a deterministic host port. read returns undefined until Komodo is up (komodoUrl
+// PENDING) or unreachable, otherwise it surfaces the deployment's current config. diff converges on that
+// config alone. apply ONLY registers the desired Komodo deployment (create-or-update) — it does NOT build or
+// deploy: the image is produced by CI and rolled out by Komodo's poll/auto_update + the workflow's notify.
 export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider => ({
     read: async (inputs, ctx) => {
         if (typeof inputs["komodoUrl"] !== "string") {
@@ -131,9 +112,8 @@ export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider =
         } else {
             await api.updateDeployment({ baseUrl: parsed.komodoUrl, jwt, id: existing.id, config: deploymentConfig(parsed) });
         }
-        // execute/Deploy only pulls + runs — build the image (and WAIT for it) first so there is something to run.
-        await runBuildAndWait(api, parsed.komodoUrl, jwt, parsed.app);
-        await api.deploy({ baseUrl: parsed.komodoUrl, jwt, deployment: ctx.id });
+        // No build, no deploy: CI pushes the image and Komodo's poll/auto_update (and the workflow's notify)
+        // roll it out. apply only registers the desired deployment.
         return outputsFor(parsed);
     },
 });

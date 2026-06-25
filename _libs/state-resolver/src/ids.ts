@@ -10,11 +10,11 @@ export const tunnelId = (hostId: string): string => `${hostId}-tunnel`;
 export const tunnelName = (hostId: string): string => `intentic-${hostId}`;
 export const repoId = (appId: string): string => `${appId}-repo`;
 export const deploymentId = (appId: string, environment: string): string => `${appId}.${environment}`;
+// The CI/CD wiring node per environment: a Forgejo Actions workflow + repo secrets, keyed off the deployment.
+export const ciId = (appId: string, environment: string): string => `${deploymentId(appId, environment)}-ci`;
 // CI/CD notification sinks, app-scoped: a Forgejo repo webhook and a Komodo alerter targeting Discord.
 export const forgejoNotifyId = (appId: string): string => `${repoId(appId)}-notify`;
 export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
-// Push-to-deploy: a Forgejo repo webhook per environment that hits Komodo's deploy listener on push.
-export const deployHookId = (appId: string, environment: string): string => `${deploymentId(appId, environment)}-deploy-hook`;
 export const gitDomain = (zone: string): string => `git.${zone}`;
 export const komodoDomain = (zone: string): string => `komodo.${zone}`;
 // A deterministic host port per deployment so co-located environments don't collide. Resolver-owned so the
@@ -26,3 +26,8 @@ export const deploymentPort = (deploymentId: string): number =>
 // build's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
 // `forgejo admin user create --username admin` fails.
 export const adminUsername = "intentic";
+// The Forgejo built-in container registry authority. Addressed host-locally so the CI runner (push,
+// --network host) and Komodo Periphery (pull, host docker socket) both reach Forgejo on the SAME host
+// dockerd, which trusts localhost registries as insecure-by-default — no daemon.json change needed, and it
+// sidesteps that git.<zone> does not resolve inside the host. The port mirrors Forgejo's HTTP port (3000).
+export const registryAuthority = "localhost:3000";
