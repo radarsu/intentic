@@ -14,6 +14,7 @@ import type { SshExecutor, SshResult } from "./ssh.js";
 const fakeSsh = (): SshExecutor => {
     const started = new Set<string>();
     let tokenPersisted = false;
+    let gitTokenPersisted = false;
     const ok = (stdout = "", code = 0): SshResult => ({ stdout, stderr: "", code });
     return {
         connect: async () => ({
@@ -24,6 +25,12 @@ const fakeSsh = (): SshExecutor => {
                     tokenPersisted = true;
                     return ok("rtok");
                 }
+                if (command.includes("generate-access-token")) {
+                    gitTokenPersisted = true;
+                    return ok("gtok");
+                }
+                const label = /docker ps --filter "label=intentic.id=([^"]+)"/.exec(command);
+                if (label?.[1] !== undefined) return ok(started.has(label[1]) ? "komodo-core-1" : "");
                 const ps = /docker ps --filter "name=\^([^$]+)\$"/.exec(command);
                 if (ps?.[1] !== undefined) return ok(started.has(ps[1]) ? ps[1] : "");
                 const run = /docker run .*--name (\S+)/.exec(command);
@@ -36,7 +43,8 @@ const fakeSsh = (): SshExecutor => {
                     return ok("up");
                 }
                 if (command.includes("wget -q --spider")) return ok("", started.has("intentic-forgejo") ? 0 : 1);
-                if (command.includes("cat /data/.runner")) return ok(started.has("intentic-forgejo-runner") ? "https://git.example.com" : "");
+                if (command.includes("cat /data/.runner")) return ok(started.has("intentic-forgejo-runner") ? "http://10.0.0.5:3000" : "");
+                if (command.includes("git-token")) return ok(gitTokenPersisted ? "gtok" : "");
                 if (command.includes("runner-token")) return ok(tokenPersisted ? "rtok" : "");
                 return ok();
             },
@@ -116,6 +124,7 @@ const fakeKomodoApi = (): KomodoApi => {
     const deployments = new Map<string, { id: string; config: DeploymentConfig }>();
     const alerters = new Map<string, { id: string; config: AlerterConfig }>();
     let seq = 0;
+    let builtAt = 0;
     return {
         login: async () => "jwt",
         listBuilds: async () => [...builds].map(([name, id]) => ({ id, name })),
@@ -123,6 +132,11 @@ const fakeKomodoApi = (): KomodoApi => {
             builds.set(name, `b-${seq++}`);
         },
         updateBuild: async () => {},
+        listBuilders: async () => [{ id: "builder-1", name: "Local" }],
+        createBuilder: async () => {},
+        runBuild: async () => {},
+        // Each poll reports a newer build so runBuildAndWait sees the image land on its next check.
+        getBuild: async () => ({ lastBuiltAt: (builtAt += 1), remoteError: undefined }),
         listDeployments: async () => [...deployments].map(([name, value]) => ({ id: value.id, name })),
         getDeployment: async ({ deployment }) => {
             const value = deployments.get(deployment);
@@ -186,7 +200,14 @@ const buildGraph = () =>
     });
 
 // Drive the real registry entirely off in-memory fakes — same wiring the e2e harness uses with real deps.
-const realProviders = () => createProviders({ ssh: fakeSsh(), cloudflare: fakeCloudflare(), forgejo: fakeForgejoApi(), komodo: fakeKomodoApi() });
+const realProviders = () =>
+    createProviders({
+        ssh: fakeSsh(),
+        cloudflare: fakeCloudflare(),
+        forgejo: fakeForgejoApi(),
+        komodo: fakeKomodoApi(),
+        dnsPropagation: async () => {},
+    });
 
 const base = { env: fullEnv, probe: async () => true, log: () => {} };
 

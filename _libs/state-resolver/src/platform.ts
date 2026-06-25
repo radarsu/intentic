@@ -58,7 +58,9 @@ export const resolvePlatform = (
         {
             id: runnerId(hostId),
             type: "forgejo-runner",
-            inputs: { server, ...ssh, instanceUrl: makeRef<string>(forgejo, "url"), token: makeRef<string>(forgejo, "runnerToken") },
+            // The runner runs ON the host, so it reaches Forgejo at its internal url directly — using the
+            // public url would force a needless round-trip through the tunnel (and depend on DNS being live).
+            inputs: { server, ...ssh, instanceUrl: makeRef<string>(forgejo, "internalUrl"), token: makeRef<string>(forgejo, "runnerToken") },
             explicitDependsOn: [],
         },
         {
@@ -75,6 +77,10 @@ export const resolvePlatform = (
                 adminPassword: env("KOMODO_ADMIN_PASSWORD"),
                 // Shared with each deploy-hook so Komodo validates the incoming push webhook's signature.
                 webhookSecret: env("KOMODO_WEBHOOK_SECRET"),
+                // The admin's token + account, so Komodo can clone the private app repos for builds. The git
+                // provider domain is derived from forgejoUrl above (the internal http://<ip>:3000 authority).
+                gitAccount: adminUsername,
+                gitToken: makeRef<string>(forgejo, "gitToken"),
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(deploy, "internalUrl"), { timeout: "90s" }),

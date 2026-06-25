@@ -18,11 +18,10 @@ const inputs = {
     adminPassword: "pw",
     repoName: "my-app",
     komodoUrl: "https://komodo.example.com",
-    deployment: "my-app.staging",
     branch: "develop",
     secret: "whsec",
 };
-const LISTENER = "https://komodo.example.com/listener/github/deployment/my-app.staging/deploy";
+const LISTENER = "https://komodo.example.com/listener/github/build/my-app";
 const hook = (): ForgejoHook => ({ id: 3, type: "gitea", config: { url: LISTENER }, events: ["push"], active: true });
 
 test("read returns undefined when forgejoUrl or komodoUrl is PENDING", async () => {

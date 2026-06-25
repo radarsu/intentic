@@ -1,6 +1,6 @@
 import type { Providers } from "@intentic/engine";
 import { createAppProvider } from "./app.js";
-import { createCfRouteProvider } from "./cf-route.js";
+import { createCfRouteProvider, type DnsPropagationWait } from "./cf-route.js";
 import { createCloudflareProvider } from "./cloudflare.js";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
@@ -29,6 +29,9 @@ export interface ProviderDeps {
     readonly cloudflare?: CloudflareApi;
     readonly forgejo?: ForgejoApi;
     readonly komodo?: KomodoApi;
+    // The cf-route DNS-propagation wait; defaults to the real DoH probe. In-memory tests inject a no-op so
+    // they never hit the network.
+    readonly dnsPropagation?: DnsPropagationWait;
 }
 
 // Assemble the full ResourceType -> Provider map the engine reconciles against. This is the single seam
@@ -41,7 +44,7 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
     return {
         host: createHostProvider(ssh),
         cloudflare: createCloudflareProvider(cloudflare),
-        "cf-route": createCfRouteProvider(cloudflare),
+        "cf-route": createCfRouteProvider(cloudflare, deps.dnsPropagation),
         tunnel: createTunnelProvider(cloudflare, ssh),
         forgejo: createForgejoProvider(ssh),
         "forgejo-runner": createForgejoRunnerProvider(ssh),

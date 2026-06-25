@@ -53,7 +53,9 @@ export const createForgejoRunnerProvider = (executor: SshExecutor = sshExecutor)
         try {
             await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
             const run = await session.exec(
-                `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
+                // --user root: the runner executes jobs via the mounted docker socket; its default non-root
+                // user gets "permission denied" on /var/run/docker.sock, so the daemon crash-loops.
+                `docker run -d --restart unless-stopped --network host --user root --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
                     `-v ${CONTAINER}-data:/data -v /var/run/docker.sock:/var/run/docker.sock ${IMAGE} ` +
                     `sh -c "forgejo-runner register --no-interactive --instance ${parsed.instanceUrl} --token ${parsed.token} && forgejo-runner daemon"`,
             );

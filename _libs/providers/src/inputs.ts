@@ -43,3 +43,14 @@ export const sshTarget = (parsed: z.infer<typeof sshSchema>): SshTarget => ({
     privateKey: parsed.sshKey,
     port: parsed.port,
 });
+
+// Split a Forgejo URL into the (domain, https) pair Komodo's git-provider model expects: the host[:port]
+// authority and whether to clone over TLS. Komodo clones the platform's app repos from INSIDE the host's
+// nested Docker, where the public git.<zone> name does not resolve and the tunnel hairpin is unreachable;
+// driving both the build's git_provider and Komodo's config.toml account off Forgejo's internal url
+// (http://<internalIp>:3000) makes the clone a direct host-local request. The two MUST agree byte-for-byte
+// (Komodo matches the account to a build by this domain), so both derive it here.
+export const gitProvider = (forgejoUrl: string): { domain: string; https: boolean } => ({
+    domain: forgejoUrl.replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+    https: forgejoUrl.startsWith("https://"),
+});

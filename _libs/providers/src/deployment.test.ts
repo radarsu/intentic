@@ -5,22 +5,30 @@ import type { KomodoApi } from "./komodo-api.js";
 const NOT_USED = async (): Promise<never> => {
     throw new Error("unused by the deployment provider");
 };
-const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
-    login: async () => "jwt",
-    listBuilds: NOT_USED,
-    createBuild: NOT_USED,
-    updateBuild: NOT_USED,
-    listDeployments: NOT_USED,
-    getDeployment: NOT_USED,
-    createDeployment: NOT_USED,
-    updateDeployment: NOT_USED,
-    deploy: NOT_USED,
-    listAlerters: NOT_USED,
-    getAlerter: NOT_USED,
-    createAlerter: NOT_USED,
-    updateAlerter: NOT_USED,
-    ...overrides,
-});
+const api = (overrides: Partial<KomodoApi>): KomodoApi => {
+    let builds = 0;
+    return {
+        login: async () => "jwt",
+        listBuilds: NOT_USED,
+        createBuild: NOT_USED,
+        updateBuild: NOT_USED,
+        listBuilders: NOT_USED,
+        createBuilder: NOT_USED,
+        runBuild: async () => {},
+        // Each poll reports a newer build, so runBuildAndWait sees the image appear on its next check.
+        getBuild: async () => ({ lastBuiltAt: (builds += 1), remoteError: undefined }),
+        listDeployments: NOT_USED,
+        getDeployment: NOT_USED,
+        createDeployment: NOT_USED,
+        updateDeployment: NOT_USED,
+        deploy: NOT_USED,
+        listAlerters: NOT_USED,
+        getAlerter: NOT_USED,
+        createAlerter: NOT_USED,
+        updateAlerter: NOT_USED,
+        ...overrides,
+    };
+};
 
 const ctx = () => ({
     env: {},
@@ -36,7 +44,6 @@ const inputs = {
     name: "staging",
     branch: "develop",
     domain: "staging.example.com",
-    server: "host",
     internalIp: "10.0.0.5",
     port: 24680,
     komodoUrl: "https://komodo.example.com",
@@ -69,13 +76,13 @@ test("read returns the deterministic url + an internalUrl on the host ip when th
     expect(observed?.detail).toEqual({ config: observedConfig });
 });
 
-test("diff is noop when the live config matches the authored fields", () => {
+test("diff is noop when the live env matches the authored env", () => {
     expect(createDeploymentProvider(api({})).diff(inputs, { outputs: {}, detail: { config: observedConfig } })).toEqual({ action: "noop" });
 });
 
-test("diff is update when an authored field (branch) drifts — runtime state is never consulted", () => {
-    const drifted = { ...observedConfig, branch: "main" };
-    expect(createDeploymentProvider(api({})).diff(inputs, { outputs: {}, detail: { config: drifted } }).action).toBe("update");
+test("diff ignores server + branch (Komodo tracks neither on a Deployment) — only env drives it", () => {
+    const drifted = { ...observedConfig, branch: "main", server_id: "elsewhere" };
+    expect(createDeploymentProvider(api({})).diff(inputs, { outputs: {}, detail: { config: drifted } })).toEqual({ action: "noop" });
 });
 
 test("diff is update when env drifts", () => {
@@ -86,14 +93,24 @@ test("diff is update when env drifts", () => {
     expect(provider.diff(withEnv, { outputs: {}, detail: { config: matching } })).toEqual({ action: "noop" });
 });
 
-test("apply creates the deployment then triggers a deploy", async () => {
-    let created: unknown;
+test("diff matches Komodo's stored env form (multiline string, spaces around '=')", () => {
+    const withEnv = { ...inputs, env: { PORT: "27748" } };
+    const stored = { ...observedConfig, environment: "  PORT = 27748\n" };
+    expect(createDeploymentProvider(api({})).diff(withEnv, { outputs: {}, detail: { config: stored } })).toEqual({ action: "noop" });
+});
+
+test("apply creates the deployment, builds the image, then triggers a deploy", async () => {
+    let created: { name: string; config: Record<string, unknown> } | undefined;
+    let built: string | undefined;
     let deployed: string | undefined;
     const provider = createDeploymentProvider(
         api({
             listDeployments: async () => [],
             createDeployment: async (args) => {
                 created = args;
+            },
+            runBuild: async (args) => {
+                built = args.build;
             },
             deploy: async (args) => {
                 deployed = args.deployment;
@@ -102,7 +119,11 @@ test("apply creates the deployment then triggers a deploy", async () => {
     );
     const result = await provider.apply(inputs, undefined, ctx());
     expect(result["url"]).toBe("https://staging.example.com");
-    expect(created).toMatchObject({ name: "my-app.staging" });
+    expect(created).toMatchObject({
+        name: "my-app.staging",
+        config: { server_id: "Local", image: { type: "Build", params: { build_id: "my-app" } } },
+    });
+    expect(built).toBe("my-app");
     expect(deployed).toBe("my-app.staging");
 });
 

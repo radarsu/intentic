@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { plan, reconcile } from "@intentic/engine";
-import { createProviders } from "@intentic/providers";
+import { createStore, plan, reconcile, resolveInputs } from "@intentic/engine";
+import { createProviders, createSshProbe, hostTarget } from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
@@ -90,9 +90,17 @@ const apply = buildCommand<ApplyFlags>({
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         loadEnvFile(dirname(artifact));
         const graph = await readArtifact(artifact);
+        // Readiness gates target host-internal urls (http://<internalIp>:<port>) reachable only from the host
+        // itself, never from this CLI process. Build an SSH probe from the graph's host node so apply gates on
+        // the host's own view; resolveInputs substitutes its HOST_SSH_KEY secret from the env loaded above.
+        const hostNode = Object.values(graph.resources).find((node) => node.type === "host");
+        const probe =
+            hostNode === undefined
+                ? undefined
+                : createSshProbe(hostTarget(resolveInputs(hostNode.inputs, createStore(), process.env, { lenient: false })));
         const result = await reconcile(
             graph,
-            { providers: createProviders(), log },
+            { providers: createProviders(), log, ...(probe !== undefined ? { probe } : {}) },
             { maxIterations: flags.maxIterations ?? DEFAULT_MAX_ITERATIONS },
         );
         await writeStatus(join(dirname(artifact), STATUS_FILE), {

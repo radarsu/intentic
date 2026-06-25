@@ -8,6 +8,7 @@ interface FakeOpts {
     readonly running?: boolean;
     readonly healthy?: boolean;
     readonly token?: string;
+    readonly gitToken?: string;
     readonly adminExists?: boolean;
     readonly runFails?: boolean;
 }
@@ -22,6 +23,9 @@ const fakeSsh = (opts: FakeOpts = {}): { executor: SshExecutor; commands: string
             }
             if (command.includes("wget -q --spider")) {
                 return res("", opts.healthy ? 0 : 1);
+            }
+            if (command.includes("git-token")) {
+                return res(opts.gitToken ?? "");
             }
             if (command.includes("runner-token")) {
                 return res(opts.token ?? "");
@@ -85,29 +89,43 @@ test("read returns undefined when forgejo is not yet healthy", async () => {
 });
 
 test("read returns undefined when the runner token is not yet persisted", async () => {
-    expect(await createForgejoProvider(fakeSsh({ running: true, healthy: true, token: "" }).executor).read(inputs, ctx())).toBeUndefined();
+    expect(
+        await createForgejoProvider(fakeSsh({ running: true, healthy: true, token: "", gitToken: "gtok" }).executor).read(inputs, ctx()),
+    ).toBeUndefined();
 });
 
-test("read returns the deterministic url/internalUrl + the persisted runner token when healthy", async () => {
-    const observed = await createForgejoProvider(fakeSsh({ running: true, healthy: true, token: "tok-123" }).executor).read(inputs, ctx());
-    expect(observed).toEqual({ outputs: { url: "https://git.example.com", internalUrl: "http://10.0.0.5:3000", runnerToken: "tok-123" } });
+test("read returns undefined when the git token is not yet persisted", async () => {
+    expect(
+        await createForgejoProvider(fakeSsh({ running: true, healthy: true, token: "tok-123", gitToken: "" }).executor).read(inputs, ctx()),
+    ).toBeUndefined();
+});
+
+test("read returns the deterministic url/internalUrl + the persisted runner and git tokens when healthy", async () => {
+    const observed = await createForgejoProvider(fakeSsh({ running: true, healthy: true, token: "tok-123", gitToken: "gtok-456" }).executor).read(
+        inputs,
+        ctx(),
+    );
+    expect(observed).toEqual({
+        outputs: { url: "https://git.example.com", internalUrl: "http://10.0.0.5:3000", runnerToken: "tok-123", gitToken: "gtok-456" },
+    });
 });
 
 test("diff is always noop", () => {
     expect(createForgejoProvider(fakeSsh().executor).diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
 });
 
-test("apply runs forgejo with INSTALL_LOCK + the stamp label, bootstraps admin, mints the token, and returns outputs", async () => {
-    const ssh = fakeSsh({ healthy: true, token: "tok-123" });
+test("apply runs forgejo with INSTALL_LOCK + the stamp label, bootstraps admin, mints both tokens, and returns outputs", async () => {
+    const ssh = fakeSsh({ healthy: true, token: "tok-123", gitToken: "gtok-456" });
     const result = await createForgejoProvider(ssh.executor).apply(inputs, undefined, ctx());
-    expect(result).toEqual({ url: "https://git.example.com", internalUrl: "http://10.0.0.5:3000", runnerToken: "tok-123" });
+    expect(result).toEqual({ url: "https://git.example.com", internalUrl: "http://10.0.0.5:3000", runnerToken: "tok-123", gitToken: "gtok-456" });
     expect(ssh.commands.some((c) => c.includes("docker run") && c.includes("INSTALL_LOCK=true") && c.includes("intentic.id=host-git"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("admin user create") && c.includes("--password pw"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("generate-runner-token"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("generate-access-token") && c.includes("--scopes read:repository"))).toBe(true);
 });
 
 test("apply tolerates the admin user already existing", async () => {
-    const ssh = fakeSsh({ healthy: true, token: "tok-123", adminExists: true });
+    const ssh = fakeSsh({ healthy: true, token: "tok-123", gitToken: "gtok-456", adminExists: true });
     await expect(createForgejoProvider(ssh.executor).apply(inputs, undefined, ctx())).resolves.toBeDefined();
 });
 

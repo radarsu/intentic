@@ -10,6 +10,11 @@ const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
     listBuilds: NOT_USED,
     createBuild: NOT_USED,
     updateBuild: NOT_USED,
+    // The auto-created "Local" Server builder exists by default so apply finds it without creating one.
+    listBuilders: async () => [{ id: "builder-1", name: "Local" }],
+    createBuilder: NOT_USED,
+    runBuild: NOT_USED,
+    getBuild: NOT_USED,
     listDeployments: NOT_USED,
     createDeployment: NOT_USED,
     updateDeployment: NOT_USED,
@@ -35,7 +40,7 @@ const inputs = {
     repoName: "my-app",
     deployer: "host-deploy",
     komodoUrl: "https://komodo.example.com",
-    gitDomain: "git.example.com",
+    gitInternalUrl: "http://10.0.0.5:3000",
     adminUser: "admin",
     adminPassword: "pw",
 };
@@ -63,8 +68,8 @@ test("read returns undefined when komodo login fails", async () => {
     expect(await provider.read(inputs, ctx())).toBeUndefined();
 });
 
-test("apply creates the build with the repo coordinates when absent", async () => {
-    let created: unknown;
+test("apply creates the build with the repo coordinates + builder when absent", async () => {
+    let created: { name: string; config: Record<string, unknown> } | undefined;
     const provider = createAppProvider(
         api({
             listBuilds: async () => [],
@@ -74,7 +79,34 @@ test("apply creates the build with the repo coordinates when absent", async () =
         }),
     );
     expect(await provider.apply(inputs, undefined, ctx())).toEqual({});
-    expect(created).toMatchObject({ name: "my-app", config: { repo: "admin/my-app", git_provider: "git.example.com", git_account: "admin" } });
+    // git_provider is Forgejo's internal authority (host:port) over plain http — Komodo clones host-locally.
+    expect(created).toMatchObject({
+        name: "my-app",
+        config: { repo: "admin/my-app", git_provider: "10.0.0.5:3000", git_account: "admin", git_https: false },
+    });
+    expect(created?.config["builder_id"]).toBe("builder-1");
+});
+
+test("apply creates the Server builder when none exists, then references it", async () => {
+    let builder: { name: string; config: unknown } | undefined;
+    let created: { config: Record<string, unknown> } | undefined;
+    let listed = 0;
+    const provider = createAppProvider(
+        api({
+            // First listing is empty (no builder), second returns the just-created one.
+            listBuilders: async () => (listed++ === 0 ? [] : [{ id: "builder-9", name: "Local" }]),
+            createBuilder: async (args) => {
+                builder = args;
+            },
+            listBuilds: async () => [],
+            createBuild: async (args) => {
+                created = args;
+            },
+        }),
+    );
+    await provider.apply(inputs, undefined, ctx());
+    expect(builder).toMatchObject({ name: "Local", config: { type: "Server", params: { server_id: "Local" } } });
+    expect(created?.config["builder_id"]).toBe("builder-9");
 });
 
 test("apply updates the existing build rather than creating", async () => {

@@ -126,7 +126,7 @@ test("the engine wires host -> cloudflare -> tunnel -> cf-route, then is idempot
         host: createHostProvider(ssh),
         cloudflare: createCloudflareProvider(cloudflare),
         tunnel: createTunnelProvider(cloudflare, ssh),
-        "cf-route": createCfRouteProvider(cloudflare),
+        "cf-route": createCfRouteProvider(cloudflare, async () => {}),
     };
 
     const first = await apply(graph, { providers, env, probe: async () => true, log: () => {} });

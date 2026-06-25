@@ -12,14 +12,16 @@ export interface KomodoResource {
     readonly name: string;
 }
 
-// The slice of a Deployment's config the deployment provider diffs against — the authored fields it
-// converges (server, branch, build image, env). Extra fields Komodo returns are dropped by zod.
-const deploymentConfigSchema = z.object({
-    server_id: z.string(),
-    branch: z.string(),
-    image: z.object({ type: z.string(), params: z.object({ build: z.string() }) }),
-    environment: z.array(z.object({ variable: z.string(), value: z.string() })).readonly(),
-});
+// The slice of a Deployment's config the deployment provider diffs against — the one authored MUTABLE field
+// it converges, `environment`. server_id and the build image are fixed at creation (like the deterministic
+// ports); branch is a Build concept that a Deployment does not carry (GetDeployment never returns it). Komodo
+// stores `environment` as a multiline string ("K = V\n") but also accepts the array-of-{variable,value} form
+// we send, so read must tolerate both; other fields Komodo returns (server_id/image/ports/...) pass through.
+const deploymentConfigSchema = z
+    .object({
+        environment: z.union([z.string(), z.array(z.object({ variable: z.string(), value: z.string() }))]).default(""),
+    })
+    .passthrough();
 export type DeploymentConfig = z.infer<typeof deploymentConfigSchema>;
 
 const alerterEndpointSchema = z.object({ type: z.enum(["Discord", "Slack", "Custom"]), params: z.object({ url: z.string() }) });
@@ -36,9 +38,20 @@ export type ResourceTarget = z.infer<typeof resourceTargetSchema>;
 export type AlerterConfig = z.infer<typeof alerterConfigSchema>;
 
 // ListX returns ResourceListItem<Info>[]; we validate id/name (+ deployment run state from info) and drop
-// the rest. The login result is the JwtOrTwoFactor enum's Jwt variant in either flattened or tagged form.
+// the rest. The login result is the JwtOrTwoFactor enum, internally tagged: {"type":"Jwt","data":{"jwt"}}
+// on success, {"type":"Totp"|"Passkey",...} when 2FA is required.
 const listItemSchema = z.object({ id: z.string(), name: z.string() });
-const jwtSchema = z.object({ jwt: z.string().optional(), Jwt: z.object({ jwt: z.string() }).optional() });
+const loginSchema = z.object({ type: z.string(), data: z.object({ jwt: z.string() }).optional() });
+// The slice of GetBuild the deployment provider polls to know a RunBuild has finished: last_built_at is 0
+// until the first successful build and advances on each subsequent one; remote_error carries a git-fetch
+// failure so a stuck build's timeout message is actionable.
+const buildStatusSchema = z.object({
+    info: z.object({ last_built_at: z.number().default(0), remote_error: z.string().nullish() }).passthrough(),
+});
+export interface BuildStatus {
+    readonly lastBuiltAt: number;
+    readonly remoteError: string | undefined;
+}
 const getAlerterSchema = z.object({ config: alerterConfigSchema });
 const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
 
@@ -63,6 +76,21 @@ export interface KomodoApi {
         readonly id: string;
         readonly config: Readonly<Record<string, unknown>>;
     }) => Promise<void>;
+    readonly listBuilders: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
+    // A Build needs a Builder attached or RunBuild errors "Must attach builder"; a Server builder builds on
+    // the named server's Periphery.
+    readonly createBuilder: (args: {
+        readonly baseUrl: string;
+        readonly jwt: string;
+        readonly name: string;
+        readonly config: Readonly<Record<string, unknown>>;
+    }) => Promise<void>;
+    // execute/RunBuild {build} — builds the image. RunBuild returns once the build STARTS (it runs async on
+    // the builder), and execute/Deploy does NOT build; it only pulls + runs. So a create/update must RunBuild,
+    // wait for the image via getBuild, then Deploy.
+    readonly runBuild: (args: { readonly baseUrl: string; readonly jwt: string; readonly build: string }) => Promise<void>;
+    // read/GetBuild {build} -> the build's status; last_built_at advances when a RunBuild produces an image.
+    readonly getBuild: (args: { readonly baseUrl: string; readonly jwt: string; readonly build: string }) => Promise<BuildStatus>;
     readonly listDeployments: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
     // read/GetDeployment {deployment: <id or name>} -> the authored config slice the provider diffs.
     readonly getDeployment: (args: { readonly baseUrl: string; readonly jwt: string; readonly deployment: string }) => Promise<DeploymentConfig>;
@@ -96,7 +124,7 @@ export interface KomodoApi {
     }) => Promise<void>;
 }
 
-type Module = "auth" | "read" | "write" | "execute";
+type Module = "read" | "write" | "execute";
 
 interface PostArgs {
     readonly baseUrl: string;
@@ -113,7 +141,8 @@ const post = async (args: PostArgs): Promise<Response> => {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            ...(args.jwt !== undefined ? { Authorization: `Bearer ${args.jwt}` } : {}),
+            // Komodo expects the bare JWT in Authorization (no "Bearer " prefix), unlike most APIs.
+            ...(args.jwt !== undefined ? { Authorization: args.jwt } : {}),
         },
         body: JSON.stringify({ type: args.type, params: args.params }),
     });
@@ -131,12 +160,21 @@ const project = (items: readonly z.infer<typeof listItemSchema>[]): readonly Kom
 
 export const komodoApi: KomodoApi = {
     login: async ({ baseUrl, username, password }) => {
-        const result = await read({ baseUrl, module: "auth", type: "LoginLocalUser", params: { username, password } }, jwtSchema);
-        const jwt = result.jwt ?? result.Jwt?.jwt;
-        if (jwt === undefined) {
-            throw new Error("Komodo auth/LoginLocalUser returned no jwt (is local auth enabled?)");
+        // Auth is the external mogh_auth surface: POST /auth/login/<Operation> with the BARE params (not the
+        // {type,params} envelope of /read|/write|/execute), and the JWT comes back internally tagged under .data.
+        const response = await fetch(`${baseUrl}/auth/login/LoginLocalUser`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+        });
+        if (!response.ok) {
+            throw new Error(`Komodo auth/login/LoginLocalUser failed (HTTP ${response.status}): ${await response.text()}`);
         }
-        return jwt;
+        const result = parseResponse(loginSchema, await response.json(), "Komodo auth/login/LoginLocalUser");
+        if (result.type !== "Jwt" || result.data === undefined) {
+            throw new Error(`Komodo login did not return a Jwt (got "${result.type}"; 2FA is not supported)`);
+        }
+        return result.data.jwt;
     },
     listBuilds: async ({ baseUrl, jwt }) =>
         project(await read({ baseUrl, module: "read", type: "ListBuilds", params: {}, jwt }, z.array(listItemSchema))),
@@ -145,6 +183,18 @@ export const komodoApi: KomodoApi = {
     },
     updateBuild: async ({ baseUrl, jwt, id, config }) => {
         await post({ baseUrl, module: "write", type: "UpdateBuild", params: { id, config }, jwt });
+    },
+    listBuilders: async ({ baseUrl, jwt }) =>
+        project(await read({ baseUrl, module: "read", type: "ListBuilders", params: {}, jwt }, z.array(listItemSchema))),
+    createBuilder: async ({ baseUrl, jwt, name, config }) => {
+        await post({ baseUrl, module: "write", type: "CreateBuilder", params: { name, config }, jwt });
+    },
+    runBuild: async ({ baseUrl, jwt, build }) => {
+        await post({ baseUrl, module: "execute", type: "RunBuild", params: { build }, jwt });
+    },
+    getBuild: async ({ baseUrl, jwt, build }) => {
+        const result = await read({ baseUrl, module: "read", type: "GetBuild", params: { build }, jwt }, buildStatusSchema);
+        return { lastBuiltAt: result.info.last_built_at, remoteError: result.info.remote_error ?? undefined };
     },
     listDeployments: async ({ baseUrl, jwt }) =>
         project(await read({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt }, z.array(listItemSchema))),

@@ -31,7 +31,9 @@ test("a need with no option throws", () => {
 test("an ambiguous capability throws — the state resolver makes no choice", () => {
     const ambiguous: Catalog = {
         optionsFor: (capability) =>
-            capability === "infra-control" ? [...defaultCatalog.optionsFor(capability), { id: "nomad", provides: ["infra-control"] }] : defaultCatalog.optionsFor(capability),
+            capability === "infra-control"
+                ? [...defaultCatalog.optionsFor(capability), { id: "nomad", provides: ["infra-control"] }]
+                : defaultCatalog.optionsFor(capability),
     };
     expect(() => resolveState(intent, ambiguous)).toThrow(/ambiguous: "infra-control"/);
 });

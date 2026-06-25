@@ -41,7 +41,9 @@ export const resolveApp = (
                 repoName: intent.id,
                 deployer: makeRef(platform.deploy),
                 komodoUrl,
-                gitDomain: gitDomain(zone),
+                // Komodo clones the repo from INSIDE the host, so it builds from Forgejo's internal url (the
+                // public git.<zone> name does not resolve there); see gitProvider in providers/inputs.ts.
+                gitInternalUrl: makeRef<string>(platform.forgejo, "internalUrl"),
                 ...komodoAdmin,
             },
             explicitDependsOn: [platform.deploy, platform.komodoRoute, repo],
@@ -60,7 +62,6 @@ export const resolveApp = (
                 name,
                 branch: environment.branch,
                 domain: environment.domain,
-                server: makeRef(intent.on),
                 internalIp: makeRef<string>(intent.on, "internalIp"),
                 port,
                 komodoUrl,
@@ -68,7 +69,8 @@ export const resolveApp = (
                 ...(environment.env !== undefined ? { env: environment.env } : {}),
             },
             explicitDependsOn: [intent.id, platform.komodoRoute],
-            readyWhen: environment.readyWhen ?? httpOk(makeRef<string>(id, "internalUrl"), { timeout: "60s" }),
+            // A cold clone+build+run on the host can take well over a minute; give the build room before the gate fails.
+            readyWhen: environment.readyWhen ?? httpOk(makeRef<string>(id, "internalUrl"), { timeout: "240s" }),
         });
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
         nodes.push(exposure.route);
@@ -83,7 +85,6 @@ export const resolveApp = (
                 ...forgejoAdmin,
                 repoName: intent.id,
                 komodoUrl,
-                deployment: id,
                 branch: environment.branch,
                 secret: env("KOMODO_WEBHOOK_SECRET"),
             },

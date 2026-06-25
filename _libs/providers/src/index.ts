@@ -22,4 +22,5 @@ export { createProviders } from "./providers.js";
 export { createRepoProvider } from "./repo.js";
 export type { SshExecutor, SshResult, SshSession, SshTarget } from "./ssh.js";
 export { sshExecutor } from "./ssh.js";
+export { createSshProbe, hostTarget } from "./ssh-probe.js";
 export { createTunnelProvider } from "./tunnel.js";

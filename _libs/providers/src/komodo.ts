@@ -1,6 +1,6 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
+import { gitProvider, parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshSession } from "./ssh.js";
 import { type SshExecutor, sshExecutor } from "./ssh.js";
 
@@ -12,6 +12,12 @@ const komodoSchema = sshSchema.extend({
     adminUser: z.string(),
     adminPassword: z.string(),
     webhookSecret: z.string(),
+    // The host git provider Komodo authenticates to when cloning the admin's private app repos for a Build.
+    // forgejoUrl is the INTERNAL Forgejo url (http://<internalIp>:3000); Komodo clones the repos from inside
+    // the host's Docker, so the git-provider account is registered against this internal authority (the public
+    // git.<zone> name does not resolve there). gitAccount/gitToken are the admin + its scoped read token.
+    gitAccount: z.string(),
+    gitToken: z.string(),
 });
 type KomodoInputs = z.infer<typeof komodoSchema>;
 const parse = (inputs: ResolvedInputs): KomodoInputs => parseInputs(komodoSchema, inputs, "komodo");
@@ -25,9 +31,11 @@ const READY_INTERVAL_MS = 3_000;
 const internalUrl = (parsed: KomodoInputs): string => `http://${parsed.internalIp}:${CORE_PORT}`;
 const outputsFor = (parsed: KomodoInputs): Record<string, unknown> => ({ url: `https://${parsed.domain}`, internalUrl: internalUrl(parsed) });
 
+// docker compose names the core container "<project>-core-1", not CORE, so match it by the intentic.id
+// label the compose stamps on it instead of by an exact container name.
 const running = async (session: SshSession): Promise<boolean> => {
-    const result = await session.exec(`docker ps --filter "name=^${CORE}$" --format '{{.Names}}'`);
-    return result.stdout.trim() === CORE;
+    const result = await session.exec(`docker ps --filter "label=intentic.id=${CORE}" --format '{{.Names}}'`);
+    return result.stdout.trim() !== "";
 };
 
 // FerretDB + Core + Periphery, co-located so Periphery trusts Core via the shared keys volume (no
@@ -53,23 +61,43 @@ const composeYaml = (): string =>
         "    depends_on: [ ferretdb ]",
         `    ports: [ "${CORE_PORT}:9120" ]`,
         "    env_file: ./.env",
-        "    volumes: [ keys:/config/keys ]",
+        // config.toml carries the git-provider account (Komodo clones private app repos with it); bind it in
+        // read-only. Relative to --project-directory (STATE_DIR), so it resolves to the file ensureFiles writes.
+        "    volumes: [ keys:/config/keys, ./config.toml:/config/config.toml:ro ]",
         `    labels: [ "intentic.id=${CORE}" ]`,
+        // INBOUND-mode agent: with no core_address set, periphery keeps its default 8120 listener (SSL on,
+        // self-signed cert auto-generated) that Core dials at https://periphery:8120. Setting
+        // PERIPHERY_CORE_ADDRESS would flip it to outbound mode and DISABLE that listener (Core's dial would
+        // be refused). Co-located on this private compose network, the shared keys volume persists each side's
+        // Noise keypair and the handshake needs no pre-shared passkey or pinned core key.
         "  periphery:",
         "    image: ghcr.io/moghtech/komodo-periphery:$COMPOSE_KOMODO_IMAGE_TAG",
         "    restart: unless-stopped",
-        "    environment: { PERIPHERY_CORE_ADDRESS: ws://core:9120, PERIPHERY_CONNECT_AS: Local, PERIPHERY_CORE_PUBLIC_KEYS: file:/config/keys/core.pub }",
         "    volumes: [ /var/run/docker.sock:/var/run/docker.sock, /proc:/proc, keys:/config/keys ]",
         "volumes: { postgres-data: {}, ferretdb-state: {}, keys: {} }",
         "",
     ].join("\n");
 
-// Write the compose file (always) and the .env (once — Core/Periphery secrets must survive restarts). The
-// webhook secret is the operator's KOMODO_WEBHOOK_SECRET (shared with the deploy-hooks); passkey/jwt/db
-// secrets are host-generated once and never surface as outputs.
+// The git-provider account Komodo uses to clone the admin's private app repos. git_provider accounts cannot
+// be configured via env in Komodo v2 — only via this config file (or the UI/API) — so it is mounted into Core.
+const configToml = (parsed: KomodoInputs): string => {
+    const git = gitProvider(parsed.forgejoUrl);
+    return [
+        "[[git_provider]]",
+        `domain = "${git.domain}"`,
+        `https = ${git.https}`,
+        `accounts = [{ username = "${parsed.gitAccount}", token = "${parsed.gitToken}" }]`,
+        "",
+    ].join("\n");
+};
+
+// Write the compose file + git-provider config.toml (always) and the .env (once — Core/Periphery secrets
+// must survive restarts). The webhook secret is the operator's KOMODO_WEBHOOK_SECRET (shared with the
+// deploy-hooks); passkey/jwt/db secrets are host-generated once and never surface as outputs.
 const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<void> => {
     await session.exec(`mkdir -p ${STATE_DIR}`);
     await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml()}COMPOSE_EOF`);
+    await session.exec(`cat > ${STATE_DIR}/config.toml <<'CONFIG_EOF'\n${configToml(parsed)}CONFIG_EOF`);
     // Each line is a separate printf argument so `printf '%s\n'` emits one KEY=value per line. Joining with
     // "\n" into a single arg would print the literal characters \n (printf %s does not interpret escapes),
     // leaving compose unable to parse the file — the image tags would come through blank.
@@ -77,10 +105,11 @@ const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<v
         "TZ=Etc/UTC",
         "COMPOSE_KOMODO_IMAGE_TAG=2",
         "KOMODO_LOCAL_AUTH=true",
+        "KOMODO_CONFIG_PATH=/config/config.toml",
         `KOMODO_INIT_ADMIN_USERNAME=${parsed.adminUser}`,
         "KOMODO_DATABASE_ADDRESS=ferretdb:27017",
         "KOMODO_FIRST_SERVER_NAME=Local",
-        "KOMODO_FIRST_SERVER=https://periphery:8120",
+        "KOMODO_FIRST_SERVER_ADDRESS=https://periphery:8120",
     ]
         .map((line) => `'${line}'`)
         .join(" ");

@@ -90,7 +90,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
                 instanceUrl: {
-                    $ref: "host-git.url",
+                    $ref: "host-git.internalUrl",
                 },
                 token: {
                     $ref: "host-git.runnerToken",
@@ -135,6 +135,10 @@ export const expectedGraph: DesiredStateGraph = {
                         source: "env",
                         key: "KOMODO_WEBHOOK_SECRET",
                     },
+                },
+                gitAccount: "intentic",
+                gitToken: {
+                    $ref: "host-git.gitToken",
                 },
             },
             dependsOn: ["host", "host-git"],
@@ -220,7 +224,9 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                gitDomain: "git.example.com",
+                gitInternalUrl: {
+                    $ref: "host-git.internalUrl",
+                },
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
@@ -229,7 +235,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
             },
-            dependsOn: ["host-deploy", "cf-komodo-example-com", "my-app-repo"],
+            dependsOn: ["host-deploy", "cf-komodo-example-com", "my-app-repo", "host-git"],
         },
         "my-app.staging": {
             id: "my-app.staging",
@@ -241,9 +247,6 @@ export const expectedGraph: DesiredStateGraph = {
                 name: "staging",
                 branch: "develop",
                 domain: "staging.example.com",
-                server: {
-                    $ref: "host",
-                },
                 internalIp: {
                     $ref: "host.internalIp",
                 },
@@ -273,7 +276,7 @@ export const expectedGraph: DesiredStateGraph = {
                 url: {
                     $ref: "my-app.staging.internalUrl",
                 },
-                timeout: "60s",
+                timeout: "240s",
             },
         },
         "cf-staging-example-com": {
@@ -314,7 +317,6 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                deployment: "my-app.staging",
                 branch: "develop",
                 secret: {
                     $secret: {
@@ -335,9 +337,6 @@ export const expectedGraph: DesiredStateGraph = {
                 name: "production",
                 branch: "main",
                 domain: "app.example.com",
-                server: {
-                    $ref: "host",
-                },
                 internalIp: {
                     $ref: "host.internalIp",
                 },
@@ -367,7 +366,7 @@ export const expectedGraph: DesiredStateGraph = {
                 url: {
                     $ref: "my-app.production.internalUrl",
                 },
-                timeout: "60s",
+                timeout: "240s",
             },
         },
         "cf-app-example-com": {
@@ -408,7 +407,6 @@ export const expectedGraph: DesiredStateGraph = {
                 komodoUrl: {
                     $ref: "host-deploy.url",
                 },
-                deployment: "my-app.production",
                 branch: "main",
                 secret: {
                     $secret: {

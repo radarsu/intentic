@@ -112,13 +112,16 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
         const existing = await api.findTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, name: parsed.name });
         const tunnel = existing ?? (await api.createTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, name: parsed.name }));
         const token = await api.getTunnelToken({ accountId: parsed.accountId, apiToken: parsed.apiToken, tunnelId: tunnel.id });
-        await runConnector(executor, parsed, tunnel.id, token);
+        // Set the ingress in Cloudflare BEFORE (re)starting the connector: a remotely-managed cloudflared
+        // fetches its config on startup, so a connector started before the ingress exists serves only the
+        // catch-all 404. runConnector always recreates the container, so it picks up the ingress just PUT.
         await api.putTunnelIngress({
             accountId: parsed.accountId,
             apiToken: parsed.apiToken,
             tunnelId: tunnel.id,
             ingress: desiredRules(parsed),
         });
+        await runConnector(executor, parsed, tunnel.id, token);
         return { tunnelId: tunnel.id, cname: cname(tunnel.id) };
     },
 });

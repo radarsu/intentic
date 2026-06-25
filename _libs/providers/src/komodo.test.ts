@@ -54,6 +54,8 @@ const inputs = {
     adminUser: "intentic",
     adminPassword: "pw",
     webhookSecret: "whsec",
+    gitAccount: "intentic",
+    gitToken: "gtok-456",
 };
 
 test("read returns undefined when the host is unreachable over SSH", async () => {
@@ -83,6 +85,17 @@ test("apply writes compose + a once-guarded env, brings the stack up, waits for 
     const result = await createKomodoProvider(ssh.executor).apply(inputs, undefined, ctx());
     expect(result).toEqual({ url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" });
     expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/komodo/compose.yaml"))).toBe(true);
+    // The git-provider account is registered against Forgejo's INTERNAL authority (derived from forgejoUrl),
+    // over plain http, so Komodo clones host-locally rather than chasing the unresolvable public name.
+    expect(
+        ssh.commands.some(
+            (c) =>
+                c.includes("cat > /opt/intentic/komodo/config.toml") &&
+                c.includes('domain = "10.0.0.5:3000"') &&
+                c.includes("https = false") &&
+                c.includes('token = "gtok-456"'),
+        ),
+    ).toBe(true);
     expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/komodo/.env") && c.includes("KOMODO_WEBHOOK_SECRET=whsec"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("docker compose -p komodo") && c.includes("up -d"))).toBe(true);
 });

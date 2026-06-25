@@ -10,16 +10,16 @@ const deployHookSchema = z.object({
     adminPassword: z.string(),
     repoName: z.string(),
     komodoUrl: z.string(),
-    deployment: z.string(),
     branch: z.string(),
     secret: z.string(),
 });
 type DeployHookInputs = z.infer<typeof deployHookSchema>;
 const parse = (inputs: ResolvedInputs): DeployHookInputs => parseInputs(deployHookSchema, inputs, "deploy-hook");
 
-// Komodo's incoming deploy listener for this environment's Deployment. Forgejo posts a gitea-format hook
-// here on push; the github auth type + shared secret signature compatibility is confirmed at integration.
-const listenerUrl = (parsed: DeployHookInputs): string => `${parsed.komodoUrl}/listener/github/deployment/${parsed.deployment}/deploy`;
+// Komodo's build listener for this app's Build (named after the repo). Komodo has no deployment listener; a
+// push here triggers RunBuild, which redeploys every environment whose Deployment has redeploy_on_build set.
+// Forgejo's gitea-type hook sends the X-Hub-Signature-256 HMAC Komodo's github integration recomputes.
+const listenerUrl = (parsed: DeployHookInputs): string => `${parsed.komodoUrl}/listener/github/build/${parsed.repoName}`;
 const findHook = (hooks: readonly ForgejoHook[], url: string): ForgejoHook | undefined => hooks.find((hook) => hook.config["url"] === url);
 
 // Push-to-deploy: a Forgejo repo webhook that triggers a Komodo deploy of this environment on push. Both

@@ -76,16 +76,18 @@ test("komodo getDeployment parses the authored config slice", async () => {
         ports: ["20000:20000"],
     };
     stubFetch({ config });
-    expect(await komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).toEqual({
-        server_id: "host",
-        branch: "main",
-        image: { type: "Build", params: { build: "my-app" } },
-        environment: [{ variable: "DATABASE_URL", value: "postgres://x" }],
-    });
+    // The read validates the env it diffs on and passes the rest (server_id/image/branch/ports) through.
+    expect(await komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).toEqual(config);
+});
+
+test("komodo getDeployment parses Komodo's real string env form", async () => {
+    stubFetch({ config: { server_id: "host", environment: "PORT = 27748\n" } });
+    const result = await komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" });
+    expect(result.environment).toBe("PORT = 27748\n");
 });
 
 test("komodo getDeployment throws a boundary error when the config is malformed", async () => {
-    stubFetch({ config: { server_id: "host", branch: 7, image: { type: "Build", params: { build: "my-app" } }, environment: [] } });
+    stubFetch({ config: { server_id: "host", environment: 7 } });
     await expect(komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).rejects.toThrow(
         /returned an unexpected response/,
     );

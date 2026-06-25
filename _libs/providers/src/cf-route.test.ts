@@ -55,6 +55,8 @@ test("diff is update when the CNAME target drifts", () => {
     expect(provider.diff(inputs, { outputs: {}, detail: { content: "stale.cfargotunnel.com" } }).action).toBe("update");
 });
 
+const noPropagationWait = async (): Promise<void> => {};
+
 test("apply creates a proxied CNAME stamped with the resource id when absent", async () => {
     let created: { name: string; content: string; comment: string } | undefined;
     const provider = createCfRouteProvider(
@@ -64,6 +66,7 @@ test("apply creates a proxied CNAME stamped with the resource id when absent", a
                 created = { name: args.name, content: args.content, comment: args.comment };
             },
         }),
+        noPropagationWait,
     );
     expect(await provider.apply(inputs, undefined, ctx())).toEqual({ url: "https://app.example.com" });
     expect(created).toEqual({ name: "app.example.com", content: "tunnel-abc.cfargotunnel.com", comment: "intentic.id=cf-app-example-com" });
@@ -78,6 +81,7 @@ test("apply updates the existing record by id", async () => {
                 updatedId = args.recordId;
             },
         }),
+        noPropagationWait,
     );
     await provider.apply(inputs, undefined, ctx());
     expect(updatedId).toBe("rec-9");

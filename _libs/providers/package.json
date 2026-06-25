@@ -33,8 +33,7 @@
         "build": "tsc",
         "watch": "tsc --build --watch",
         "test": "vitest run",
-        "test:watch": "vitest",
-        "e2e": "INTENTIC_E2E=1 vitest run local.e2e"
+        "test:watch": "vitest"
     },
     "dependencies": {
         "@intentic/engine": "workspace:*",
@@ -48,7 +47,6 @@
         "@intentic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
         "@types/ssh2": "1.15.5",
-        "testcontainers": "^11.0.0",
         "typescript": "catalog:",
         "vitest": "catalog:"
     }
