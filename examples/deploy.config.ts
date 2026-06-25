@@ -23,12 +23,22 @@ export const intent = defineIntent((i) => {
         zone: "example.com",
     });
 
-    // What I want: an app shipped to two environments. The tool derives the needs (source control, Docker
-    // registry, infra control, deployment target, domain) and the support stack that meets them — choosing
-    // among the catalog's options for each — on the host I declared, exposed through the Cloudflare I declared.
+    // What I want (a shared service): SignOz for observability, deployed onto the host and exposed at its own
+    // domain. Apps wire to it via `observe` below; intentic injects its OTLP endpoint into each deployment.
+    const obs = i.want.service("obs", {
+        kind: "signoz",
+        on: host,
+        expose: cf,
+        domain: "signoz.example.com",
+    });
+
+    // What I want (an app): shipped to two environments. The tool derives the needs (source control, Docker
+    // registry, infra control, deployment target, domain) and the support stack that meets them — on the host
+    // I declared, exposed through the Cloudflare I declared — and exports the app's telemetry to `obs`.
     i.want.app("my-app", {
         on: host,
         expose: cf,
+        observe: obs,
         environments: {
             staging: { domain: "staging.example.com", branch: "develop", env: { DATABASE_URL: env("STAGING_DATABASE_URL") } },
             production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },

@@ -32,3 +32,13 @@ export interface EnvironmentInput {
 export interface NotifyInput {
     discord: SecretRef;
 }
+
+// An off-the-shelf shared service the host runs, named by `kind` from the service catalog. Unlike apps
+// (built from source through the platform), a service is deployed directly onto the host from a pinned
+// image and exposed at its own `domain`. Today's catalog: SignOz (observability).
+export type ServiceKind = "signoz";
+
+export interface ServiceInput {
+    kind: ServiceKind;
+    domain: string;
+}

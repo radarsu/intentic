@@ -63,6 +63,25 @@ test("linearize derives a topological order (dependency before dependent)", () =
     expect([...order].sort()).toEqual(Object.keys(graph.resources).sort());
 });
 
+test("want.service derives a signoz node + route, and want.app's observe wires the app's deployment to its OTLP endpoint", () => {
+    const graph = defineStack((i) => {
+        const { host, cf } = inventory(i);
+        const obs = i.want.service("obs", { kind: "signoz", on: host, expose: cf, domain: "signoz.example.com" });
+        i.want.app("app", { on: host, expose: cf, observe: obs, environments: { prod: { domain: "app.example.com", branch: "main" } } });
+    });
+
+    // The service is deployed onto the host and routed, but not built through the app platform.
+    expect(graph.resources["obs"]?.type).toBe("signoz");
+    expect(graph.resources["obs"]?.inputs["server"]).toEqual({ $ref: "host" });
+    expect(graph.resources["cf-signoz-example-com"]?.type).toBe("cf-route");
+    // observe injects the service's OTLP endpoint and a dependency on it.
+    expect(graph.resources["app.prod"]?.inputs["env"]).toEqual({
+        OTEL_EXPORTER_OTLP_ENDPOINT: { $ref: "obs.otlpEndpoint" },
+        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+    });
+    expect(graph.resources["app.prod"]?.dependsOn).toContain("obs");
+});
+
 test("apps share one derived platform", () => {
     const graph = defineStack((i) => {
         const { host, cf } = inventory(i);

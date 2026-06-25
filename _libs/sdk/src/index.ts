@@ -15,4 +15,4 @@ export const defineIntent = (declare: (stack: Stack) => void): IntentSet => {
 // One-shot: intent → needs → the desired-state graph the resolvers derive.
 export const defineStack = (declare: (stack: Stack) => void): DesiredStateGraph => resolveState(defineIntent(declare));
 
-export type { App, Cloudflare, Deployment, Have, Host, Repo, Stack, Want, WantAppInput } from "./handles.js";
+export type { App, Cloudflare, Deployment, Have, Host, Repo, Service, Stack, Want, WantAppInput, WantServiceInput } from "./handles.js";

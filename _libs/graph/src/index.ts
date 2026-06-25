@@ -3,6 +3,10 @@ import type { DesiredStateGraph, RawNode, Readiness, Ref, SecretRef } from "./ty
 
 export const env = (key: string): SecretRef => Object.freeze({ kind: "secret", source: "env", key });
 
+// A secret intentic generates and persists itself (vs env(), which the user supplies). The key names the
+// slot it is stored under; the resolver uses this for the Forgejo/Komodo admin credentials.
+export const generated = (key: string): SecretRef => Object.freeze({ kind: "secret", source: "generated", key });
+
 export const httpOk = (url: string | Ref<string>, options?: { timeout?: string; status?: number }): Readiness =>
     Object.freeze({
         kind: "readiness",
@@ -37,4 +41,15 @@ export { compile } from "./compile.js";
 export { isRef, makeRef, refKey } from "./ref.js";
 export { formatStamp, parseStamp, STAMP_KEY } from "./stamp.js";
 
-export type { DesiredStateGraph, Input, RawNode, Readiness, Ref, ResourceNode, SecretRef, SerializedReadiness, SerializedValue } from "./types.js";
+export type {
+    DesiredStateGraph,
+    Input,
+    RawNode,
+    Readiness,
+    Ref,
+    ResourceNode,
+    SecretRef,
+    SecretSource,
+    SerializedReadiness,
+    SerializedValue,
+} from "./types.js";

@@ -11,6 +11,7 @@ test("an app derives the four host capabilities plus a domain", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -27,6 +28,7 @@ test("multiple apps collapse to one set of needs on the shared host and cloud", 
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [
             { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
             { id: "two", on: "host", expose: "cf", environments: { prod: { domain: "two.example.com", branch: "main" } } },
@@ -37,5 +39,5 @@ test("multiple apps collapse to one set of needs on the shared host and cloud", 
 });
 
 test("no apps derive no needs", () => {
-    expect(resolveNeeds({ apps: [] })).toEqual([]);
+    expect(resolveNeeds({ apps: [], services: [] })).toEqual([]);
 });

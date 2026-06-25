@@ -1,5 +1,5 @@
 import type { SecretRef } from "@intentic/graph";
-import { env, httpOk, makeRef } from "@intentic/graph";
+import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { AppIntent } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { adminUsername, deployHookId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, repoId } from "./ids.js";
@@ -22,8 +22,14 @@ export const resolveApp = (
     const repo = repoId(intent.id);
     const forgejoUrl = makeRef<string>(platform.forgejo, "url");
     const komodoUrl = makeRef<string>(platform.deploy, "url");
-    const forgejoAdmin = { adminUser: adminUsername, adminPassword: env("FORGEJO_ADMIN_PASSWORD") };
-    const komodoAdmin = { adminUser: adminUsername, adminPassword: env("KOMODO_ADMIN_PASSWORD") };
+    const forgejoAdmin = { adminUser: adminUsername, adminPassword: generated("FORGEJO_ADMIN_PASSWORD") };
+    const komodoAdmin = { adminUser: adminUsername, adminPassword: generated("KOMODO_ADMIN_PASSWORD") };
+    // Telemetry wiring: when the app observes a service, every deployment exports OTLP to that service's
+    // host-internal endpoint. Spread before the author's own env so an explicit OTEL_* can still override.
+    const otel =
+        intent.observe !== undefined
+            ? { OTEL_EXPORTER_OTLP_ENDPOINT: makeRef<string>(intent.observe, "otlpEndpoint"), OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf" }
+            : undefined;
 
     const nodes: ResolvedNode[] = [
         {
@@ -54,6 +60,7 @@ export const resolveApp = (
     for (const [name, environment] of Object.entries(intent.environments)) {
         const id = deploymentId(intent.id, name);
         const port = deploymentPort(id);
+        const env = otel !== undefined || environment.env !== undefined ? { ...otel, ...environment.env } : undefined;
         nodes.push({
             id,
             type: "deployment",
@@ -66,9 +73,9 @@ export const resolveApp = (
                 port,
                 komodoUrl,
                 ...komodoAdmin,
-                ...(environment.env !== undefined ? { env: environment.env } : {}),
+                ...(env !== undefined ? { env } : {}),
             },
-            explicitDependsOn: [intent.id, platform.komodoRoute],
+            explicitDependsOn: [intent.id, platform.komodoRoute, ...(intent.observe !== undefined ? [intent.observe] : [])],
             // A cold clone+build+run on the host can take well over a minute; give the build room before the gate fails.
             readyWhen: environment.readyWhen ?? httpOk(makeRef<string>(id, "internalUrl"), { timeout: "240s" }),
         });
@@ -86,7 +93,7 @@ export const resolveApp = (
                 repoName: intent.id,
                 komodoUrl,
                 branch: environment.branch,
-                secret: env("KOMODO_WEBHOOK_SECRET"),
+                secret: generated("KOMODO_WEBHOOK_SECRET"),
             },
             // Registers a Forgejo webhook via the public git URL, so it waits on git's route.
             explicitDependsOn: [repo, id, platform.gitRoute],

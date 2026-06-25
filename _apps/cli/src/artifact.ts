@@ -10,7 +10,9 @@ export const TARGET_DIR = "desired-state";
 export const CONFIG_FILE = "deploy.config.ts";
 export const ARTIFACT_FILE = "desired-state.json";
 export const STATUS_FILE = "status.json";
+export const ACCESS_FILE = "access.md";
 export const ENV_FILE = ".env";
+export const SECRETS_FILE = ".secrets.json";
 
 // The defaults every command resolves against cwd: the config in the intent repo, the artifact in the
 // desired-state repo. `init` scaffolds both repos at these same paths.

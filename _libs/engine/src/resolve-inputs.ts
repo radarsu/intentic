@@ -1,9 +1,9 @@
-import type { SerializedValue } from "@intentic/graph";
+import type { SecretSource, SerializedValue } from "@intentic/graph";
 import type { OutputStore } from "./store.js";
 
 // Inputs in the compiled graph are SERIALIZED: $ref/$secret are plain objects, NOT the protocol's
 // kind:"ref"/kind:"secret" form. So we detect them structurally and must NOT use protocol isRef/isSecret.
-const isSecretNode = (value: object): value is { readonly $secret: { readonly source: "env"; readonly key: string } } => "$secret" in value;
+const isSecretNode = (value: object): value is { readonly $secret: { readonly source: SecretSource; readonly key: string } } => "$secret" in value;
 const isRefNode = (value: object): value is { readonly $ref: string } => "$ref" in value;
 
 export const resolveInputs = (

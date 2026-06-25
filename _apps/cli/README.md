@@ -21,24 +21,36 @@ Built on [stricli](https://github.com/bloomberg/stricli) with generated `--help`
 - `intentic plan [--artifact desired-state.json]` — read-only preview of what `apply` would
   create/update.
 - `intentic apply [--artifact desired-state.json] [--max-iterations 5]` — reconcile the artifact
-  until state reads true, writing `status.json` beside it. Deploy-target secrets (e.g. `HOST_SSH_KEY`,
-  `CLOUDFLARE_API_TOKEN`) are read at apply time from `.env` beside the artifact (the `desired-state`
-  repo, gitignored) or from the environment.
+  until state reads true, writing `status.json` beside it. Reads user-supplied secrets from `.env`
+  beside the artifact (or the environment) and generates the platform admin secrets it owns (see
+  below). On success it prints an **Access** summary and writes `access.md` beside the artifact: the
+  URL, the `intentic` username, and the password (the generated value on stdout; a pointer to
+  `.secrets.json` in the committed `access.md`) for Forgejo and Komodo, plus each app-environment URL.
 
 ## Secrets
 
-`apply` and `plan` resolve deploy-target secrets from a `.env` in the artifact's directory (the
-`desired-state` repo), falling back to the ambient environment when a key is absent there. `init`
-scaffolds a gitignored `.env` slot: copy `desired-state/.env.example` to `desired-state/.env` and fill
-it in. The `.env` is gitignored so secrets never land in the PR-managed repo.
+Secrets split by who provides them:
+
+- **User-supplied** (`source: env`) — credentials to systems intentic does **not** create:
+  `HOST_SSH_KEY`, `CLOUDFLARE_API_TOKEN`, and each environment's `*_DATABASE_URL`. You set these in
+  `.env` beside the artifact (or the ambient environment). The required set is more than what your
+  `deploy.config.ts` names, so `resolve` derives it from the graph and writes `desired-state/.env.example`.
+- **intentic-generated** (`source: generated`) — admin credentials for the services intentic itself
+  provisions: `FORGEJO_ADMIN_PASSWORD`, `KOMODO_ADMIN_PASSWORD`, `KOMODO_WEBHOOK_SECRET`. `plan`/`apply`
+  generate each one (shell-safe hex) the first time and persist it to gitignored
+  `desired-state/.secrets.json`, reusing it forever after (Forgejo/Komodo bake the password in on first
+  init and won't re-key, so it must be stable). The chosen Forgejo/Komodo password is what you log in
+  with, as user `intentic`. Setting one of these in `.env` overrides generation (pins your own value).
+
+Both `.env` and `.secrets.json` are gitignored, so no secret lands in the PR-managed repo.
 
 ## Workflow
 
 ```sh
 intentic init
 cd intent && intentic resolve --out ../desired-state/desired-state.json
-cp ../desired-state/.env.example ../desired-state/.env   # then fill in HOST_SSH_KEY, CLOUDFLARE_API_TOKEN, …
-cd .. && intentic apply
+cp ../desired-state/.env.example ../desired-state/.env   # fill in the user-supplied values resolve listed
+cd .. && intentic apply                                  # generates the platform secrets, prints the logins
 ```
 
 > A `deploy.config.ts` imports `@intentic/sdk` + `@intentic/graph`, so the project it lives in must have

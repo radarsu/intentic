@@ -60,7 +60,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "FORGEJO_ADMIN_PASSWORD",
                     },
                 },
@@ -126,13 +126,13 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
                 webhookSecret: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_WEBHOOK_SECRET",
                     },
                 },
@@ -203,7 +203,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "FORGEJO_ADMIN_PASSWORD",
                     },
                 },
@@ -230,7 +230,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
@@ -257,7 +257,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
@@ -309,7 +309,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "FORGEJO_ADMIN_PASSWORD",
                     },
                 },
@@ -320,7 +320,7 @@ export const expectedGraph: DesiredStateGraph = {
                 branch: "develop",
                 secret: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_WEBHOOK_SECRET",
                     },
                 },
@@ -347,7 +347,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
@@ -399,7 +399,7 @@ export const expectedGraph: DesiredStateGraph = {
                 adminUser: "intentic",
                 adminPassword: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "FORGEJO_ADMIN_PASSWORD",
                     },
                 },
@@ -410,7 +410,7 @@ export const expectedGraph: DesiredStateGraph = {
                 branch: "main",
                 secret: {
                     $secret: {
-                        source: "env",
+                        source: "generated",
                         key: "KOMODO_WEBHOOK_SECRET",
                     },
                 },

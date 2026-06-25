@@ -20,4 +20,5 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     "forgejo-notify": [],
     "komodo-notify": [],
     "deploy-hook": [],
+    signoz: ["url", "internalUrl", "otlpEndpoint"],
 });

@@ -1,7 +1,16 @@
 import { makeRef } from "@intentic/graph";
-import type { AppIntent, CloudflareInput, CloudflareIntent, EnvironmentInput, HostInput, HostIntent, IntentSet } from "@intentic/need-resolver";
+import type {
+    AppIntent,
+    CloudflareInput,
+    CloudflareIntent,
+    EnvironmentInput,
+    HostInput,
+    HostIntent,
+    IntentSet,
+    ServiceIntent,
+} from "@intentic/need-resolver";
 import { deploymentId, repoId } from "@intentic/state-resolver";
-import type { App, Cloudflare, Deployment, Host, Repo, Stack, WantAppInput } from "./handles.js";
+import type { App, Cloudflare, Deployment, Host, Repo, Service, Stack, WantAppInput, WantServiceInput } from "./handles.js";
 
 // The builder is a pure intent recorder: i.have.* / i.want.app record what was declared and hand back typed
 // handles for wiring. No derivation happens here — that is the resolver's job. There is a single host and a
@@ -17,7 +26,8 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     };
 
     const apps: AppIntent[] = [];
-    const intent: { host?: HostIntent; cloudflare?: CloudflareIntent; apps: AppIntent[] } = { apps };
+    const services: ServiceIntent[] = [];
+    const intent: { host?: HostIntent; cloudflare?: CloudflareIntent; apps: AppIntent[]; services: ServiceIntent[] } = { apps, services };
 
     const host = (id: string, input: HostInput): Host => {
         if (intent.host !== undefined) {
@@ -44,6 +54,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
             on: input.on.resourceId,
             expose: input.expose.resourceId,
             ...(input.notify !== undefined ? { notify: input.notify } : {}),
+            ...(input.observe !== undefined ? { observe: input.observe.resourceId } : {}),
             environments: input.environments,
         });
 
@@ -62,6 +73,17 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze({ ...makeRef(id), repo, environments: Object.freeze(environments) }) as App<keyof E & string>;
     };
 
-    const stack: Stack = { have: { host, cloudflare }, want: { app } };
+    const service = (id: string, input: WantServiceInput): Service => {
+        claim(id);
+        services.push({ id, kind: input.kind, on: input.on.resourceId, expose: input.expose.resourceId, domain: input.domain });
+        return Object.freeze({
+            ...makeRef(id),
+            url: makeRef<string>(id, "url"),
+            internalUrl: makeRef<string>(id, "internalUrl"),
+            otlpEndpoint: makeRef<string>(id, "otlpEndpoint"),
+        }) as Service;
+    };
+
+    const stack: Stack = { have: { host, cloudflare }, want: { app, service } };
     return { stack, intent };
 };

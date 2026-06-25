@@ -6,4 +6,5 @@ export { emit } from "./emit.js";
 export { adminUsername, deploymentId, deploymentPort, repoId } from "./ids.js";
 export type { PlatformRefs } from "./platform.js";
 export { resolvePlatform } from "./platform.js";
+export { resolveService } from "./service.js";
 export { resolveState } from "./state.js";

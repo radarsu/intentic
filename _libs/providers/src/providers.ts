@@ -17,6 +17,7 @@ import type { KomodoApi } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 import { createKomodoNotifyProvider } from "./komodo-notify.js";
 import { createRepoProvider } from "./repo.js";
+import { createSignozProvider } from "./signoz.js";
 import type { SshExecutor } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 import { createTunnelProvider } from "./tunnel.js";
@@ -55,5 +56,6 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "forgejo-notify": createForgejoNotifyProvider(forgejo),
         "komodo-notify": createKomodoNotifyProvider(komodo),
         "deploy-hook": createDeployHookProvider(forgejo),
+        signoz: createSignozProvider(ssh),
     };
 };

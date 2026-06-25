@@ -10,9 +10,13 @@ export interface Ref<T> {
     readonly __type?: T;
 }
 
+// Where a secret's value comes from: "env" — supplied by the user in the environment; "generated" —
+// intentic creates and persists it (admin credentials for services intentic itself provisions).
+export type SecretSource = "env" | "generated";
+
 export interface SecretRef {
     readonly kind: "secret";
-    readonly source: "env";
+    readonly source: SecretSource;
     readonly key: string;
 }
 
@@ -43,7 +47,7 @@ export type SerializedValue =
     | number
     | boolean
     | { readonly $ref: string }
-    | { readonly $secret: { readonly source: "env"; readonly key: string } }
+    | { readonly $secret: { readonly source: SecretSource; readonly key: string } }
     | readonly SerializedValue[]
     | { readonly [key: string]: SerializedValue };
 

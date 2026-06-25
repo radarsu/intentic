@@ -4,6 +4,8 @@ import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
 import { tunnelId, tunnelName } from "./ids.js";
 import { resolvePlatform } from "./platform.js";
+import type { IngressPair } from "./route.js";
+import { resolveService } from "./service.js";
 
 // One concrete choice of option per need: `${capability}:${scope}` -> option id. The state resolver
 // builds this from the catalog; emit turns it into the support stack it describes.
@@ -26,14 +28,14 @@ export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] 
         }
     }
 
-    if (intent.apps.length === 0) {
+    if (intent.apps.length === 0 && intent.services.length === 0) {
         return [];
     }
 
     const host = intent.host;
     const cloudflare = intent.cloudflare;
     if (host === undefined || cloudflare === undefined) {
-        throw new Error("intent declares apps but no host/Cloudflare; declare them with i.have.host and i.have.cloudflare");
+        throw new Error("intent declares apps/services but no host/Cloudflare; declare them with i.have.host and i.have.cloudflare");
     }
 
     const zone = cloudflare.input.zone;
@@ -58,14 +60,30 @@ export const emit = (intent: IntentSet, assignment: Assignment): ResolvedNode[] 
             explicitDependsOn: [],
         },
     ];
+    const ingress: IngressPair[] = [];
 
-    // The git/CI/deploy platform every app on the host requires, shared once across all apps.
-    const platform = resolvePlatform(host.id, cloudflare.id, zone, apiToken, host.input);
-    nodes.push(...platform.nodes);
-    const ingress = [...platform.ingress];
+    // The git/CI/deploy platform exists only to ship apps from source; a services-only intent skips it. Apps
+    // reference a service's id in `observe`; assert it names a declared service so a bad ref fails here, not
+    // as a dangling dependency the compiler accepts.
+    if (intent.apps.length > 0) {
+        const serviceIds = new Set(intent.services.map((service) => service.id));
+        const platform = resolvePlatform(host.id, cloudflare.id, zone, apiToken, host.input);
+        nodes.push(...platform.nodes);
+        ingress.push(...platform.ingress);
+        for (const app of intent.apps) {
+            if (app.observe !== undefined && !serviceIds.has(app.observe)) {
+                throw new Error(`app "${app.id}" observes unknown service "${app.observe}"; declare it with i.want.service`);
+            }
+            const resolved = resolveApp(app, platform.refs, apiToken, zone);
+            nodes.push(...resolved.nodes);
+            ingress.push(...resolved.ingress);
+        }
+    }
 
-    for (const app of intent.apps) {
-        const resolved = resolveApp(app, platform.refs, apiToken, zone);
+    // Off-the-shelf services: deployed directly onto the host and exposed at their own domains, independent
+    // of the app platform.
+    for (const service of intent.services) {
+        const resolved = resolveService(service, host.input, zone, apiToken);
         nodes.push(...resolved.nodes);
         ingress.push(...resolved.ingress);
     }

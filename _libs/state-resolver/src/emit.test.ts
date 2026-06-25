@@ -1,4 +1,4 @@
-import { env } from "@intentic/graph";
+import { env, makeRef } from "@intentic/graph";
 import type { CloudflareIntent, HostIntent, IntentSet } from "@intentic/need-resolver";
 import { needKey, resolveNeeds } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
@@ -29,6 +29,7 @@ test("emit derives the full support stack for a two-environment app", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [
             {
                 id: "app",
@@ -66,6 +67,7 @@ test("apps share one derived platform", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [
             { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
             { id: "two", on: "host", expose: "cf", environments: { prod: { domain: "two.example.com", branch: "main" } } },
@@ -83,6 +85,7 @@ test("an unsupported option assignment throws", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
     const byNeed = new Map(assign(intent).byNeed);
@@ -94,6 +97,7 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [
             {
                 id: "app",
@@ -123,6 +127,7 @@ test("an app without notify derives no notification sinks", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -135,6 +140,7 @@ test("notification sinks are derived per app, while the platform stays shared pe
     const intent: IntentSet = {
         host,
         cloudflare,
+        services: [],
         apps: [
             {
                 id: "one",
@@ -158,4 +164,74 @@ test("notification sinks are derived per app, while the platform stays shared pe
     expect(types.filter((type) => type === "komodo-notify")).toHaveLength(2);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
+});
+
+test("a services-only intent emits the service + its route + tunnel, but no app platform", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        apps: [],
+    };
+
+    const nodes = emit(intent, assign(intent));
+    expect(nodes.map((node) => node.id)).toEqual(["host", "cf", "obs", "cf-signoz-example-com", "host-tunnel"]);
+    const signoz = nodes.find((node) => node.id === "obs");
+    expect(signoz?.type).toBe("signoz");
+    expect(signoz?.inputs["domain"]).toBe("signoz.example.com");
+    // The build platform exists only to ship apps from source — a services-only intent skips it.
+    expect(nodes.some((node) => node.type === "forgejo")).toBe(false);
+    expect(nodes.some((node) => node.type === "komodo")).toBe(false);
+    // The service's dashboard port is aggregated onto the host tunnel's ingress.
+    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["ingress"]).toEqual([{ hostname: "signoz.example.com", port: 8080 }]);
+});
+
+test("an app's observe injects the service's OTLP endpoint into each deployment and depends on the service", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        apps: [
+            {
+                id: "app",
+                on: "host",
+                expose: "cf",
+                observe: "obs",
+                environments: { prod: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("DB") } } },
+            },
+        ],
+    };
+
+    const deployment = emit(intent, assign(intent)).find((node) => node.id === "app.prod");
+    // OTLP wiring is spread before the author's env, so an explicit DATABASE_URL survives alongside it.
+    expect(deployment?.inputs["env"]).toEqual({
+        OTEL_EXPORTER_OTLP_ENDPOINT: makeRef("obs", "otlpEndpoint"),
+        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+        DATABASE_URL: env("DB"),
+    });
+    expect(deployment?.explicitDependsOn).toContain("obs");
+});
+
+test("an app without observe carries no OTLP env and no service dependency", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        services: [],
+        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    const deployment = emit(intent, assign(intent)).find((node) => node.id === "app.prod");
+    expect(deployment?.inputs["env"]).toBeUndefined();
+    expect(deployment?.explicitDependsOn).toEqual(["app", "cf-komodo-example-com"]);
+});
+
+test("observing an undeclared service throws", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        services: [],
+        apps: [{ id: "app", on: "host", expose: "cf", observe: "ghost", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    expect(() => emit(intent, assign(intent))).toThrow('app "app" observes unknown service "ghost"');
 });

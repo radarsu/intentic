@@ -1,5 +1,5 @@
 import type { SecretRef } from "@intentic/graph";
-import { env, httpOk, makeRef } from "@intentic/graph";
+import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, runnerId } from "./ids.js";
@@ -22,8 +22,8 @@ const KOMODO_PORT = 9120;
 
 // The git+CI and deploy-orchestrator stack every app on a host requires, shared per host: Forgejo, its
 // runner, and Komodo, exposed at git.<zone>/komodo.<zone> so push/CI/UI are reachable. Terse defaults:
-// adminUser "admin", env()-sourced admin passwords, domain-derived health gates. Returns each exposure's
-// ingress pair so the caller can aggregate the host's tunnel ingress.
+// adminUser "intentic", intentic-generated admin passwords, domain-derived health gates. Returns each
+// exposure's ingress pair so the caller can aggregate the host's tunnel ingress.
 export const resolvePlatform = (
     hostId: string,
     cloudflareId: string,
@@ -51,7 +51,14 @@ export const resolvePlatform = (
         {
             id: forgejo,
             type: "forgejo",
-            inputs: { server, ...ssh, internalIp, domain: gitDomain(zone), adminUser: adminUsername, adminPassword: env("FORGEJO_ADMIN_PASSWORD") },
+            inputs: {
+                server,
+                ...ssh,
+                internalIp,
+                domain: gitDomain(zone),
+                adminUser: adminUsername,
+                adminPassword: generated("FORGEJO_ADMIN_PASSWORD"),
+            },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(forgejo, "internalUrl"), { timeout: "120s" }),
         },
@@ -74,9 +81,9 @@ export const resolvePlatform = (
                 forgejoUrl: makeRef<string>(forgejo, "internalUrl"),
                 runnerToken: makeRef<string>(forgejo, "runnerToken"),
                 adminUser: adminUsername,
-                adminPassword: env("KOMODO_ADMIN_PASSWORD"),
+                adminPassword: generated("KOMODO_ADMIN_PASSWORD"),
                 // Shared with each deploy-hook so Komodo validates the incoming push webhook's signature.
-                webhookSecret: env("KOMODO_WEBHOOK_SECRET"),
+                webhookSecret: generated("KOMODO_WEBHOOK_SECRET"),
                 // The admin's token + account, so Komodo can clone the private app repos for builds. The git
                 // provider domain is derived from forgejoUrl above (the internal http://<ip>:3000 authority).
                 gitAccount: adminUsername,
