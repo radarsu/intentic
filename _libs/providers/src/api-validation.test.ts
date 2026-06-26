@@ -74,12 +74,12 @@ test("komodo getAlerter parses a well-formed alerter config", async () => {
         except_resources: [],
     };
     stubFetch({ config });
-    expect(await komodoApi.getAlerter({ baseUrl: "https://komodo.example.com", jwt: "j", id: "a1" })).toEqual(config);
+    expect(await komodoApi.getAlerter({ baseUrl: "https://deploy.example.com", jwt: "j", id: "a1" })).toEqual(config);
 });
 
 test("komodo getAlerter throws a boundary error when the alerter config is malformed", async () => {
     stubFetch({ config: { enabled: "yes" } });
-    await expect(komodoApi.getAlerter({ baseUrl: "https://komodo.example.com", jwt: "j", id: "a1" })).rejects.toThrow(
+    await expect(komodoApi.getAlerter({ baseUrl: "https://deploy.example.com", jwt: "j", id: "a1" })).rejects.toThrow(
         /returned an unexpected response/,
     );
 });
@@ -94,18 +94,18 @@ test("komodo getDeployment parses the authored config slice", async () => {
     };
     stubFetch({ config });
     // The read validates the env it diffs on and passes the rest (server_id/image/branch/ports) through.
-    expect(await komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).toEqual(config);
+    expect(await komodoApi.getDeployment({ baseUrl: "https://deploy.example.com", jwt: "j", deployment: "my-app.production" })).toEqual(config);
 });
 
 test("komodo getDeployment parses Komodo's real string env form", async () => {
     stubFetch({ config: { server_id: "host", environment: "PORT = 27748\n" } });
-    const result = await komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" });
+    const result = await komodoApi.getDeployment({ baseUrl: "https://deploy.example.com", jwt: "j", deployment: "my-app.production" });
     expect(result.environment).toBe("PORT = 27748\n");
 });
 
 test("komodo getDeployment throws a boundary error when the config is malformed", async () => {
     stubFetch({ config: { server_id: "host", environment: 7 } });
-    await expect(komodoApi.getDeployment({ baseUrl: "https://komodo.example.com", jwt: "j", deployment: "my-app.production" })).rejects.toThrow(
+    await expect(komodoApi.getDeployment({ baseUrl: "https://deploy.example.com", jwt: "j", deployment: "my-app.production" })).rejects.toThrow(
         /returned an unexpected response/,
     );
 });

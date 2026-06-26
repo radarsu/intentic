@@ -35,7 +35,7 @@ const ctx = (log: (message: string) => void = () => {}) => ({
 });
 
 const inputs = {
-    komodoUrl: "https://komodo.example.com",
+    komodoUrl: "https://deploy.example.com",
     adminUser: "intentic",
     adminPassword: "pw",
     username: "alice",

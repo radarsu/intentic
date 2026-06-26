@@ -127,7 +127,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
                     serverName: hostId,
                     image: IMAGES.komodoPeriphery,
                 },
-                explicitDependsOn: [hostId, platform.refs.deploy, platform.refs.komodoRoute],
+                explicitDependsOn: [hostId, platform.refs.deploy, platform.refs.deployRoute],
             });
 
             nodes.push({
@@ -139,7 +139,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
                     adminPassword: generated("KOMODO_ADMIN_PASSWORD"),
                     serverName: hostId,
                 },
-                explicitDependsOn: [peripheryId, platform.refs.deploy, platform.refs.komodoRoute],
+                explicitDependsOn: [peripheryId, platform.refs.deploy, platform.refs.deployRoute],
             });
 
             // Initialize ingress bucket for worker host.

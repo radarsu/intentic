@@ -22,7 +22,7 @@ const graph: DesiredStateGraph = {
 
 const outputs = {
     "host-git": { url: "https://git.example.com", internalUrl: "http://10.0.0.1:3000" },
-    "host-deploy": { url: "https://komodo.example.com" },
+    "host-deploy": { url: "https://deploy.example.com" },
     "my-app.production": { url: "https://app.example.com" },
     host: { internalIp: "10.0.0.1" },
 };
@@ -44,7 +44,7 @@ describe("collectAccess", () => {
         expect(entries).toContainEqual({
             id: "host-deploy",
             label: "Komodo (deploys)",
-            url: "https://komodo.example.com",
+            url: "https://deploy.example.com",
             username: "intentic",
             password: { source: "env", key: "KOMODO_ADMIN_PASSWORD" },
         });

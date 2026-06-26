@@ -52,7 +52,7 @@ test("emit derives the full support stack for a two-environment app", () => {
         "host-git-runner",
         "host-deploy",
         "cf-git-example-com",
-        "cf-komodo-example-com",
+        "cf-deploy-example-com",
         "app-repo",
         "app.staging-ci",
         "app.staging",
@@ -123,7 +123,7 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
     expect(forgejoNotify?.type).toBe("forgejo-notify");
     expect(forgejoNotify?.explicitDependsOn).toEqual(["host-git", "cf-git-example-com", "app-repo"]);
     expect(komodoNotify?.type).toBe("komodo-notify");
-    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "cf-komodo-example-com", "app.prod"]);
+    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "cf-deploy-example-com", "app.prod"]);
 
     // The webhook secret passes through unresolved — the engine resolves it per apply.
     expect(forgejoNotify?.inputs["webhook"]).toEqual(env("DISCORD_WEBHOOK_URL"));
@@ -239,7 +239,7 @@ test("an app without observe carries no OTLP env and no service dependency", () 
 
     const deployment = emit(intent, assign(intent), "example.com").find((node) => node.id === "app.prod");
     expect(deployment?.inputs["env"]).toBeUndefined();
-    expect(deployment?.explicitDependsOn).toEqual(["app.prod-ci", "cf-komodo-example-com"]);
+    expect(deployment?.explicitDependsOn).toEqual(["app.prod-ci", "cf-deploy-example-com"]);
 });
 
 test("observing an undeclared service throws", () => {

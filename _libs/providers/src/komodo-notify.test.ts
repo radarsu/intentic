@@ -35,7 +35,7 @@ const ctx = () => ({
 });
 
 const inputs = {
-    komodoUrl: "https://komodo.example.com",
+    komodoUrl: "https://deploy.example.com",
     adminUser: "admin",
     adminPassword: "pw",
     targets: ["my-app.staging", "my-app.production"],

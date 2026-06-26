@@ -14,7 +14,7 @@ import { readGeneratedSecrets } from "./generated-secrets.js";
 // The realistic Tier-1 run: boot a Docker-in-Docker "host", then drive the REAL CLI (pnpm intentic
 // init/resolve/apply) exactly as an operator would — scaffold, author a deploy.config.ts pointed at the
 // DinD host's mapped SSH port, fill desired-state/.env, resolve, apply. Phase 1 stands up the platform
-// (Forgejo + runner + Komodo) and exposes git.<zone>/komodo.<zone> through a real Cloudflare tunnel. Then we
+// (Forgejo + runner + Komodo) and exposes git.<zone>/deploy.<zone> through a real Cloudflare tunnel. Then we
 // push a tiny Dockerfile to the app repo and, in phase 2, author an environment so apply WIRES CI/CD (a
 // Forgejo Actions workflow + a Komodo registry deployment) — intentic does not build or deploy. The workflow
 // then builds + pushes the image and Komodo rolls it out live at app.<zone>. Gated behind INTENTIC_E2E because
@@ -46,7 +46,7 @@ const APP = "app";
 const ENV = "production";
 const APP_DOMAIN = `${APP}.${ZONE}`;
 const GIT_DOMAIN = `git.${ZONE}`;
-const KOMODO_DOMAIN = `komodo.${ZONE}`;
+const KOMODO_DOMAIN = `deploy.${ZONE}`;
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const hostContext = join(repoRoot, "test", "host");

@@ -16,7 +16,7 @@ export const repoId = (appId: string): string => `${appId}-repo`;
 export const forgejoUserId = (hostId: string, userId: string): string => `${forgejoId(hostId)}-user-${userId}`;
 export const forgejoOrgId = (hostId: string, teamId: string): string => `${forgejoId(hostId)}-org-${teamId}`;
 export const forgejoTeamId = (hostId: string, teamId: string): string => `${forgejoOrgId(hostId, teamId)}-team`;
-// The Komodo UI account per declared user, host-scoped like Komodo itself.
+// The Komodo UI account per declared user, host-scoped like the deploy orchestrator itself.
 export const komodoUserId = (hostId: string, userId: string): string => `${komodoId(hostId)}-user-${userId}`;
 // The Forgejo org login a team maps to (the repo + registry namespace for the apps it owns). The team id is
 // already globally unique (the builder's claim()), and Forgejo org names must be unique per instance, so the
@@ -31,17 +31,17 @@ export const ciId = (appId: string, environment: string): string => `${deploymen
 export const forgejoNotifyId = (appId: string): string => `${repoId(appId)}-notify`;
 export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
 export const gitDomain = (zone: string): string => `git.${zone}`;
-export const komodoDomain = (zone: string): string => `komodo.${zone}`;
+export const deployDomain = (zone: string): string => `deploy.${zone}`;
 // A deterministic host port per deployment so co-located environments don't collide. Resolver-owned so the
 // tunnel's ingress (hostname -> http://<internalIp>:<port>) can be computed without depending on the
 // deployment node — which is what lets the tunnel come up before the control plane uses it.
 export const deploymentPort = (deploymentId: string): number =>
     20000 + [...deploymentId].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 10000, 7);
-// The single admin identity for both Forgejo and Komodo — also the repo owner namespace and the Komodo
-// build's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
+// The single admin identity for both Forgejo and the deploy orchestrator — also the repo owner namespace
+// and the deploy orchestrator's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
 // `forgejo admin user create --username admin` fails.
 export const adminUsername = "intentic";
 // The Forgejo container registry authority. Uses the public git domain so the registry is reachable from
 // ALL hosts (control-plane and workers alike) through the Cloudflare tunnel. CI pushes over HTTPS, all
-// Komodo instances pull from the same URL. The port-less authority uses the default HTTPS port (443).
+// deploy orchestrator instances pull from the same URL. The port-less authority uses the default HTTPS port (443).
 export const registryAuthority = (zone: string): string => gitDomain(zone);

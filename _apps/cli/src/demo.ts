@@ -44,7 +44,7 @@ const forgejoPort = Number(process.env["DEMO_FORGEJO_PORT"] ?? "3000");
 const komodoPort = Number(process.env["DEMO_KOMODO_PORT"] ?? "9120");
 
 const GIT_URL = `https://git.${zone}`;
-const KOMODO_URL = `https://komodo.${zone}`;
+const KOMODO_URL = `https://deploy.${zone}`;
 const APP_URL = `https://app.${zone}`;
 
 const log = (message: string): void => {
@@ -364,7 +364,7 @@ const clear = async (): Promise<void> => {
                 .deleteTunnel({ accountId: cfZone.accountId, apiToken, tunnelId: tunnel.id })
                 .catch((error) => log(`  tunnel: ${String(error)}`));
         }
-        for (const name of [`git.${zoneName}`, `komodo.${zoneName}`, `app.${zoneName}`]) {
+        for (const name of [`git.${zoneName}`, `deploy.${zoneName}`, `app.${zoneName}`]) {
             const record = await cloudflareApi.findDnsRecord({ apiToken, zoneId: cfZone.id, name }).catch(() => undefined);
             if (record !== undefined) {
                 await cloudflareApi

@@ -42,7 +42,7 @@ const inputs = {
     domain: "staging.example.com",
     internalIp: "10.0.0.5",
     port: 24680,
-    komodoUrl: "https://komodo.example.com",
+    komodoUrl: "https://deploy.example.com",
     adminUser: "admin",
     adminPassword: "pw",
     env: {},

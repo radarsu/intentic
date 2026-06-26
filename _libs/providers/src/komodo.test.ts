@@ -64,7 +64,7 @@ const inputs = {
     user: "deploy",
     sshKey: "key",
     internalIp: "10.0.0.5",
-    domain: "komodo.example.com",
+    domain: "deploy.example.com",
     forgejoUrl: "http://10.0.0.5:3000",
     runnerToken: "tok-123",
     adminUser: "intentic",
@@ -95,7 +95,7 @@ test("read returns undefined when core is not yet healthy", async () => {
 test("read returns the deterministic url/internalUrl plus the observed service images when running and healthy", async () => {
     const provider = createKomodoProvider(fakeSsh({ running: true, healthy: true }).executor);
     expect(await provider.read(inputs, ctx())).toEqual({
-        outputs: { url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" },
+        outputs: { url: "https://deploy.example.com", internalUrl: "http://10.0.0.5:9120" },
         detail: { images: DEFAULT_IMAGES },
     });
 });
@@ -112,7 +112,7 @@ test("diff is update when a service image differs from the desired pin", () => {
 test("apply writes compose + a once-guarded env, brings the stack up, waits for health, and returns outputs", async () => {
     const ssh = fakeSsh({ healthy: true });
     const result = await createKomodoProvider(ssh.executor).apply(inputs, undefined, ctx());
-    expect(result).toEqual({ url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" });
+    expect(result).toEqual({ url: "https://deploy.example.com", internalUrl: "http://10.0.0.5:9120" });
     expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/komodo/compose.yaml"))).toBe(true);
     // The git-provider account is registered against Forgejo's INTERNAL authority (derived from forgejoUrl),
     // over plain http, so Komodo clones host-locally rather than chasing the unresolvable public name.

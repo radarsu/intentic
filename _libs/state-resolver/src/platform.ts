@@ -2,7 +2,7 @@ import type { SecretRef } from "@intentic/graph";
 import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, registryAuthority, runnerId } from "./ids.js";
+import { adminUsername, deployDomain, forgejoId, gitDomain, komodoId, registryAuthority, runnerId } from "./ids.js";
 import { IMAGES } from "./images.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
@@ -13,16 +13,16 @@ export interface PlatformRefs {
     // The cf-route ids for the platform's public hostnames, so the control-plane nodes that call those
     // public URLs can depend on the route being live (DNS + tunnel) before they run.
     readonly gitRoute: string;
-    readonly komodoRoute: string;
+    readonly deployRoute: string;
 }
 
 // The fixed host ports the platform services listen on (Forgejo HTTP, Komodo Core), mirrored by their
-// providers; the tunnel routes git.<zone>/komodo.<zone> to these.
+// providers; the tunnel routes git.<zone>/deploy.<zone> to these.
 const FORGEJO_PORT = 3000;
 const KOMODO_PORT = 9120;
 
 // The git+CI and deploy-orchestrator stack every app on a host requires, shared per host: Forgejo, its
-// runner, and Komodo, exposed at git.<zone>/komodo.<zone> so push/CI/UI are reachable. Terse defaults:
+// runner, and Komodo, exposed at git.<zone>/deploy.<zone> so push/CI/UI are reachable. Terse defaults:
 // adminUser "intentic", intentic-generated admin passwords, domain-derived health gates. Returns each
 // exposure's ingress pair so the caller can aggregate the host's tunnel ingress.
 // When guarded updates are on (host.updatePolicy === "guarded" + a backup is declared), the stateful
@@ -57,7 +57,7 @@ export const resolvePlatform = (
     };
     const internalIp = makeRef<string>(hostId, "internalIp");
     const git = exposeRoute(cloudflareId, hostId, gitDomain(zone), FORGEJO_PORT, apiToken);
-    const komodo = exposeRoute(cloudflareId, hostId, komodoDomain(zone), KOMODO_PORT, apiToken);
+    const komodo = exposeRoute(cloudflareId, hostId, deployDomain(zone), KOMODO_PORT, apiToken);
 
     const nodes: ResolvedNode[] = [
         {
@@ -98,7 +98,7 @@ export const resolvePlatform = (
                 server,
                 ...ssh,
                 internalIp,
-                domain: komodoDomain(zone),
+                domain: deployDomain(zone),
                 forgejoUrl: makeRef<string>(forgejo, "internalUrl"),
                 runnerToken: makeRef<string>(forgejo, "runnerToken"),
                 adminUser: adminUsername,
@@ -123,5 +123,5 @@ export const resolvePlatform = (
         git.route,
         komodo.route,
     ];
-    return { nodes, refs: { forgejo, deploy, gitRoute: git.route.id, komodoRoute: komodo.route.id }, ingress: [git.ingress, komodo.ingress] };
+    return { nodes, refs: { forgejo, deploy, gitRoute: git.route.id, deployRoute: komodo.route.id }, ingress: [git.ingress, komodo.ingress] };
 };

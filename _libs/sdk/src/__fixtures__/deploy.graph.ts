@@ -118,7 +118,7 @@ export const expectedGraph: DesiredStateGraph = {
                 internalIp: {
                     $ref: "host.internalIp",
                 },
-                domain: "komodo.example.com",
+                domain: "deploy.example.com",
                 forgejoUrl: {
                     $ref: "host-git.internalUrl",
                 },
@@ -175,11 +175,11 @@ export const expectedGraph: DesiredStateGraph = {
             },
             dependsOn: ["cf", "host-tunnel"],
         },
-        "cf-komodo-example-com": {
-            id: "cf-komodo-example-com",
+        "cf-deploy-example-com": {
+            id: "cf-deploy-example-com",
             type: "cf-route",
             inputs: {
-                hostname: "komodo.example.com",
+                hostname: "deploy.example.com",
                 zoneId: {
                     $ref: "cf.zoneId",
                 },
@@ -284,7 +284,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
             },
-            dependsOn: ["my-app.staging-ci", "cf-komodo-example-com", "host", "host-deploy"],
+            dependsOn: ["my-app.staging-ci", "cf-deploy-example-com", "host", "host-deploy"],
         },
         "cf-staging-example-com": {
             id: "cf-staging-example-com",
@@ -374,7 +374,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
             },
-            dependsOn: ["my-app.production-ci", "cf-komodo-example-com", "host", "host-deploy"],
+            dependsOn: ["my-app.production-ci", "cf-deploy-example-com", "host", "host-deploy"],
         },
         "cf-app-example-com": {
             id: "cf-app-example-com",
@@ -453,7 +453,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 ],
             },
-            dependsOn: ["host-deploy", "cf-komodo-example-com", "my-app.staging", "my-app.production"],
+            dependsOn: ["host-deploy", "cf-deploy-example-com", "my-app.staging", "my-app.production"],
         },
         "host-git-org-squad": {
             id: "host-git-org-squad",
@@ -531,7 +531,7 @@ export const expectedGraph: DesiredStateGraph = {
                         port: 3000,
                     },
                     {
-                        hostname: "komodo.example.com",
+                        hostname: "deploy.example.com",
                         port: 9120,
                     },
                     {

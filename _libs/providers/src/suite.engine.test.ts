@@ -283,7 +283,7 @@ test("the full provider suite reconciles a notify-enabled app end-to-end, then i
             "host-git-runner",
             "host-deploy",
             "cf-git-example-com",
-            "cf-komodo-example-com",
+            "cf-deploy-example-com",
             "my-app-repo",
             "my-app.production-ci",
             "my-app.production",
@@ -294,7 +294,7 @@ test("the full provider suite reconciles a notify-enabled app end-to-end, then i
         ].sort(),
     );
     // Komodo's output is url/internalUrl only — the stale v1 passkey was dropped.
-    expect(first.outputs["host-deploy"]).toEqual({ url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" });
+    expect(first.outputs["host-deploy"]).toEqual({ url: "https://deploy.example.com", internalUrl: "http://10.0.0.5:9120" });
     expect(first.orphans).toEqual([]);
 
     // Same fakes (same world) => everything is found, healthy, and converged => all noop.

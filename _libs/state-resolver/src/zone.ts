@@ -1,7 +1,7 @@
 import type { IntentSet } from "@intentic/need-resolver";
 
 // Every domain the author declared across apps and services — the hostnames the deployment routes through
-// Cloudflare. The derived platform domains (git.<zone>/komodo.<zone>) are NOT included: they hang off the
+// Cloudflare. The derived platform domains (git.<zone>/deploy.<zone>) are NOT included: they hang off the
 // zone, they don't determine it.
 export const collectDomains = (intent: IntentSet): string[] => [
     ...intent.apps.flatMap((app) => Object.values(app.environments).map((environment) => environment.domain)),

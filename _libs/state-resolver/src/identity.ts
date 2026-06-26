@@ -114,7 +114,7 @@ export const resolveIdentities = (intent: IntentSet, platform: PlatformRefs, hos
             type: "komodo-user",
             inputs: { komodoUrl, ...komodoAdmin, username: user.input.username, password: generated(userPasswordKey(user.id)), grants },
             // The Komodo account + its per-deployment permissions; depends on each scoped deployment existing.
-            explicitDependsOn: [platform.deploy, platform.komodoRoute, ...grants.map((grant) => grant.deployment)],
+            explicitDependsOn: [platform.deploy, platform.deployRoute, ...grants.map((grant) => grant.deployment)],
         });
     }
 

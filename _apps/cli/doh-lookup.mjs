@@ -1,6 +1,6 @@
 // Local-resolver workaround used ONLY by `pnpm demo:up` (passed to the CLI children via NODE_OPTIONS
 // --import). The engine talks to Forgejo/Komodo over their public URLs (https://git.<zone>,
-// https://komodo.<zone>); right after the demo creates those DNS records this machine's resolver can still
+// https://deploy.<zone>); right after the demo creates those DNS records this machine's resolver can still
 // negative-cache them, so the engine's fetch() fails. This hook routes lookups for the demo zone through
 // Cloudflare DoH over HTTPS (no port-53 / root needed) so the freshly created hostnames resolve immediately.
 // It only intercepts names in DEMO_DOH_ZONE; everything else falls through to the real resolver.

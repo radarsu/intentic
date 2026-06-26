@@ -115,7 +115,7 @@ export const resolveApp = (
             // Depends on ci so the workflow + secrets exist first; the route gates Komodo reachability. No
             // default readyWhen: apply only registers the deployment (it does not go live until CI pushes an
             // image), so an httpOk gate would hang forever — honour only an author-supplied one.
-            explicitDependsOn: [ci, platform.komodoRoute, ...(intent.observe !== undefined ? [intent.observe] : [])],
+            explicitDependsOn: [ci, platform.deployRoute, ...(intent.observe !== undefined ? [intent.observe] : [])],
             ...(environment.readyWhen !== undefined ? { readyWhen: environment.readyWhen } : {}),
         });
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
@@ -138,7 +138,7 @@ export const resolveApp = (
             id: komodoNotifyId(intent.id),
             type: "komodo-notify",
             inputs: { komodoUrl, ...komodoAdmin, targets, webhook: intent.notify.discord, events: ["deploy"] },
-            explicitDependsOn: [platform.deploy, platform.komodoRoute, ...targets],
+            explicitDependsOn: [platform.deploy, platform.deployRoute, ...targets],
         });
     }
 
