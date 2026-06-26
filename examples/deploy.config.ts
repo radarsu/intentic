@@ -13,7 +13,7 @@ export const intent = defineIntent((i) => {
     // zone and the account that owns it are discovered from the API token (the app domains pick which of the
     // token's zones to use), so neither is authored here.
     const host = i.have.host("host", {
-        address: "203.0.113.10",
+        address: "127.0.0.1",
         user: "deploy",
         sshKey: env("HOST_SSH_KEY"),
     });

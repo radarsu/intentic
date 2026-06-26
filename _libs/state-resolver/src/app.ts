@@ -100,7 +100,10 @@ export const resolveApp = (
             id,
             type: "deployment",
             inputs: {
-                server: intent.on,
+                // The Komodo Server to target: worker hosts use the host id (registered by komodo-server);
+                // the CP host omits this so the schema default "Local" is used (auto-created by Komodo's
+                // KOMODO_FIRST_SERVER_NAME).
+                ...(intent.on !== controlPlaneHost ? { server: intent.on } : {}),
                 owner,
                 repoName: intent.id,
                 registry: registryAuthority(zone),
