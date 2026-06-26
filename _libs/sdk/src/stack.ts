@@ -8,9 +8,25 @@ import type {
     HostIntent,
     IntentSet,
     ServiceIntent,
+    TeamIntent,
+    UserInput,
+    UserIntent,
 } from "@intentic/need-resolver";
 import { deploymentId, repoId } from "@intentic/state-resolver";
-import type { App, Cloudflare, Deployment, Host, Repo, Service, Stack, WantAppInput, WantServiceInput } from "./handles.js";
+import type {
+    App,
+    Cloudflare,
+    Deployment,
+    Host,
+    Repo,
+    Service,
+    Stack,
+    Team,
+    User,
+    WantAppInput,
+    WantServiceInput,
+    WantTeamInput,
+} from "./handles.js";
 
 // The builder is a pure intent recorder: i.have.* / i.want.app record what was declared and hand back typed
 // handles for wiring. No derivation happens here — that is the resolver's job. There is a single host and a
@@ -25,9 +41,18 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         claimed.add(id);
     };
 
+    const users: UserIntent[] = [];
+    const teams: TeamIntent[] = [];
     const apps: AppIntent[] = [];
     const services: ServiceIntent[] = [];
-    const intent: { host?: HostIntent; cloudflare?: CloudflareIntent; apps: AppIntent[]; services: ServiceIntent[] } = { apps, services };
+    const intent: {
+        host?: HostIntent;
+        cloudflare?: CloudflareIntent;
+        users: UserIntent[];
+        teams: TeamIntent[];
+        apps: AppIntent[];
+        services: ServiceIntent[];
+    } = { users, teams, apps, services };
 
     const host = (id: string, input: HostInput): Host => {
         if (intent.host !== undefined) {
@@ -55,6 +80,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
             expose: input.expose.resourceId,
             ...(input.notify !== undefined ? { notify: input.notify } : {}),
             ...(input.observe !== undefined ? { observe: input.observe.resourceId } : {}),
+            ...(input.teams !== undefined ? { teams: input.teams.map((grant) => ({ team: grant.team.resourceId, role: grant.role })) } : {}),
             environments: input.environments,
         });
 
@@ -84,6 +110,18 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         }) as Service;
     };
 
-    const stack: Stack = { have: { host, cloudflare }, want: { app, service } };
+    const user = (id: string, input: UserInput): User => {
+        claim(id);
+        users.push({ id, input });
+        return Object.freeze(makeRef(id)) as User;
+    };
+
+    const team = (id: string, input: WantTeamInput): Team => {
+        claim(id);
+        teams.push({ id, input: { members: input.members.map((member) => member.resourceId), komodo: input.komodo } });
+        return Object.freeze(makeRef(id)) as Team;
+    };
+
+    const stack: Stack = { have: { host, cloudflare }, want: { app, service, user, team } };
     return { stack, intent };
 };

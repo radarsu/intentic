@@ -4,9 +4,7 @@ import { adoptRepos, type GitRunner } from "./adopt.js";
 
 // A git runner that records every invocation and answers the two queries adopt makes (status + remote) from
 // the supplied maps, defaulting to empty (clean tree, no remotes) so the happy path is the default.
-const recordingGit = (
-    answers: { status?: string; remotes?: string } = {},
-): { git: GitRunner; calls: string[][] } => {
+const recordingGit = (answers: { status?: string; remotes?: string } = {}): { git: GitRunner; calls: string[][] } => {
     const calls: string[][] = [];
     const git: GitRunner = async (dir, args) => {
         calls.push([dir, ...args]);

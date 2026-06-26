@@ -11,9 +11,11 @@ const deploymentSchema = z.object({
     komodoUrl: z.string(),
     adminUser: z.string(),
     adminPassword: z.string(),
+    // The repo + registry namespace (a team's org, or the admin user when team-less) — matches CI's owner.
+    owner: z.string(),
     repoName: z.string(),
     // The Forgejo built-in registry authority (e.g. "127.0.0.1:3000") + the image tag (= environment name);
-    // image = registry/<adminUser>/<repoName>:<tag>, matching exactly what the CI workflow pushes.
+    // image = registry/<owner>/<repoName>:<tag>, matching exactly what the CI workflow pushes.
     registry: z.string(),
     tag: z.string(),
     domain: z.string(),
@@ -33,10 +35,14 @@ const outputsFor = (parsed: DeploymentInputs): Record<string, unknown> => ({
 
 const deploymentConfig = (parsed: DeploymentInputs): Record<string, unknown> => ({
     server_id: SERVER,
-    // A registry Image (NOT a Komodo Build) — CI builds + pushes it; Komodo only pulls + runs it.
-    image: { type: "Image", params: { image: registryImage({ registry: parsed.registry, owner: parsed.adminUser, repoName: parsed.repoName, tag: parsed.tag }) } },
+    // A registry Image (NOT a Komodo Build) — CI builds + pushes it; Komodo only pulls + runs it. The image
+    // path is namespaced under the repo owner (the team's org), matching exactly what CI pushes.
+    image: {
+        type: "Image",
+        params: { image: registryImage({ registry: parsed.registry, owner: parsed.owner, repoName: parsed.repoName, tag: parsed.tag }) },
+    },
     // Selects the [[docker_registry]] account komodo.ts writes (domain = registry, username = adminUser) so
-    // Komodo can pull the private image.
+    // Komodo can pull the private image; the admin owns the org, so its packages token can pull it.
     image_registry_account: parsed.adminUser,
     // Komodo watches the tag's manifest digest (poll_for_updates) and redeploys when it changes (auto_update),
     // so a CI push of a new image goes live without intentic deploying anything.

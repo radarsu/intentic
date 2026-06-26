@@ -1,4 +1,4 @@
-import type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput, ServiceInput } from "./inputs.js";
+import type { AppTeamGrantInput, CloudflareInput, EnvironmentInput, HostInput, NotifyInput, ServiceInput, TeamInput, UserInput } from "./inputs.js";
 
 // The intent the builder records and the resolver consumes — "what you have" + "what you want" as pure
 // data. App `on`/`expose` are resource-id strings (not handles), so the intent stays serializable and
@@ -14,6 +14,16 @@ export interface CloudflareIntent {
     readonly input: CloudflareInput;
 }
 
+export interface UserIntent {
+    readonly id: string;
+    readonly input: UserInput;
+}
+
+export interface TeamIntent {
+    readonly id: string;
+    readonly input: TeamInput;
+}
+
 export interface AppIntent {
     readonly id: string;
     readonly on: string;
@@ -22,6 +32,9 @@ export interface AppIntent {
     // The id of a service (i.want.service) this app sends telemetry to. The resolver injects that service's
     // OTLP endpoint into each deployment's env and depends the deployment on it. Absent = no telemetry.
     readonly observe?: string;
+    // The teams that manage this app, each at a Forgejo role. The first grant's team owns the repo; absent or
+    // empty = admin-owned (the default single-admin behaviour). Resolver validates each team is declared.
+    readonly teams?: readonly AppTeamGrantInput[];
     readonly environments: Readonly<Record<string, EnvironmentInput>>;
 }
 
@@ -38,6 +51,8 @@ export interface ServiceIntent extends ServiceInput {
 export interface IntentSet {
     readonly host?: HostIntent;
     readonly cloudflare?: CloudflareIntent;
+    readonly users: readonly UserIntent[];
+    readonly teams: readonly TeamIntent[];
     readonly apps: readonly AppIntent[];
     readonly services: readonly ServiceIntent[];
 }

@@ -41,3 +41,28 @@ export interface ServiceInput {
     kind: ServiceKind;
     domain: string;
 }
+
+// A person who works on the apps: a real Forgejo git account + a Komodo UI user. The login password is
+// intentic-generated (one per user, reused for both logins), so it is not authored here.
+export interface UserInput {
+    username: string;
+    email: string;
+}
+
+// A team of users. Becomes a Forgejo organization (named by the team id) + a team inside it, and grants its
+// members a single Komodo permission level on the deployments of the apps the team is attached to. `members`
+// are user ids (i.want.user); the intent stays a serializable id graph, like AppIntent.on/expose.
+export type ForgejoRole = "admin" | "write" | "read";
+export type KomodoRole = "admin" | "execute" | "read";
+
+export interface TeamInput {
+    members: readonly string[];
+    komodo: KomodoRole;
+}
+
+// An app's grant of a team at a Forgejo role. `team` is a team id. The first grant on an app owns its repo
+// (its org is the repo + registry namespace); the rest are added as collaborator teams at their role.
+export interface AppTeamGrantInput {
+    team: string;
+    role: ForgejoRole;
+}

@@ -31,13 +31,23 @@ export const intent = defineIntent((i) => {
         domain: "signoz.example.com",
     });
 
+    // Who works on the app: people get a Forgejo git account + a Komodo UI user (each with an intentic-generated
+    // password, surfaced in the secrets file). A team becomes a Forgejo organization + team and a Komodo
+    // permission scope: its members can act on the deployments of the apps it manages at the `komodo` level.
+    const alice = i.want.user("alice", { username: "alice", email: "alice@example.com" });
+    const bob = i.want.user("bob", { username: "bob", email: "bob@example.com" });
+    const platform = i.want.team("platform", { members: [alice, bob], komodo: "execute" });
+
     // What I want (an app): shipped to two environments. The tool derives the needs (source control, Docker
     // registry, infra control, deployment target, domain) and the support stack that meets them — on the host
-    // I declared, exposed through the Cloudflare I declared — and exports the app's telemetry to `obs`.
+    // I declared, exposed through the Cloudflare I declared — and exports the app's telemetry to `obs`. The
+    // `platform` team owns the app: its org owns the repo (the repo + image namespace) and its members get
+    // write on the repo + Komodo execute on the deployments.
     i.want.app("my-app", {
         on: host,
         expose: cf,
         observe: obs,
+        teams: [{ team: platform, role: "write" }],
         environments: {
             staging: { domain: "staging.example.com", branch: "develop", env: { DATABASE_URL: env("STAGING_DATABASE_URL") } },
             production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },

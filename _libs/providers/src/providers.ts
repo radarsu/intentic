@@ -9,12 +9,16 @@ import { createForgejoProvider } from "./forgejo.js";
 import type { ForgejoApi } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";
 import { createForgejoNotifyProvider } from "./forgejo-notify.js";
+import { createForgejoOrgProvider } from "./forgejo-org.js";
 import { createForgejoRunnerProvider } from "./forgejo-runner.js";
+import { createForgejoTeamProvider } from "./forgejo-team.js";
+import { createForgejoUserProvider } from "./forgejo-user.js";
 import { createHostProvider } from "./host.js";
 import { createKomodoProvider } from "./komodo.js";
 import type { KomodoApi } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 import { createKomodoNotifyProvider } from "./komodo-notify.js";
+import { createKomodoUserProvider } from "./komodo-user.js";
 import { createRepoProvider } from "./repo.js";
 import { createSignozProvider } from "./signoz.js";
 import type { SshExecutor } from "./ssh.js";
@@ -47,8 +51,12 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "cf-route": createCfRouteProvider(cloudflare, deps.dnsPropagation),
         tunnel: createTunnelProvider(cloudflare, ssh),
         forgejo: createForgejoProvider(ssh),
+        "forgejo-user": createForgejoUserProvider(forgejo),
+        "forgejo-org": createForgejoOrgProvider(forgejo),
+        "forgejo-team": createForgejoTeamProvider(forgejo),
         "forgejo-runner": createForgejoRunnerProvider(ssh),
         komodo: createKomodoProvider(ssh),
+        "komodo-user": createKomodoUserProvider(komodo),
         repo: createRepoProvider(forgejo),
         ci: createCiProvider(forgejo),
         deployment: createDeploymentProvider(komodo),

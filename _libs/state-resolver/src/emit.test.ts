@@ -29,6 +29,8 @@ test("emit derives the full support stack for a two-environment app", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [
             {
@@ -66,6 +68,8 @@ test("apps share one derived platform", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [
             { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
@@ -84,6 +88,8 @@ test("an unsupported option assignment throws", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -96,6 +102,8 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [
             {
@@ -126,6 +134,8 @@ test("an app without notify derives no notification sinks", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -139,6 +149,8 @@ test("notification sinks are derived per app, while the platform stays shared pe
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [
             {
@@ -169,6 +181,8 @@ test("a services-only intent emits the service + its route + tunnel, but no app 
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
         apps: [],
     };
@@ -189,6 +203,8 @@ test("an app's observe injects the service's OTLP endpoint into each deployment 
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
         apps: [
             {
@@ -215,6 +231,8 @@ test("an app without observe carries no OTLP env and no service dependency", () 
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -228,6 +246,8 @@ test("observing an undeclared service throws", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [{ id: "app", on: "host", expose: "cf", observe: "ghost", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -235,10 +255,111 @@ test("observing an undeclared service throws", () => {
     expect(() => emit(intent, assign(intent), "example.com")).toThrow('app "app" observes unknown service "ghost"');
 });
 
+test("users and teams derive Forgejo accounts + org/team and Komodo users, and the team owns the app's repo", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        users: [{ id: "alice", input: { username: "alice", email: "alice@example.com" } }],
+        teams: [{ id: "squad", input: { members: ["alice"], komodo: "execute" } }],
+        services: [],
+        apps: [
+            {
+                id: "app",
+                on: "host",
+                expose: "cf",
+                teams: [{ team: "squad", role: "write" }],
+                environments: { prod: { domain: "app.example.com", branch: "main" } },
+            },
+        ],
+    };
+
+    const nodes = emit(intent, assign(intent), "example.com");
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+
+    // One identity node of each kind, host-scoped.
+    expect(byId.get("host-git-user-alice")?.type).toBe("forgejo-user");
+    expect(byId.get("host-deploy-user-alice")?.type).toBe("komodo-user");
+    expect(byId.get("host-git-org-squad")?.type).toBe("forgejo-org");
+    expect(byId.get("host-git-org-squad-team")?.type).toBe("forgejo-team");
+
+    // The repo is owned by the team's org (its id), and so are the ci/deployment image namespaces.
+    expect(byId.get("app-repo")?.inputs["owner"]).toBe("squad");
+    expect(byId.get("app.prod")?.inputs["owner"]).toBe("squad");
+    expect(byId.get("app-repo")?.explicitDependsOn).toContain("host-git-org-squad");
+
+    // The team carries the resolved role + member usernames + the repos it is attached to.
+    const team = byId.get("host-git-org-squad-team");
+    expect(team?.inputs["permission"]).toBe("write");
+    expect(team?.inputs["members"]).toEqual(["alice"]);
+    expect(team?.inputs["repos"]).toEqual([{ owner: "squad", name: "app" }]);
+
+    // The Komodo user is granted Execute on the app's deployment, and depends on it existing.
+    const komodoUser = byId.get("host-deploy-user-alice");
+    expect(komodoUser?.inputs["grants"]).toEqual([{ deployment: "app.prod", level: "Execute" }]);
+    expect(komodoUser?.explicitDependsOn).toContain("app.prod");
+});
+
+test("a team-less app stays admin-owned (identical to the single-admin default)", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    const repo = emit(intent, assign(intent), "example.com").find((node) => node.id === "app-repo");
+    expect(repo?.inputs["owner"]).toBe("intentic");
+    expect(repo?.explicitDependsOn).toEqual(["host-git", "cf-git-example-com"]);
+});
+
+test("a team referencing an undeclared user throws", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        users: [],
+        teams: [{ id: "squad", input: { members: ["ghost"], komodo: "read" } }],
+        services: [],
+        apps: [
+            {
+                id: "app",
+                on: "host",
+                expose: "cf",
+                teams: [{ team: "squad", role: "read" }],
+                environments: { prod: { domain: "app.example.com", branch: "main" } },
+            },
+        ],
+    };
+    expect(() => emit(intent, assign(intent), "example.com")).toThrow('team "squad" references unknown user "ghost"');
+});
+
+test("an app granting an undeclared team throws", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        apps: [
+            {
+                id: "app",
+                on: "host",
+                expose: "cf",
+                teams: [{ team: "ghost", role: "read" }],
+                environments: { prod: { domain: "app.example.com", branch: "main" } },
+            },
+        ],
+    };
+    expect(() => emit(intent, assign(intent), "example.com")).toThrow('app "app" grants unknown team "ghost"');
+});
+
 test("the cloudflare node carries only token + discovered zone, and the tunnel reads the account from it via a ref", () => {
     const intent: IntentSet = {
         host,
         cloudflare,
+        users: [],
+        teams: [],
         services: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };

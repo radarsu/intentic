@@ -8,6 +8,8 @@ import { resolveState } from "./state.js";
 const intent: IntentSet = {
     host: { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } },
     cloudflare: { id: "cf", input: { apiToken: env("CLOUDFLARE_API_TOKEN") } },
+    users: [],
+    teams: [],
     apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     services: [],
 };
@@ -21,7 +23,7 @@ test("the default catalog resolves intent to one desired-state graph built from 
 });
 
 test("no apps resolve to an empty desired state", () => {
-    expect(resolveState({ apps: [], services: [] })).toEqual({ version: 1, resources: {} });
+    expect(resolveState({ users: [], teams: [], apps: [], services: [] })).toEqual({ version: 1, resources: {} });
 });
 
 test("a need with no option throws", () => {

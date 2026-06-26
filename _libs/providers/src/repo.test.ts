@@ -13,6 +13,7 @@ const ctx = (log: (message: string) => void = () => {}) => ({
 
 const inputs = {
     name: "my-app",
+    owner: "admin",
     private: true,
     forgejoUrl: "https://git.example.com",
     domain: "git.example.com",
@@ -82,6 +83,25 @@ test("apply does not create when the repo already exists", async () => {
     );
     await provider.apply(inputs, undefined, ctx());
     expect(createCalled).toBe(false);
+});
+
+test("a team-owned repo is created under the org (ownerIsOrg) and its urls are namespaced under the org", async () => {
+    let created: { owner?: string; ownerIsOrg?: boolean } = {};
+    const provider = createRepoProvider(
+        fakeForgejoApi({
+            findRepo: async () => undefined,
+            createRepo: async (args) => {
+                created = args;
+                return { cloneUrl: "x", sshUrl: "y" };
+            },
+        }),
+    );
+    const owned = { ...inputs, owner: "squad" };
+    expect(await provider.apply(owned, undefined, ctx())).toEqual({
+        cloneUrl: "https://git.example.com/squad/my-app.git",
+        sshUrl: "git@git.example.com:squad/my-app.git",
+    });
+    expect(created).toMatchObject({ owner: "squad", ownerIsOrg: true });
 });
 
 test("diff is always noop", () => {

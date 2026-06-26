@@ -11,10 +11,16 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     "cf-route": ["url"],
     tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken", "gitToken", "packagesToken"],
+    // Identity nodes are pure sinks: usernames/org names are authored or deterministic literals the resolver
+    // passes around directly, so nothing refs an output off them (like ci/forgejo-notify/komodo-notify).
+    "forgejo-user": [],
+    "forgejo-org": [],
+    "forgejo-team": [],
     repo: ["cloneUrl", "sshUrl"],
     "control-repo": ["cloneUrl", "sshUrl"],
     "forgejo-runner": [],
     komodo: ["url", "internalUrl"],
+    "komodo-user": [],
     ci: [],
     deployment: ["internalUrl", "url"],
     "forgejo-notify": [],

@@ -11,6 +11,10 @@ const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
     getDeployment: NOT_USED,
     createDeployment: NOT_USED,
     updateDeployment: NOT_USED,
+    listUsers: NOT_USED,
+    createUser: NOT_USED,
+    enableUser: NOT_USED,
+    setPermissionOnTarget: NOT_USED,
     listAlerters: NOT_USED,
     getAlerter: NOT_USED,
     createAlerter: NOT_USED,
@@ -28,6 +32,7 @@ const ctx = () => ({
 });
 
 const inputs = {
+    owner: "admin",
     repoName: "my-app",
     registry: "127.0.0.1:3000",
     tag: "staging",

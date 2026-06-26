@@ -16,6 +16,7 @@ const inputs = {
     adminUser: "intentic",
     adminPassword: "fpw",
     komodoPassword: "kpw",
+    owner: "intentic",
     repoName: "my-app",
     branch: "main",
     registry: "127.0.0.1:3000",

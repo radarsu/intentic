@@ -1,5 +1,14 @@
 import type { Ref } from "@intentic/graph";
-import type { CloudflareInput, EnvironmentInput, HostInput, NotifyInput, ServiceInput } from "@intentic/need-resolver";
+import type {
+    CloudflareInput,
+    EnvironmentInput,
+    ForgejoRole,
+    HostInput,
+    KomodoRole,
+    NotifyInput,
+    ServiceInput,
+    UserInput,
+} from "@intentic/need-resolver";
 
 // The authoring surface. A developer declares the inventory they have — i.have.host / i.have.cloudflare —
 // and what they want — i.want.app (built from source) and i.want.service (an off-the-shelf shared tool).
@@ -36,6 +45,25 @@ export interface App<Names extends string = string> extends Ref<"app"> {
     readonly environments: Readonly<Record<Names, Deployment>>;
 }
 
+// --- People and teams (i.want.user / i.want.team). Identity handles: bare refs with no output props —
+// nothing references an output off them (usernames and org names are authored or deterministic literals the
+// resolver passes around directly), they exist only to be wired into teams and app grants. ---
+
+export type User = Ref<"forgejo-user">;
+export type Team = Ref<"forgejo-team">;
+
+// A team's members are User handles; its Komodo role applies to the deployments of the apps it manages.
+export interface WantTeamInput {
+    members: readonly User[];
+    komodo: KomodoRole;
+}
+
+// An app's grant of a team at a Forgejo role. The first grant on an app owns its repo.
+export interface AppTeamGrant {
+    team: Team;
+    role: ForgejoRole;
+}
+
 // --- A shared off-the-shelf service (i.want.service); its output refs are inert, like inventory handles ---
 
 export interface Service extends Ref<"signoz"> {
@@ -53,6 +81,9 @@ export interface WantAppInput {
     notify?: NotifyInput;
     // A service to send this app's telemetry to; the resolver injects its OTLP endpoint into each deployment.
     observe?: Service;
+    // The teams that manage this app, each at a Forgejo role. The first grant's team owns the repo (its org is
+    // the repo + registry namespace); omitted/empty falls back to the single admin owner.
+    teams?: readonly AppTeamGrant[];
     environments: Record<string, EnvironmentInput>;
 }
 
@@ -70,6 +101,8 @@ export interface Want {
     // `const` so environment names come from the object keys, e.g. App<"staging" | "production">.
     app<const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string>;
     service(id: string, input: WantServiceInput): Service;
+    user(id: string, input: UserInput): User;
+    team(id: string, input: WantTeamInput): Team;
 }
 
 export interface Stack {

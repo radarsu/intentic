@@ -9,9 +9,16 @@ export interface ForgejoRepo {
     readonly sshUrl: string;
 }
 
+// A Forgejo org team: its numeric id (needed to add members/repos) and the permission it grants on its repos.
+export interface ForgejoTeam {
+    readonly id: number;
+    readonly permission: string;
+}
+
 const rawRepoSchema = z.object({ clone_url: z.string(), ssh_url: z.string() });
 const rawCommitSchema = z.object({ sha: z.string() });
 const rawContentSchema = z.object({ sha: z.string() });
+const rawTeamSchema = z.object({ id: z.number(), permission: z.string() });
 
 // Percent-encode each path segment but keep the slashes, so a nested file path stays a valid URL path.
 const encodePath = (path: string): string => path.split("/").map(encodeURIComponent).join("/");
@@ -38,17 +45,81 @@ export interface ForgejoApi {
         readonly owner: string;
         readonly name: string;
     }) => Promise<ForgejoRepo | undefined>;
-    // Create a repo owned by `owner` (admin-for-user). `autoInit` makes Forgejo write an initial commit (so an
-    // app repo can be cloned immediately); pass false to get an EMPTY repo when local history will be pushed in.
+    // Create a repo owned by `owner`. `ownerIsOrg` picks the endpoint: an org repo (POST /orgs/{owner}/repos)
+    // when the owner is a team's organization, or an admin-for-user repo (POST /admin/users/{owner}/repos) for
+    // the single-admin fallback owner. `autoInit` makes Forgejo write an initial commit (so an app repo can be
+    // cloned immediately); pass false to get an EMPTY repo when local history will be pushed in.
     readonly createRepo: (args: {
         readonly baseUrl: string;
         readonly user: string;
         readonly password: string;
         readonly owner: string;
+        readonly ownerIsOrg: boolean;
         readonly name: string;
         readonly private: boolean;
         readonly autoInit: boolean;
     }) => Promise<ForgejoRepo>;
+    // A user exists (by username). Public endpoint; admin Basic auth is fine.
+    readonly findUser: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly username: string;
+    }) => Promise<boolean>;
+    // Create a git account. `mustChangePassword` is forced false so the generated password works for the API +
+    // git push immediately (Forgejo defaults it true, which would lock the account out until a rotation).
+    readonly createUser: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly username: string;
+        readonly email: string;
+        readonly accountPassword: string;
+    }) => Promise<void>;
+    // An organization exists (by login).
+    readonly findOrg: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly org: string;
+    }) => Promise<boolean>;
+    // Create an organization owned by the admin `user` (so the admin stays in its Owners team and its tokens
+    // retain full access to the org's private repos — what Komodo clones and pulls with).
+    readonly createOrg: (args: { readonly baseUrl: string; readonly user: string; readonly password: string; readonly org: string }) => Promise<void>;
+    // A team in an org (by name); undefined if absent. Returns the numeric id member/repo grants need.
+    readonly findTeam: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly org: string;
+        readonly name: string;
+    }) => Promise<ForgejoTeam | undefined>;
+    // Create a team in an org at `permission` (read|write|admin) granting access to the repos it is attached to.
+    readonly createTeam: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly org: string;
+        readonly name: string;
+        readonly permission: string;
+    }) => Promise<ForgejoTeam>;
+    // Add a user to a team (idempotent PUT).
+    readonly addTeamMember: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly teamId: number;
+        readonly username: string;
+    }) => Promise<void>;
+    // Attach a repo to a team so its members get the team's permission on it (idempotent PUT).
+    readonly addTeamRepo: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly teamId: number;
+        readonly org: string;
+        readonly name: string;
+    }) => Promise<void>;
     // Every webhook on a repo, for stateless re-attribution (matched by type + config.url).
     readonly listHooks: (args: {
         readonly baseUrl: string;
@@ -160,10 +231,61 @@ export const forgejoApi: ForgejoApi = {
         }
         return toRepo(parseResponse(rawRepoSchema, await (await ok(response, "GET", path)).json(), `Forgejo API GET ${path}`));
     },
-    createRepo: async ({ baseUrl, user, password, owner, name, private: isPrivate, autoInit }) => {
-        const path = `/admin/users/${encodeURIComponent(owner)}/repos`;
+    createRepo: async ({ baseUrl, user, password, owner, ownerIsOrg, name, private: isPrivate, autoInit }) => {
+        const path = ownerIsOrg ? `/orgs/${encodeURIComponent(owner)}/repos` : `/admin/users/${encodeURIComponent(owner)}/repos`;
         const response = await request({ method: "POST", baseUrl, path, user, password, body: { name, private: isPrivate, auto_init: autoInit } });
         return toRepo(parseResponse(rawRepoSchema, await (await ok(response, "POST", path)).json(), `Forgejo API POST ${path}`));
+    },
+    findUser: async ({ baseUrl, user, password, username }) => {
+        const path = `/users/${encodeURIComponent(username)}`;
+        const response = await request({ method: "GET", baseUrl, path, user, password });
+        if (response.status === 404) {
+            return false;
+        }
+        await ok(response, "GET", path);
+        return true;
+    },
+    createUser: async ({ baseUrl, user, password, username, email, accountPassword }) => {
+        const path = "/admin/users";
+        const body = { username, email, password: accountPassword, must_change_password: false, visibility: "private" };
+        await ok(await request({ method: "POST", baseUrl, path, user, password, body }), "POST", path);
+    },
+    findOrg: async ({ baseUrl, user, password, org }) => {
+        const path = `/orgs/${encodeURIComponent(org)}`;
+        const response = await request({ method: "GET", baseUrl, path, user, password });
+        if (response.status === 404) {
+            return false;
+        }
+        await ok(response, "GET", path);
+        return true;
+    },
+    createOrg: async ({ baseUrl, user, password, org }) => {
+        const path = `/admin/users/${encodeURIComponent(user)}/orgs`;
+        await ok(await request({ method: "POST", baseUrl, path, user, password, body: { username: org, visibility: "private" } }), "POST", path);
+    },
+    findTeam: async ({ baseUrl, user, password, org, name }) => {
+        const path = `/orgs/${encodeURIComponent(org)}/teams/${encodeURIComponent(name)}`;
+        const response = await request({ method: "GET", baseUrl, path, user, password });
+        if (response.status === 404) {
+            return undefined;
+        }
+        const raw = parseResponse(rawTeamSchema, await (await ok(response, "GET", path)).json(), `Forgejo API GET ${path}`);
+        return { id: raw.id, permission: raw.permission };
+    },
+    createTeam: async ({ baseUrl, user, password, org, name, permission }) => {
+        const path = `/orgs/${encodeURIComponent(org)}/teams`;
+        const body = { name, permission, units: ["repo.code"], includes_all_repositories: false, can_create_org_repo: false };
+        const response = await request({ method: "POST", baseUrl, path, user, password, body });
+        const raw = parseResponse(rawTeamSchema, await (await ok(response, "POST", path)).json(), `Forgejo API POST ${path}`);
+        return { id: raw.id, permission: raw.permission };
+    },
+    addTeamMember: async ({ baseUrl, user, password, teamId, username }) => {
+        const path = `/teams/${teamId}/members/${encodeURIComponent(username)}`;
+        await ok(await request({ method: "PUT", baseUrl, path, user, password }), "PUT", path);
+    },
+    addTeamRepo: async ({ baseUrl, user, password, teamId, org, name }) => {
+        const path = `/teams/${teamId}/repos/${encodeURIComponent(org)}/${encodeURIComponent(name)}`;
+        await ok(await request({ method: "PUT", baseUrl, path, user, password }), "PUT", path);
     },
     listHooks: async ({ baseUrl, user, password, owner, name }) => {
         const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/hooks`;

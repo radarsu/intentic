@@ -9,6 +9,19 @@ export const tunnelId = (hostId: string): string => `${hostId}-tunnel`;
 // The human-facing Cloudflare tunnel name (must be stable + unique within the account).
 export const tunnelName = (hostId: string): string => `intentic-${hostId}`;
 export const repoId = (appId: string): string => `${appId}-repo`;
+// Forgejo identities are host-scoped (one Forgejo per host), keyed off the author's user/team id. A team is a
+// Forgejo org (named by the team id) with one team inside it.
+export const forgejoUserId = (hostId: string, userId: string): string => `${forgejoId(hostId)}-user-${userId}`;
+export const forgejoOrgId = (hostId: string, teamId: string): string => `${forgejoId(hostId)}-org-${teamId}`;
+export const forgejoTeamId = (hostId: string, teamId: string): string => `${forgejoOrgId(hostId, teamId)}-team`;
+// The Komodo UI account per declared user, host-scoped like Komodo itself.
+export const komodoUserId = (hostId: string, userId: string): string => `${komodoId(hostId)}-user-${userId}`;
+// The Forgejo org login a team maps to (the repo + registry namespace for the apps it owns). The team id is
+// already globally unique (the builder's claim()), and Forgejo org names must be unique per instance, so the
+// team id IS the org name.
+export const orgName = (teamId: string): string => teamId;
+// The env var key for a user's intentic-generated login password (one per user, reused for Forgejo + Komodo).
+export const userPasswordKey = (userId: string): string => `INTENTIC_USER_PASSWORD_${userId.replace(/[^A-Za-z0-9]/g, "_").toUpperCase()}`;
 export const deploymentId = (appId: string, environment: string): string => `${appId}.${environment}`;
 // The CI/CD wiring node per environment: a Forgejo Actions workflow + repo secrets, keyed off the deployment.
 export const ciId = (appId: string, environment: string): string => `${deploymentId(appId, environment)}-ci`;

@@ -2,9 +2,9 @@ import type { DesiredStateGraph } from "@intentic/graph";
 
 // Golden expected output for ../deploy.config.ts — regenerated from the compiled graph. Captures the
 // platform-self-init ordering (the tunnel comes up before the control plane that reaches Forgejo/Komodo
-// through its public routes) and the CI/CD wiring: per-environment `ci` nodes (a Forgejo Actions workflow +
-// repo secrets) and Komodo `deployment` nodes pointed at the registry image — no Komodo Build, no deploy-hook.
-// Guarded by the topo-order, ref-edge, and secret tests.
+// through its public routes), the users/teams identity nodes (Forgejo accounts + org/team, Komodo users +
+// per-deployment grants), and the CI/CD wiring: per-environment `ci` nodes + Komodo `deployment` nodes
+// pointed at the registry image under the owning team org. Guarded by the topo-order, ref-edge, and secret tests.
 export const expectedGraph: DesiredStateGraph = {
     version: 1,
     resources: {
@@ -192,6 +192,7 @@ export const expectedGraph: DesiredStateGraph = {
             type: "repo",
             inputs: {
                 name: "my-app",
+                owner: "squad",
                 private: true,
                 forgejoUrl: {
                     $ref: "host-git.url",
@@ -205,7 +206,7 @@ export const expectedGraph: DesiredStateGraph = {
                     },
                 },
             },
-            dependsOn: ["host-git", "cf-git-example-com"],
+            dependsOn: ["host-git", "cf-git-example-com", "host-git-org-squad"],
         },
         "my-app.staging-ci": {
             id: "my-app.staging-ci",
@@ -227,6 +228,7 @@ export const expectedGraph: DesiredStateGraph = {
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
+                owner: "squad",
                 repoName: "my-app",
                 branch: "develop",
                 registry: "127.0.0.1:3000",
@@ -239,12 +241,13 @@ export const expectedGraph: DesiredStateGraph = {
                 },
                 deployment: "my-app.staging",
             },
-            dependsOn: ["host-git", "cf-git-example-com", "host-deploy", "my-app-repo"],
+            dependsOn: ["host-git", "cf-git-example-com", "host-deploy", "my-app-repo", "host-git-org-squad"],
         },
         "my-app.staging": {
             id: "my-app.staging",
             type: "deployment",
             inputs: {
+                owner: "squad",
                 repoName: "my-app",
                 registry: "127.0.0.1:3000",
                 tag: "staging",
@@ -314,6 +317,7 @@ export const expectedGraph: DesiredStateGraph = {
                         key: "KOMODO_ADMIN_PASSWORD",
                     },
                 },
+                owner: "squad",
                 repoName: "my-app",
                 branch: "main",
                 registry: "127.0.0.1:3000",
@@ -326,12 +330,13 @@ export const expectedGraph: DesiredStateGraph = {
                 },
                 deployment: "my-app.production",
             },
-            dependsOn: ["host-git", "cf-git-example-com", "host-deploy", "my-app-repo"],
+            dependsOn: ["host-git", "cf-git-example-com", "host-deploy", "my-app-repo", "host-git-org-squad"],
         },
         "my-app.production": {
             id: "my-app.production",
             type: "deployment",
             inputs: {
+                owner: "squad",
                 repoName: "my-app",
                 registry: "127.0.0.1:3000",
                 tag: "production",
@@ -380,6 +385,110 @@ export const expectedGraph: DesiredStateGraph = {
                 },
             },
             dependsOn: ["cf", "host-tunnel"],
+        },
+        "host-git-user-dev": {
+            id: "host-git-user-dev",
+            type: "forgejo-user",
+            inputs: {
+                forgejoUrl: {
+                    $ref: "host-git.url",
+                },
+                adminUser: "intentic",
+                adminPassword: {
+                    $secret: {
+                        source: "generated",
+                        key: "FORGEJO_ADMIN_PASSWORD",
+                    },
+                },
+                username: "dev",
+                email: "dev@example.com",
+                accountPassword: {
+                    $secret: {
+                        source: "generated",
+                        key: "INTENTIC_USER_PASSWORD_DEV",
+                    },
+                },
+            },
+            dependsOn: ["host-git", "cf-git-example-com"],
+        },
+        "host-deploy-user-dev": {
+            id: "host-deploy-user-dev",
+            type: "komodo-user",
+            inputs: {
+                komodoUrl: {
+                    $ref: "host-deploy.url",
+                },
+                adminUser: "intentic",
+                adminPassword: {
+                    $secret: {
+                        source: "generated",
+                        key: "KOMODO_ADMIN_PASSWORD",
+                    },
+                },
+                username: "dev",
+                password: {
+                    $secret: {
+                        source: "generated",
+                        key: "INTENTIC_USER_PASSWORD_DEV",
+                    },
+                },
+                grants: [
+                    {
+                        deployment: "my-app.staging",
+                        level: "Execute",
+                    },
+                    {
+                        deployment: "my-app.production",
+                        level: "Execute",
+                    },
+                ],
+            },
+            dependsOn: ["host-deploy", "cf-komodo-example-com", "my-app.staging", "my-app.production"],
+        },
+        "host-git-org-squad": {
+            id: "host-git-org-squad",
+            type: "forgejo-org",
+            inputs: {
+                forgejoUrl: {
+                    $ref: "host-git.url",
+                },
+                adminUser: "intentic",
+                adminPassword: {
+                    $secret: {
+                        source: "generated",
+                        key: "FORGEJO_ADMIN_PASSWORD",
+                    },
+                },
+                org: "squad",
+            },
+            dependsOn: ["host-git", "cf-git-example-com"],
+        },
+        "host-git-org-squad-team": {
+            id: "host-git-org-squad-team",
+            type: "forgejo-team",
+            inputs: {
+                forgejoUrl: {
+                    $ref: "host-git.url",
+                },
+                adminUser: "intentic",
+                adminPassword: {
+                    $secret: {
+                        source: "generated",
+                        key: "FORGEJO_ADMIN_PASSWORD",
+                    },
+                },
+                org: "squad",
+                name: "members",
+                permission: "write",
+                members: ["dev"],
+                repos: [
+                    {
+                        owner: "squad",
+                        name: "my-app",
+                    },
+                ],
+            },
+            dependsOn: ["host-git-org-squad", "host-git-user-dev", "my-app-repo", "host-git"],
         },
         "host-tunnel": {
             id: "host-tunnel",

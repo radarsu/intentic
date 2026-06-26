@@ -39,7 +39,7 @@ export const adoptRepos = async (options: AdoptOptions): Promise<{ readonly name
     for (const { dir, name } of repos) {
         const existing = await api.findRepo({ baseUrl, user, password, owner: user, name });
         if (existing === undefined) {
-            await api.createRepo({ baseUrl, user, password, owner: user, name, private: true, autoInit: false });
+            await api.createRepo({ baseUrl, user, password, owner: user, ownerIsOrg: false, name, private: true, autoInit: false });
             log(`created ${user}/${name} in Forgejo`);
         }
         await git(dir, ["add", "-A"]);

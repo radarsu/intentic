@@ -2,6 +2,7 @@ import { makeRef } from "@intentic/graph";
 import type { IntentSet } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
+import { resolveIdentities } from "./identity.js";
 import { tunnelId, tunnelName } from "./ids.js";
 import { resolvePlatform } from "./platform.js";
 import type { IngressPair } from "./route.js";
@@ -82,6 +83,10 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
             nodes.push(...resolved.nodes);
             ingress.push(...resolved.ingress);
         }
+        // The declared people + teams and the cross-cutting grant graph (which repos each team owns/collaborates
+        // on, which deployments each user can act on). Emitted after apps so the grant graph sees every app, and
+        // gated on the same platform being up. Validates team->user and app->team references.
+        nodes.push(...resolveIdentities(intent, platform.refs, host.id));
     }
 
     // Off-the-shelf services: deployed directly onto the host and exposed at their own domains, independent

@@ -109,10 +109,9 @@ test("read returns undefined when the git token is not yet persisted", async () 
 
 test("read returns undefined when the packages token is not yet persisted", async () => {
     expect(
-        await createForgejoProvider(fakeSsh({ running: true, healthy: true, token: "tok-123", gitToken: "gtok-456", packagesToken: "" }).executor).read(
-            inputs,
-            ctx(),
-        ),
+        await createForgejoProvider(
+            fakeSsh({ running: true, healthy: true, token: "tok-123", gitToken: "gtok-456", packagesToken: "" }).executor,
+        ).read(inputs, ctx()),
     ).toBeUndefined();
 });
 

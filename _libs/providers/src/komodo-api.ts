@@ -12,6 +12,17 @@ export interface KomodoResource {
     readonly name: string;
 }
 
+// A Komodo user: its mongo id (needed to set permissions), login name, and whether it is enabled. A user
+// created via CreateLocalUser lands disabled, so the provider checks `enabled` to decide whether to enable it.
+export interface KomodoUser {
+    readonly id: string;
+    readonly username: string;
+    readonly enabled: boolean;
+}
+
+// The Komodo permission level a grant carries (None is never sent — an absent grant is the same as None).
+export type KomodoPermissionLevel = "Read" | "Execute" | "Write";
+
 // The slice of a Deployment's config the deployment provider diffs against — the one authored MUTABLE field
 // it converges, `environment`. server_id and the build image are fixed at creation (like the deterministic
 // ports); branch is a Build concept that a Deployment does not carry (GetDeployment never returns it). Komodo
@@ -41,6 +52,8 @@ export type AlerterConfig = z.infer<typeof alerterConfigSchema>;
 // the rest. The login result is the JwtOrTwoFactor enum, internally tagged: {"type":"Jwt","data":{"jwt"}}
 // on success, {"type":"Totp"|"Passkey",...} when 2FA is required.
 const listItemSchema = z.object({ id: z.string(), name: z.string() });
+// Komodo's User serializes its mongo id as "_id"; enabled defaults false (CreateLocalUser lands disabled).
+const rawUserSchema = z.object({ _id: z.string(), username: z.string(), enabled: z.boolean().default(false) });
 const loginSchema = z.object({ type: z.string(), data: z.object({ jwt: z.string() }).optional() });
 const getAlerterSchema = z.object({ config: alerterConfigSchema });
 const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
@@ -69,6 +82,25 @@ export interface KomodoApi {
         readonly jwt: string;
         readonly id: string;
         readonly config: Readonly<Record<string, unknown>>;
+    }) => Promise<void>;
+    // read/ListUsers {service_users:"Include"} -> every user (id from "_id", username, enabled).
+    readonly listUsers: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoUser[]>;
+    // write/CreateLocalUser {username,password}; admin-only, creates the user DISABLED (enable separately).
+    readonly createUser: (args: {
+        readonly baseUrl: string;
+        readonly jwt: string;
+        readonly username: string;
+        readonly password: string;
+    }) => Promise<void>;
+    // write/UpdateUserBasePermissions {user_id, enabled:true} — flip a freshly-created user on.
+    readonly enableUser: (args: { readonly baseUrl: string; readonly jwt: string; readonly userId: string }) => Promise<void>;
+    // write/UpdatePermissionOnTarget — grant a user `level` on one Deployment.
+    readonly setPermissionOnTarget: (args: {
+        readonly baseUrl: string;
+        readonly jwt: string;
+        readonly userId: string;
+        readonly deployment: string;
+        readonly level: KomodoPermissionLevel;
     }) => Promise<void>;
     readonly listAlerters: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
     readonly getAlerter: (args: { readonly baseUrl: string; readonly jwt: string; readonly id: string }) => Promise<AlerterConfig>;
@@ -147,6 +179,29 @@ export const komodoApi: KomodoApi = {
     },
     updateDeployment: async ({ baseUrl, jwt, id, config }) => {
         await post({ baseUrl, module: "write", type: "UpdateDeployment", params: { id, config }, jwt });
+    },
+    listUsers: async ({ baseUrl, jwt }) => {
+        const users = await read({ baseUrl, module: "read", type: "ListUsers", params: { service_users: "Include" }, jwt }, z.array(rawUserSchema));
+        return users.map((user) => ({ id: user._id, username: user.username, enabled: user.enabled }));
+    },
+    createUser: async ({ baseUrl, jwt, username, password }) => {
+        await post({ baseUrl, module: "write", type: "CreateLocalUser", params: { username, password }, jwt });
+    },
+    enableUser: async ({ baseUrl, jwt, userId }) => {
+        await post({ baseUrl, module: "write", type: "UpdateUserBasePermissions", params: { user_id: userId, enabled: true }, jwt });
+    },
+    setPermissionOnTarget: async ({ baseUrl, jwt, userId, deployment, level }) => {
+        await post({
+            baseUrl,
+            module: "write",
+            type: "UpdatePermissionOnTarget",
+            params: {
+                user_target: { type: "User", id: userId },
+                resource_target: { type: "Deployment", id: deployment },
+                permission: { level, specific: [] },
+            },
+            jwt,
+        });
     },
     listAlerters: async ({ baseUrl, jwt }) =>
         project(await read({ baseUrl, module: "read", type: "ListAlerters", params: {}, jwt }, z.array(listItemSchema))),

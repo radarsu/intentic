@@ -16,4 +16,20 @@ export const defineIntent = (declare: (stack: Stack) => void): IntentSet => {
 // apps are exposed under (the CLI discovers it from the API token; tests/fixtures pass it directly).
 export const defineStack = (declare: (stack: Stack) => void, zone?: string): DesiredStateGraph => resolveState(defineIntent(declare), zone);
 
-export type { App, Cloudflare, Deployment, Have, Host, Repo, Service, Stack, Want, WantAppInput, WantServiceInput } from "./handles.js";
+export type {
+    App,
+    AppTeamGrant,
+    Cloudflare,
+    Deployment,
+    Have,
+    Host,
+    Repo,
+    Service,
+    Stack,
+    Team,
+    User,
+    Want,
+    WantAppInput,
+    WantServiceInput,
+    WantTeamInput,
+} from "./handles.js";

@@ -16,6 +16,7 @@ const inputs = {
     forgejoUrl: "https://git.example.com",
     adminUser: "admin",
     adminPassword: "pw",
+    owner: "admin",
     repoName: "my-app",
     webhook: "https://discord.test/wh",
     events: ["build"],

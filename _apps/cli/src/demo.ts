@@ -285,7 +285,11 @@ const up = async (): Promise<void> => {
                 await sleep(2000);
             }
         }
-        log(appDeployed ? `✅ app deployed by CI/CD — serving "${APP_BODY}" on the host` : `⚠ app not live yet on :${appPort} (CI/CD may still be running)`);
+        log(
+            appDeployed
+                ? `✅ app deployed by CI/CD — serving "${APP_BODY}" on the host`
+                : `⚠ app not live yet on :${appPort} (CI/CD may still be running)`,
+        );
     } catch (error) {
         log(`⚠ app phase skipped (platform stays up): ${String(error)}`);
     }

@@ -2,7 +2,19 @@ import type { SecretRef } from "@intentic/graph";
 import { generated, makeRef } from "@intentic/graph";
 import type { AppIntent } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { adminUsername, ciId, deploymentId, deploymentPort, forgejoNotifyId, gitDomain, komodoNotifyId, registryAuthority, repoId } from "./ids.js";
+import {
+    adminUsername,
+    ciId,
+    deploymentId,
+    deploymentPort,
+    forgejoNotifyId,
+    forgejoOrgId,
+    gitDomain,
+    komodoNotifyId,
+    orgName,
+    registryAuthority,
+    repoId,
+} from "./ids.js";
 import type { PlatformRefs } from "./platform.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
@@ -28,6 +40,13 @@ export const resolveApp = (
     const packagesToken = makeRef<string>(platform.forgejo, "packagesToken");
     const forgejoAdmin = { adminUser: adminUsername, adminPassword: generated("FORGEJO_ADMIN_PASSWORD") };
     const komodoAdmin = { adminUser: adminUsername, adminPassword: generated("KOMODO_ADMIN_PASSWORD") };
+    // The repo + registry namespace: the first team grant's org owns the app; with no grants it falls back to
+    // the single admin owner (identical to the original single-admin behaviour). The admin still authenticates
+    // every call (forgejoAdmin) — it owns the org, so its git + packages tokens retain full access. intent.on
+    // is the host id (the resolved host the app runs on), which the Forgejo org id is scoped under.
+    const ownerTeam = intent.teams?.[0];
+    const owner = ownerTeam !== undefined ? orgName(ownerTeam.team) : adminUsername;
+    const ownerDeps = ownerTeam !== undefined ? [forgejoOrgId(intent.on, ownerTeam.team)] : [];
     // Telemetry wiring: when the app observes a service, every deployment exports OTLP to that service's
     // host-internal endpoint. Spread before the author's own env so an explicit OTEL_* can still override.
     const otel =
@@ -39,9 +58,10 @@ export const resolveApp = (
         {
             id: repo,
             type: "repo",
-            inputs: { name: intent.id, private: true, forgejoUrl, domain: gitDomain(zone), ...forgejoAdmin },
-            // Calls the public git URL, so it must run after git's DNS + tunnel route is live.
-            explicitDependsOn: [platform.forgejo, platform.gitRoute],
+            inputs: { name: intent.id, owner, private: true, forgejoUrl, domain: gitDomain(zone), ...forgejoAdmin },
+            // Calls the public git URL, so it must run after git's DNS + tunnel route is live; and after the
+            // owning org exists when the app is team-owned.
+            explicitDependsOn: [platform.forgejo, platform.gitRoute, ...ownerDeps],
         },
     ];
     const ingress: IngressPair[] = [];
@@ -60,6 +80,7 @@ export const resolveApp = (
                 forgejoUrl,
                 ...forgejoAdmin,
                 komodoPassword: komodoAdmin.adminPassword,
+                owner,
                 repoName: intent.id,
                 branch: environment.branch,
                 registry: registryAuthority,
@@ -69,13 +90,14 @@ export const resolveApp = (
                 deployment: id,
             },
             // Commits via the public git URL (waits on git's route) and bakes Komodo's internal url into the
-            // workflow (waits on Komodo being up).
-            explicitDependsOn: [platform.forgejo, platform.gitRoute, platform.deploy, repo],
+            // workflow (waits on Komodo being up); the repo it commits into is owned by the org (waits on it).
+            explicitDependsOn: [platform.forgejo, platform.gitRoute, platform.deploy, repo, ...ownerDeps],
         });
         nodes.push({
             id,
             type: "deployment",
             inputs: {
+                owner,
                 repoName: intent.id,
                 registry: registryAuthority,
                 tag: name,
@@ -104,8 +126,8 @@ export const resolveApp = (
         nodes.push({
             id: forgejoNotifyId(intent.id),
             type: "forgejo-notify",
-            inputs: { forgejoUrl, ...forgejoAdmin, repoName: intent.id, webhook: intent.notify.discord, events: ["build"] },
-            explicitDependsOn: [platform.forgejo, platform.gitRoute, repo],
+            inputs: { forgejoUrl, ...forgejoAdmin, owner, repoName: intent.id, webhook: intent.notify.discord, events: ["build"] },
+            explicitDependsOn: [platform.forgejo, platform.gitRoute, repo, ...ownerDeps],
         });
         const targets = Object.keys(intent.environments).map((environment) => deploymentId(intent.id, environment));
         nodes.push({
