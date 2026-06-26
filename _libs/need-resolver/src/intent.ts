@@ -12,7 +12,8 @@ import type {
 
 // The intent the builder records and the resolver consumes — "what you have" + "what you want" as pure
 // data. App `on`/`expose` are resource-id strings (not handles), so the intent stays serializable and
-// depends on nothing from the authoring layer. There is a single host and a single Cloudflare account.
+// depends on nothing from the authoring layer. Multiple hosts are supported; the control plane is derived
+// (one Forgejo + Komodo shared across all hosts). There is a single Cloudflare account.
 
 export interface HostIntent {
     readonly id: string;
@@ -24,8 +25,8 @@ export interface CloudflareIntent {
     readonly input: CloudflareInput;
 }
 
-// The backup destination the operator declared (i.have.backup). Like host/cloudflare, a singleton — one
-// restic repository protects the host's control-plane state.
+// The backup destination the operator declared (i.have.backup). A singleton — one restic repository
+// protects the control-plane host's state.
 export interface BackupIntent {
     readonly id: string;
     readonly input: BackupInput;
@@ -63,10 +64,11 @@ export interface ServiceIntent extends ServiceInput {
     readonly expose: string;
 }
 
-// host/cloudflare are optional so an app-less intent stays valid; the SDK's `on`/`expose` types guarantee
-// both are declared whenever an app or service is, and the resolver asserts the same before deriving.
+// hosts/cloudflare may be empty so an app-less intent stays valid; the SDK's `on`/`expose` types guarantee
+// at least one host and cloudflare are declared whenever an app or service is, and the resolver asserts the
+// same before deriving.
 export interface IntentSet {
-    readonly host?: HostIntent;
+    readonly hosts: readonly HostIntent[];
     readonly cloudflare?: CloudflareIntent;
     readonly backup?: BackupIntent;
     readonly users: readonly UserIntent[];

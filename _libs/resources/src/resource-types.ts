@@ -16,6 +16,8 @@ export type ResourceType =
     | "control-repo"
     | "forgejo-runner"
     | "komodo"
+    | "komodo-periphery"
+    | "komodo-server"
     | "komodo-user"
     | "ci"
     | "deployment"

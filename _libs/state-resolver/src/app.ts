@@ -25,11 +25,14 @@ import { exposeRoute } from "./route.js";
 // image on a developer push and Komodo rolls it out. The config nodes (repo/ci/deployment/notify) talk to the
 // Forgejo or Komodo HTTP API, so each carries the backend `url` ref + the admin password it logs in with.
 // Returns each environment's ingress pair so the caller can aggregate the host's tunnel ingress.
+// `controlPlaneHost` is the id of the host running the shared platform (Forgejo/Komodo); identity nodes
+// (forgejo-org) are scoped under it, not `intent.on` (which may be a worker host).
 export const resolveApp = (
     intent: AppIntent,
     platform: PlatformRefs,
     apiToken: SecretRef,
     zone: string,
+    controlPlaneHost: string,
 ): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
     const repo = repoId(intent.id);
     const forgejoUrl = makeRef<string>(platform.forgejo, "url");
@@ -42,11 +45,11 @@ export const resolveApp = (
     const komodoAdmin = { adminUser: adminUsername, adminPassword: generated("KOMODO_ADMIN_PASSWORD") };
     // The repo + registry namespace: the first team grant's org owns the app; with no grants it falls back to
     // the single admin owner (identical to the original single-admin behaviour). The admin still authenticates
-    // every call (forgejoAdmin) — it owns the org, so its git + packages tokens retain full access. intent.on
-    // is the host id (the resolved host the app runs on), which the Forgejo org id is scoped under.
+    // every call (forgejoAdmin) — it owns the org, so its git + packages tokens retain full access.
+    // Forgejo org ids are scoped under the control-plane host (one Forgejo for all hosts).
     const ownerTeam = intent.teams?.[0];
     const owner = ownerTeam !== undefined ? orgName(ownerTeam.team) : adminUsername;
-    const ownerDeps = ownerTeam !== undefined ? [forgejoOrgId(intent.on, ownerTeam.team)] : [];
+    const ownerDeps = ownerTeam !== undefined ? [forgejoOrgId(controlPlaneHost, ownerTeam.team)] : [];
     // Telemetry wiring: when the app observes a service, every deployment exports OTLP to that service's
     // host-internal endpoint. Spread before the author's own env so an explicit OTEL_* can still override.
     const otel =
@@ -83,7 +86,7 @@ export const resolveApp = (
                 owner,
                 repoName: intent.id,
                 branch: environment.branch,
-                registry: registryAuthority,
+                registry: registryAuthority(zone),
                 tag: name,
                 packagesToken,
                 komodoUrl: komodoInternalUrl,
@@ -97,9 +100,10 @@ export const resolveApp = (
             id,
             type: "deployment",
             inputs: {
+                server: intent.on,
                 owner,
                 repoName: intent.id,
-                registry: registryAuthority,
+                registry: registryAuthority(zone),
                 tag: name,
                 domain: environment.domain,
                 internalIp: makeRef<string>(intent.on, "internalIp"),

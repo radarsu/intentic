@@ -109,7 +109,7 @@ export const resolvePlatform = (
                 gitToken: makeRef<string>(forgejo, "gitToken"),
                 // The Forgejo built-in registry + the admin's packages token, written as a [[docker_registry]]
                 // account so Komodo can pull the private app images CI pushes.
-                registry: registryAuthority,
+                registry: registryAuthority(zone),
                 packagesToken: makeRef<string>(forgejo, "packagesToken"),
                 coreImage: IMAGES.komodoCore,
                 peripheryImage: IMAGES.komodoPeriphery,

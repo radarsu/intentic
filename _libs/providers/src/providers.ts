@@ -19,6 +19,8 @@ import { createKomodoProvider } from "./komodo.js";
 import type { KomodoApi } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 import { createKomodoNotifyProvider } from "./komodo-notify.js";
+import { createKomodoPeripheryProvider } from "./komodo-periphery.js";
+import { createKomodoServerProvider } from "./komodo-server.js";
 import { createKomodoUserProvider } from "./komodo-user.js";
 import { createRepoProvider } from "./repo.js";
 import { createSignozProvider } from "./signoz.js";
@@ -57,6 +59,8 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "forgejo-team": createForgejoTeamProvider(forgejo),
         "forgejo-runner": createForgejoRunnerProvider(ssh),
         komodo: createKomodoProvider(ssh),
+        "komodo-periphery": createKomodoPeripheryProvider(ssh),
+        "komodo-server": createKomodoServerProvider(komodo),
         "komodo-user": createKomodoUserProvider(komodo),
         repo: createRepoProvider(forgejo),
         ci: createCiProvider(forgejo),

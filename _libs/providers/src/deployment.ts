@@ -4,10 +4,13 @@ import { parseInputs, registryImage } from "./inputs.js";
 import type { DeploymentConfig, KomodoApi } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 
-// The Komodo server the deployment runs on (auto-registered by KOMODO_FIRST_SERVER_NAME in komodo.ts).
-const SERVER = "Local";
+// The Komodo server for control-plane-local deployments (auto-registered by KOMODO_FIRST_SERVER_NAME in
+// komodo.ts). Worker-host deployments use the host id as server name, registered by komodo-server.
+const LOCAL_SERVER = "Local";
 
 const deploymentSchema = z.object({
+    // The Komodo Server the deployment targets: "Local" for the CP host, the host id for workers.
+    server: z.string().default(LOCAL_SERVER),
     komodoUrl: z.string(),
     adminUser: z.string(),
     adminPassword: z.string(),
@@ -34,7 +37,7 @@ const outputsFor = (parsed: DeploymentInputs): Record<string, unknown> => ({
 });
 
 const deploymentConfig = (parsed: DeploymentInputs): Record<string, unknown> => ({
-    server_id: SERVER,
+    server_id: parsed.server,
     // A registry Image (NOT a Komodo Build) — CI builds + pushes it; Komodo only pulls + runs it. The image
     // path is namespaced under the repo owner (the team's org), matching exactly what CI pushes.
     image: {

@@ -9,7 +9,7 @@ const cloudflare: CloudflareIntent = { id: "cf", input: { apiToken: env("CLOUDFL
 
 test("an app derives the four host capabilities plus a domain", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -28,7 +28,7 @@ test("an app derives the four host capabilities plus a domain", () => {
 
 test("multiple apps collapse to one set of needs on the shared host and cloud", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -43,5 +43,5 @@ test("multiple apps collapse to one set of needs on the shared host and cloud", 
 });
 
 test("no apps derive no needs", () => {
-    expect(resolveNeeds({ users: [], teams: [], apps: [], services: [] })).toEqual([]);
+    expect(resolveNeeds({ hosts: [], users: [], teams: [], apps: [], services: [] })).toEqual([]);
 });

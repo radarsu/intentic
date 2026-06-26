@@ -41,11 +41,7 @@ export const deploymentPort = (deploymentId: string): number =>
 // build's git account. NOT "admin": Forgejo reserves that name (it collides with the /admin route), so
 // `forgejo admin user create --username admin` fails.
 export const adminUsername = "intentic";
-// The Forgejo built-in container registry authority. Addressed host-locally so the CI runner (push,
-// --network host) and Komodo Periphery (pull, host docker socket) both reach Forgejo on the SAME host
-// dockerd, which trusts 127.0.0.0/8 registries as insecure-by-default — no daemon.json change needed, and it
-// sidesteps that git.<zone> does not resolve inside the host. The dotted loopback IP (NOT "localhost") is
-// deliberate: Komodo's image-reference parser only treats a dotted host[:port] first segment as a registry —
-// it does not honor Docker's `localhost` special-case — so a `localhost:3000/...` image resolves to docker.io
-// and misses this account ("did not find token ... domain docker.io"). The port mirrors Forgejo's HTTP port.
-export const registryAuthority = "127.0.0.1:3000";
+// The Forgejo container registry authority. Uses the public git domain so the registry is reachable from
+// ALL hosts (control-plane and workers alike) through the Cloudflare tunnel. CI pushes over HTTPS, all
+// Komodo instances pull from the same URL. The port-less authority uses the default HTTPS port (443).
+export const registryAuthority = (zone: string): string => gitDomain(zone);

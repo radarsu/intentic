@@ -32,9 +32,9 @@ import type {
 } from "./handles.js";
 
 // The builder is a pure intent recorder: i.have.* / i.want.app record what was declared and hand back typed
-// handles for wiring. No derivation happens here — that is the resolver's job. There is a single host and a
-// single Cloudflare account. The App handle's per-environment ids come from the same deploymentId() the
-// resolver uses, so they cannot drift.
+// handles for wiring. No derivation happens here — that is the resolver's job. Multiple hosts are supported
+// (one control plane is derived); there is a single Cloudflare account. The App handle's per-environment
+// ids come from the same deploymentId() the resolver uses, so they cannot drift.
 export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const claimed = new Set<string>();
     const claim = (id: string): void => {
@@ -48,22 +48,20 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const teams: TeamIntent[] = [];
     const apps: AppIntent[] = [];
     const services: ServiceIntent[] = [];
+    const hosts: HostIntent[] = [];
     const intent: {
-        host?: HostIntent;
+        hosts: HostIntent[];
         cloudflare?: CloudflareIntent;
         backup?: BackupIntent;
         users: UserIntent[];
         teams: TeamIntent[];
         apps: AppIntent[];
         services: ServiceIntent[];
-    } = { users, teams, apps, services };
+    } = { hosts, users, teams, apps, services };
 
     const host = (id: string, input: HostInput): Host => {
-        if (intent.host !== undefined) {
-            throw new Error("a host is already declared; intentic supports a single host");
-        }
         claim(id);
-        intent.host = { id, input };
+        hosts.push({ id, input });
         return Object.freeze({ ...makeRef(id), internalIp: makeRef<string>(id, "internalIp"), publicIp: makeRef<string>(id, "publicIp") }) as Host;
     };
 

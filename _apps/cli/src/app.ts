@@ -139,13 +139,24 @@ const apply = buildCommand<ApplyFlags>({
         const graph = await readArtifact(artifact);
         await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
         // Readiness gates target host-internal urls (http://<internalIp>:<port>) reachable only from the host
-        // itself, never from this CLI process. Build an SSH probe from the graph's host node so apply gates on
-        // the host's own view; resolveInputs substitutes its HOST_SSH_KEY secret from the env loaded above.
-        const hostNode = Object.values(graph.resources).find((node) => node.type === "host");
+        // itself, never from this CLI process. Build SSH probes from every host node in the graph so apply
+        // gates on each host's own view; resolveInputs substitutes SSH_KEY secrets from the env loaded above.
+        // The composite probe tries each host until one can reach the URL (the wrong host simply fails wget).
+        const hostNodes = Object.values(graph.resources).filter((node) => node.type === "host");
+        const probes = hostNodes.map((node) =>
+            createSshProbe(hostTarget(resolveInputs(node.inputs, createStore(), process.env, { lenient: false }))),
+        );
         const probe =
-            hostNode === undefined
+            probes.length === 0
                 ? undefined
-                : createSshProbe(hostTarget(resolveInputs(hostNode.inputs, createStore(), process.env, { lenient: false })));
+                : async (url: string, status: number): Promise<boolean> => {
+                      for (const p of probes) {
+                          if (await p(url, status)) {
+                              return true;
+                          }
+                      }
+                      return false;
+                  };
         const result = await reconcile(
             graph,
             { providers: createProviders(), log, ...(probe !== undefined ? { probe } : {}) },

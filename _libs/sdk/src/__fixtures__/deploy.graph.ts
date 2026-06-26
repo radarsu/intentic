@@ -136,7 +136,7 @@ export const expectedGraph: DesiredStateGraph = {
                 gitToken: {
                     $ref: "host-git.gitToken",
                 },
-                registry: "127.0.0.1:3000",
+                registry: "git.example.com",
                 packagesToken: {
                     $ref: "host-git.packagesToken",
                 },
@@ -239,7 +239,7 @@ export const expectedGraph: DesiredStateGraph = {
                 owner: "squad",
                 repoName: "my-app",
                 branch: "develop",
-                registry: "127.0.0.1:3000",
+                registry: "git.example.com",
                 tag: "staging",
                 packagesToken: {
                     $ref: "host-git.packagesToken",
@@ -255,9 +255,10 @@ export const expectedGraph: DesiredStateGraph = {
             id: "my-app.staging",
             type: "deployment",
             inputs: {
+                server: "host",
                 owner: "squad",
                 repoName: "my-app",
-                registry: "127.0.0.1:3000",
+                registry: "git.example.com",
                 tag: "staging",
                 domain: "staging.example.com",
                 internalIp: {
@@ -328,7 +329,7 @@ export const expectedGraph: DesiredStateGraph = {
                 owner: "squad",
                 repoName: "my-app",
                 branch: "main",
-                registry: "127.0.0.1:3000",
+                registry: "git.example.com",
                 tag: "production",
                 packagesToken: {
                     $ref: "host-git.packagesToken",
@@ -344,9 +345,10 @@ export const expectedGraph: DesiredStateGraph = {
             id: "my-app.production",
             type: "deployment",
             inputs: {
+                server: "host",
                 owner: "squad",
                 repoName: "my-app",
-                registry: "127.0.0.1:3000",
+                registry: "git.example.com",
                 tag: "production",
                 domain: "app.example.com",
                 internalIp: {

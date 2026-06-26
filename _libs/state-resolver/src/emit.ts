@@ -1,10 +1,11 @@
-import { makeRef } from "@intentic/graph";
-import type { IntentSet } from "@intentic/need-resolver";
+import { generated, makeRef } from "@intentic/graph";
+import type { HostInput, IntentSet } from "@intentic/need-resolver";
+import { controlPlaneHostId } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
 import { resolveBackup } from "./backup.js";
 import { resolveIdentities } from "./identity.js";
-import { tunnelId, tunnelName } from "./ids.js";
+import { adminUsername, tunnelId, tunnelName } from "./ids.js";
 import { IMAGES } from "./images.js";
 import { resolvePlatform } from "./platform.js";
 import type { IngressPair } from "./route.js";
@@ -20,10 +21,18 @@ export interface Assignment {
 // (e.g. Gitlab) lands, emit branches on the assignment instead of asserting it.
 const supportedOptions = new Set(["forgejo", "komodo", "ssh-linux", "cloudflare-tunnel"]);
 
-// Build the concrete RawNodes for one assignment. The host and Cloudflare are authored inventory: one host
-// node + one cloudflare node carrying the connection the author declared with i.have.host / i.have.cloudflare.
-// Every app shares one git/CI/deploy platform on that host, and one Cloudflare Tunnel owns the host's
-// aggregated ingress. The compiler folds the result into one desired-state artifact (a DesiredStateGraph).
+// Extract the SSH connection block from a HostInput (shared by every node deployed onto a host over SSH).
+const sshOf = (input: HostInput): Record<string, unknown> => ({
+    address: input.address,
+    user: input.user,
+    sshKey: input.sshKey,
+    ...(input.port !== undefined ? { port: input.port } : {}),
+});
+
+// Build the concrete RawNodes for one assignment. One shared control plane (Forgejo + Komodo + runner) is
+// derived onto the control-plane host (first declared host with apps). Worker hosts get Komodo Periphery
+// in outbound mode and are registered as Komodo Servers. Each host with ingress gets its own Cloudflare
+// Tunnel. All apps share one git/CI/deploy platform regardless of which host they run on.
 export const emit = (intent: IntentSet, assignment: Assignment, zone: string | undefined): ResolvedNode[] => {
     for (const optionId of assignment.byNeed.values()) {
         if (!supportedOptions.has(optionId)) {
@@ -35,10 +44,9 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         return [];
     }
 
-    const host = intent.host;
     const cloudflare = intent.cloudflare;
-    if (host === undefined || cloudflare === undefined) {
-        throw new Error("intent declares apps/services but no host/Cloudflare; declare them with i.have.host and i.have.cloudflare");
+    if (cloudflare === undefined) {
+        throw new Error("intent declares apps/services but no Cloudflare; declare it with i.have.cloudflare");
     }
     if (zone === undefined) {
         throw new Error(
@@ -46,90 +54,156 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         );
     }
 
+    const cpId = controlPlaneHostId(intent);
+    if (cpId === undefined) {
+        throw new Error("intent declares apps/services but no host; declare one with i.have.host");
+    }
+
     const apiToken = cloudflare.input.apiToken;
-    const ssh = {
-        address: host.input.address,
-        user: host.input.user,
-        sshKey: host.input.sshKey,
-        ...(host.input.port !== undefined ? { port: host.input.port } : {}),
-    };
-    const nodes: ResolvedNode[] = [
-        {
+    const hostById = new Map(intent.hosts.map((h) => [h.id, h]));
+    const cpHost = hostById.get(cpId)!;
+    const nodes: ResolvedNode[] = [];
+
+    // Emit ALL host inventory nodes.
+    for (const host of intent.hosts) {
+        nodes.push({
             id: host.id,
             type: "host",
-            inputs: { ...ssh },
+            inputs: { ...sshOf(host.input) },
             explicitDependsOn: [],
-        },
-        {
-            id: cloudflare.id,
-            type: "cloudflare",
-            inputs: { apiToken, zone },
-            explicitDependsOn: [],
-        },
-    ];
-    const ingress: IngressPair[] = [];
+        });
+    }
 
-    // The git/CI/deploy platform exists only to ship apps from source; a services-only intent skips it. Apps
-    // reference a service's id in `observe`; assert it names a declared service so a bad ref fails here, not
-    // as a dangling dependency the compiler accepts.
+    // The single Cloudflare inventory node.
+    nodes.push({
+        id: cloudflare.id,
+        type: "cloudflare",
+        inputs: { apiToken, zone },
+        explicitDependsOn: [],
+    });
+
+    // Per-host ingress buckets (for tunnel aggregation).
+    const ingressByHost = new Map<string, IngressPair[]>();
+
+    // --- Shared control plane on the CP host ---
+
+    const serviceIds = new Set(intent.services.map((service) => service.id));
+
     if (intent.apps.length > 0) {
-        const serviceIds = new Set(intent.services.map((service) => service.id));
         // Guarded updates need a restic repo to snapshot into; enabled only when the host opts in AND a
         // backup destination is declared (the provider reuses its on-host restic.env for the password).
         const guard =
-            host.input.updatePolicy === "guarded" && intent.backup !== undefined
+            cpHost.input.updatePolicy === "guarded" && intent.backup !== undefined
                 ? { repo: intent.backup.input.repo, resticImage: IMAGES.backup }
                 : undefined;
-        const platform = resolvePlatform(host.id, cloudflare.id, zone, apiToken, host.input, guard);
+        const platform = resolvePlatform(cpId, cloudflare.id, zone, apiToken, cpHost.input, guard);
         nodes.push(...platform.nodes);
-        ingress.push(...platform.ingress);
+        const cpIngress = [...platform.ingress];
+        ingressByHost.set(cpId, cpIngress);
+
+        // Validate app -> service references.
         for (const app of intent.apps) {
             if (app.observe !== undefined && !serviceIds.has(app.observe)) {
                 throw new Error(`app "${app.id}" observes unknown service "${app.observe}"; declare it with i.want.service`);
             }
-            const resolved = resolveApp(app, platform.refs, apiToken, zone);
-            nodes.push(...resolved.nodes);
-            ingress.push(...resolved.ingress);
         }
-        // The declared people + teams and the cross-cutting grant graph (which repos each team owns/collaborates
-        // on, which deployments each user can act on). Emitted after apps so the grant graph sees every app, and
-        // gated on the same platform being up. Validates team->user and app->team references.
-        nodes.push(...resolveIdentities(intent, platform.refs, host.id));
+
+        // --- Worker hosts: Periphery + Server registration ---
+
+        const workerHostIds = new Set(
+            [...intent.apps.map((a) => a.on), ...intent.services.map((s) => s.on)].filter((id) => id !== cpId),
+        );
+        for (const hostId of workerHostIds) {
+            const host = hostById.get(hostId)!;
+            const peripheryId = `${hostId}-periphery`;
+            const serverId = `${hostId}-server`;
+
+            nodes.push({
+                id: peripheryId,
+                type: "komodo-periphery",
+                inputs: {
+                    ...sshOf(host.input),
+                    coreAddress: makeRef<string>(platform.refs.deploy, "url"),
+                    serverName: hostId,
+                    image: IMAGES.komodoPeriphery,
+                },
+                explicitDependsOn: [hostId, platform.refs.deploy, platform.refs.komodoRoute],
+            });
+
+            nodes.push({
+                id: serverId,
+                type: "komodo-server",
+                inputs: {
+                    komodoUrl: makeRef<string>(platform.refs.deploy, "url"),
+                    adminUser: adminUsername,
+                    adminPassword: generated("KOMODO_ADMIN_PASSWORD"),
+                    serverName: hostId,
+                },
+                explicitDependsOn: [peripheryId, platform.refs.deploy, platform.refs.komodoRoute],
+            });
+
+            // Initialize ingress bucket for worker host.
+            if (!ingressByHost.has(hostId)) {
+                ingressByHost.set(hostId, []);
+            }
+        }
+
+        // --- Apps: all go through the shared platform ---
+
+        for (const app of intent.apps) {
+            const resolved = resolveApp(app, platform.refs, apiToken, zone, cpId);
+            nodes.push(...resolved.nodes);
+            // Route ingress goes to the host the app runs ON (its tunnel), not the CP host.
+            const hostIngress = ingressByHost.get(app.on) ?? [];
+            hostIngress.push(...resolved.ingress);
+            ingressByHost.set(app.on, hostIngress);
+        }
+
+        // The declared people + teams and the cross-cutting grant graph. One Forgejo, one Komodo, one
+        // set of identity accounts — all scoped to the control-plane host.
+        nodes.push(...resolveIdentities(intent, platform.refs, cpId));
     }
 
-    // Off-the-shelf services: deployed directly onto the host and exposed at their own domains, independent
-    // of the app platform.
+    // --- Services: placed on the specified host ---
+
     for (const service of intent.services) {
+        const host = hostById.get(service.on)!;
         const resolved = resolveService(service, host.input, zone, apiToken);
         nodes.push(...resolved.nodes);
-        ingress.push(...resolved.ingress);
+        const hostIngress = ingressByHost.get(service.on) ?? [];
+        hostIngress.push(...resolved.ingress);
+        ingressByHost.set(service.on, hostIngress);
     }
 
-    // The scheduled backup, when declared: a host container that dumps Forgejo + Komodo (and SignOz when both
-    // opted in and declared) to the operator's restic repo. Emitted only alongside the control plane it dumps.
+    // --- Backup on the control-plane host (where Forgejo+Komodo data lives) ---
+
     if (intent.backup !== undefined && intent.apps.length > 0) {
         const signozService = intent.services.find((service) => service.kind === "signoz");
-        nodes.push(resolveBackup(host.id, host.input, intent.backup.input, signozService?.id));
+        nodes.push(resolveBackup(cpId, cpHost.input, intent.backup.input, signozService?.id));
     }
 
-    // One Cloudflare Tunnel for the host: cloudflared runs on the host (hence the SSH creds), connects
-    // through the Cloudflare account, and owns the host's aggregated ingress. Its ingress is (hostname ->
-    // host-internal port), computable from the host's internal ip alone, so it can come up BEFORE the
-    // control plane that reaches Forgejo/Komodo through its public routes. Routes reference its cname.
-    nodes.push({
-        id: tunnelId(host.id),
-        type: "tunnel",
-        inputs: {
-            name: tunnelName(host.id),
-            accountId: makeRef(cloudflare.id, "accountId"),
-            apiToken,
-            ...ssh,
-            internalIp: makeRef(host.id, "internalIp"),
-            ingress,
-            image: IMAGES.cloudflared,
-        },
-        explicitDependsOn: [cloudflare.id, host.id],
-    });
+    // --- One Cloudflare Tunnel per host that has ingress ---
+
+    for (const [hostId, ingress] of ingressByHost) {
+        if (ingress.length === 0) {
+            continue;
+        }
+        const host = hostById.get(hostId)!;
+        nodes.push({
+            id: tunnelId(hostId),
+            type: "tunnel",
+            inputs: {
+                name: tunnelName(hostId),
+                accountId: makeRef(cloudflare.id, "accountId"),
+                apiToken,
+                ...sshOf(host.input),
+                internalIp: makeRef(hostId, "internalIp"),
+                ingress,
+                image: IMAGES.cloudflared,
+            },
+            explicitDependsOn: [cloudflare.id, hostId],
+        });
+    }
 
     return nodes;
 };

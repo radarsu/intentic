@@ -20,6 +20,10 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     "control-repo": ["cloneUrl", "sshUrl"],
     "forgejo-runner": [],
     komodo: ["url", "internalUrl"],
+    // Komodo Periphery deployed on a worker host (outbound to Core) — a pure side-effect like the runner.
+    "komodo-periphery": [],
+    // A worker host registered as a Komodo Server — exposes the server name the deployment provider targets.
+    "komodo-server": ["serverName"],
     "komodo-user": [],
     ci: [],
     deployment: ["internalUrl", "url"],

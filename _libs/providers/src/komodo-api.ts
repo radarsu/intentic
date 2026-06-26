@@ -68,6 +68,7 @@ const getDeploymentSchema = z.object({ config: deploymentConfigSchema });
 export interface KomodoApi {
     // POST /auth/LoginLocalUser {username,password} -> jwt (local auth must be enabled).
     readonly login: (args: { readonly baseUrl: string; readonly username: string; readonly password: string }) => Promise<string>;
+    readonly listServers: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
     readonly listDeployments: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoResource[]>;
     // read/GetDeployment {deployment: <id or name>} -> the authored config slice the provider diffs.
     readonly getDeployment: (args: { readonly baseUrl: string; readonly jwt: string; readonly deployment: string }) => Promise<DeploymentConfig>;
@@ -176,6 +177,8 @@ export const komodoApi: KomodoApi = {
         }
         return result.data.jwt;
     },
+    listServers: async ({ baseUrl, jwt }) =>
+        project(await read({ baseUrl, module: "read", type: "ListServers", params: {}, jwt }, z.array(listItemSchema))),
     listDeployments: async ({ baseUrl, jwt }) =>
         project(await read({ baseUrl, module: "read", type: "ListDeployments", params: {}, jwt }, z.array(listItemSchema))),
     getDeployment: async ({ baseUrl, jwt, deployment }) =>

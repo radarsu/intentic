@@ -16,4 +16,4 @@ export type {
 } from "./inputs.js";
 export type { AppIntent, BackupIntent, CloudflareIntent, HostIntent, IntentSet, ServiceIntent, TeamIntent, UserIntent } from "./intent.js";
 export type { Capability, Need, Plane } from "./needs.js";
-export { needKey, resolveNeeds } from "./needs.js";
+export { controlPlaneHostId, needKey, resolveNeeds } from "./needs.js";

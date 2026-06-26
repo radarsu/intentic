@@ -27,7 +27,7 @@ const assign = (intent: IntentSet): Assignment => {
 
 test("emit derives the full support stack for a two-environment app", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -66,7 +66,7 @@ test("emit derives the full support stack for a two-environment app", () => {
 
 test("apps share one derived platform", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -86,7 +86,7 @@ test("apps share one derived platform", () => {
 
 test("an unsupported option assignment throws", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -100,7 +100,7 @@ test("an unsupported option assignment throws", () => {
 
 test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to the app's stack", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -132,7 +132,7 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
 
 test("an app without notify derives no notification sinks", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -147,7 +147,7 @@ test("an app without notify derives no notification sinks", () => {
 
 test("notification sinks are derived per app, while the platform stays shared per host", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -179,7 +179,7 @@ test("notification sinks are derived per app, while the platform stays shared pe
 
 test("a services-only intent emits the service + its route + tunnel, but no app platform", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -201,7 +201,7 @@ test("a services-only intent emits the service + its route + tunnel, but no app 
 
 test("an app's observe injects the service's OTLP endpoint into each deployment and depends on the service", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -229,7 +229,7 @@ test("an app's observe injects the service's OTLP endpoint into each deployment 
 
 test("an app without observe carries no OTLP env and no service dependency", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -244,7 +244,7 @@ test("an app without observe carries no OTLP env and no service dependency", () 
 
 test("observing an undeclared service throws", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -257,7 +257,7 @@ test("observing an undeclared service throws", () => {
 
 test("users and teams derive Forgejo accounts + org/team and Komodo users, and the team owns the app's repo", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [{ id: "alice", input: { username: "alice", email: "alice@example.com" } }],
         teams: [{ id: "squad", input: { members: ["alice"], komodo: "execute" } }],
@@ -301,7 +301,7 @@ test("users and teams derive Forgejo accounts + org/team and Komodo users, and t
 
 test("a team-less app stays admin-owned (identical to the single-admin default)", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -316,7 +316,7 @@ test("a team-less app stays admin-owned (identical to the single-admin default)"
 
 test("a team referencing an undeclared user throws", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [{ id: "squad", input: { members: ["ghost"], komodo: "read" } }],
@@ -336,7 +336,7 @@ test("a team referencing an undeclared user throws", () => {
 
 test("an app granting an undeclared team throws", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -356,7 +356,7 @@ test("an app granting an undeclared team throws", () => {
 
 test("the cloudflare node carries only token + discovered zone, and the tunnel reads the account from it via a ref", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         users: [],
         teams: [],
@@ -380,7 +380,7 @@ const oneApp: IntentSet["apps"][number] = {
 
 test("a guarded host with a backup threads guardRepo + resticImage onto forgejo + komodo", () => {
     const intent: IntentSet = {
-        host: { id: "host", input: { ...host.input, updatePolicy: "guarded" } },
+        hosts: [{ id: "host", input: { ...host.input, updatePolicy: "guarded" } }],
         cloudflare,
         backup: { id: "backups", input: { repo: "s3:s3.example.com/bucket", password: env("RESTIC_PASSWORD") } },
         users: [],
@@ -399,7 +399,7 @@ test("a guarded host with a backup threads guardRepo + resticImage onto forgejo 
 
 test("a pinned host (default) leaves the guard inputs off even when a backup is declared", () => {
     const intent: IntentSet = {
-        host,
+        hosts: [host],
         cloudflare,
         backup: { id: "backups", input: { repo: "s3:s3.example.com/bucket", password: env("RESTIC_PASSWORD") } },
         users: [],
@@ -413,7 +413,7 @@ test("a pinned host (default) leaves the guard inputs off even when a backup is 
 
 test("a guarded host WITHOUT a declared backup leaves the guard inputs off (nowhere to snapshot)", () => {
     const intent: IntentSet = {
-        host: { id: "host", input: { ...host.input, updatePolicy: "guarded" } },
+        hosts: [{ id: "host", input: { ...host.input, updatePolicy: "guarded" } }],
         cloudflare,
         users: [],
         teams: [],

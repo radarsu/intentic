@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 
 import { collectDomains, selectZone } from "./zone.js";
 
-const intent = (apps: IntentSet["apps"], services: IntentSet["services"] = []): IntentSet => ({ users: [], teams: [], apps, services });
+const intent = (apps: IntentSet["apps"], services: IntentSet["services"] = []): IntentSet => ({ hosts: [], users: [], teams: [], apps, services });
 
 test("collectDomains gathers every app-environment and service domain", () => {
     const set = intent(
