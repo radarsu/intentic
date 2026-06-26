@@ -36,7 +36,20 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
         if (observed === undefined) {
             steps.push({ id, type, action: "create" });
             for (const name of OUTPUTS[type]) {
-                store.set(refKey(id, name), PENDING);
+                if (name.endsWith(":")) {
+                    // Prefix pattern: seed PENDING for every actual $ref in the graph that matches.
+                    const prefix = `${id}.${name}`;
+                    for (const node of Object.values(graph.resources)) {
+                        JSON.stringify(node.inputs, (_k, v) => {
+                            if (typeof v === "object" && v !== null && "$ref" in v && typeof v.$ref === "string" && v.$ref.startsWith(prefix)) {
+                                store.set(v.$ref as string, PENDING);
+                            }
+                            return v;
+                        });
+                    }
+                } else {
+                    store.set(refKey(id, name), PENDING);
+                }
             }
             continue;
         }
@@ -44,7 +57,8 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
         const result = provider.diff(inputs, observed);
         steps.push(result.action === "update" ? { id, type, action: "update", reason: result.reason } : { id, type, action: "noop" });
         for (const [name, value] of Object.entries(observed.outputs)) {
-            if (OUTPUTS[type].includes(name)) {
+            const allowed = OUTPUTS[type].some((pattern) => (pattern.endsWith(":") ? name.startsWith(pattern) : name === pattern));
+            if (allowed) {
                 store.set(refKey(id, name), value);
             }
         }

@@ -89,8 +89,6 @@ test("apply updates the existing matching hook rather than creating", async () =
     expect(updatedId).toBe(7);
 });
 
-test("malformed inputs are rejected", async () => {
-    await expect(createForgejoNotifyProvider(fakeForgejoApi({})).read({ ...inputs, webhook: 5 }, ctx())).rejects.toThrow(
-        /forgejo-notify inputs malformed/,
-    );
+test("read returns undefined when webhook is not a string (PENDING)", async () => {
+    expect(await createForgejoNotifyProvider(fakeForgejoApi({})).read({ ...inputs, webhook: 5 }, ctx())).toBeUndefined();
 });

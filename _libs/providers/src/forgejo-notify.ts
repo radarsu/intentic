@@ -30,7 +30,7 @@ const findDiscordHook = (hooks: readonly ForgejoHook[], webhook: string): Forgej
 // CI notifications: a Forgejo repo webhook of type "discord" firing on build results.
 export const createForgejoNotifyProvider = (api: ForgejoApi = forgejoApi): Provider => ({
     read: async (inputs, ctx) => {
-        if (typeof inputs["forgejoUrl"] !== "string") {
+        if (typeof inputs["forgejoUrl"] !== "string" || typeof inputs["webhook"] !== "string") {
             return undefined;
         }
         const parsed = parse(inputs);

@@ -40,7 +40,7 @@ const sameTargets = (a: readonly ResourceTarget[], b: readonly ResourceTarget[])
 // drift in the webhook url, scope, or enabled flag.
 export const createKomodoNotifyProvider = (api: KomodoApi = komodoApi): Provider => ({
     read: async (inputs, ctx) => {
-        if (typeof inputs["komodoUrl"] !== "string") {
+        if (typeof inputs["komodoUrl"] !== "string" || typeof inputs["webhook"] !== "string") {
             return undefined;
         }
         const parsed = parse(inputs);
