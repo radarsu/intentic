@@ -369,3 +369,57 @@ test("the cloudflare node carries only token + discovered zone, and the tunnel r
     // accountId is resolved by the cloudflare provider and read by the tunnel through a ref, never authored.
     expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["accountId"]).toEqual(makeRef("cf", "accountId"));
 });
+
+// A minimal one-app intent reused by the guarded-update threading tests.
+const oneApp: IntentSet["apps"][number] = {
+    id: "app",
+    on: "host",
+    expose: "cf",
+    environments: { production: { domain: "app.example.com", branch: "main" } },
+};
+
+test("a guarded host with a backup threads guardRepo + resticImage onto forgejo + komodo", () => {
+    const intent: IntentSet = {
+        host: { id: "host", input: { ...host.input, updatePolicy: "guarded" } },
+        cloudflare,
+        backup: { id: "backups", input: { repo: "s3:s3.example.com/bucket", password: env("RESTIC_PASSWORD") } },
+        users: [],
+        teams: [],
+        services: [],
+        apps: [oneApp],
+    };
+    const nodes = emit(intent, assign(intent), "example.com");
+    for (const id of ["host-git", "host-deploy"]) {
+        const node = nodes.find((n) => n.id === id);
+        expect(node?.inputs["guardRepo"], id).toBe("s3:s3.example.com/bucket");
+        expect(typeof node?.inputs["resticImage"], id).toBe("string");
+    }
+    expect(nodes.some((n) => n.id === "host-backup")).toBe(true);
+});
+
+test("a pinned host (default) leaves the guard inputs off even when a backup is declared", () => {
+    const intent: IntentSet = {
+        host,
+        cloudflare,
+        backup: { id: "backups", input: { repo: "s3:s3.example.com/bucket", password: env("RESTIC_PASSWORD") } },
+        users: [],
+        teams: [],
+        services: [],
+        apps: [oneApp],
+    };
+    const nodes = emit(intent, assign(intent), "example.com");
+    expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBeUndefined();
+});
+
+test("a guarded host WITHOUT a declared backup leaves the guard inputs off (nowhere to snapshot)", () => {
+    const intent: IntentSet = {
+        host: { id: "host", input: { ...host.input, updatePolicy: "guarded" } },
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        apps: [oneApp],
+    };
+    const nodes = emit(intent, assign(intent), "example.com");
+    expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBeUndefined();
+});

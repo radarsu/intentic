@@ -74,7 +74,13 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
     // as a dangling dependency the compiler accepts.
     if (intent.apps.length > 0) {
         const serviceIds = new Set(intent.services.map((service) => service.id));
-        const platform = resolvePlatform(host.id, cloudflare.id, zone, apiToken, host.input);
+        // Guarded updates need a restic repo to snapshot into; enabled only when the host opts in AND a
+        // backup destination is declared (the provider reuses its on-host restic.env for the password).
+        const guard =
+            host.input.updatePolicy === "guarded" && intent.backup !== undefined
+                ? { repo: intent.backup.input.repo, resticImage: IMAGES.backup }
+                : undefined;
+        const platform = resolvePlatform(host.id, cloudflare.id, zone, apiToken, host.input, guard);
         nodes.push(...platform.nodes);
         ingress.push(...platform.ingress);
         for (const app of intent.apps) {

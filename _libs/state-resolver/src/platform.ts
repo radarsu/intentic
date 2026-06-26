@@ -25,13 +25,24 @@ const KOMODO_PORT = 9120;
 // runner, and Komodo, exposed at git.<zone>/komodo.<zone> so push/CI/UI are reachable. Terse defaults:
 // adminUser "intentic", intentic-generated admin passwords, domain-derived health gates. Returns each
 // exposure's ingress pair so the caller can aggregate the host's tunnel ingress.
+// When guarded updates are on (host.updatePolicy === "guarded" + a backup is declared), the stateful
+// services carry the restic repo + image so a pin bump runs as a snapshot/rollback transaction; the
+// password/creds come from the on-host restic.env the backup provider writes.
+export interface GuardConfig {
+    readonly repo: string;
+    readonly resticImage: string;
+}
+
 export const resolvePlatform = (
     hostId: string,
     cloudflareId: string,
     zone: string,
     apiToken: SecretRef,
     host: HostInput,
+    guard: GuardConfig | undefined,
 ): { nodes: ResolvedNode[]; refs: PlatformRefs; ingress: IngressPair[] } => {
+    // The guarded-update inputs, spread onto the stateful (forgejo/komodo) nodes only when enabled.
+    const guarded = guard !== undefined ? { guardRepo: guard.repo, resticImage: guard.resticImage } : {};
     const forgejo = forgejoId(hostId);
     const deploy = komodoId(hostId);
     const server = makeRef(hostId);
@@ -60,6 +71,7 @@ export const resolvePlatform = (
                 adminUser: adminUsername,
                 adminPassword: generated("FORGEJO_ADMIN_PASSWORD"),
                 image: IMAGES.forgejo,
+                ...guarded,
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(forgejo, "internalUrl"), { timeout: "120s" }),
@@ -103,6 +115,7 @@ export const resolvePlatform = (
                 peripheryImage: IMAGES.komodoPeriphery,
                 ferretdbImage: IMAGES.ferretdb,
                 postgresImage: IMAGES.postgresDocumentdb,
+                ...guarded,
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(deploy, "internalUrl"), { timeout: "90s" }),

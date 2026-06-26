@@ -3,6 +3,12 @@ import type { Input, Readiness, SecretRef } from "@intentic/graph";
 // The author-supplied data shapes. They reference only protocol primitives so the intent that carries
 // them stays free of any dependency on the authoring handles.
 
+// How image-pin bumps roll out on this host. "pinned" (default): recreate the service on the new pin and
+// health-gate (Phase-1 behavior); rollback is `git revert` + re-apply. "guarded": wrap each stateful
+// service's bump in a transaction — pre-update restic snapshot, recreate, health-gate, and auto-rollback
+// (old image + restored data) on failure. "guarded" requires i.have.backup (it reuses its restic repo).
+export type UpdatePolicy = "pinned" | "guarded";
+
 // The host an app runs on: its SSH connection, authored inline. address/user are literals; the private
 // key is a secret. SSH port defaults to 22 when omitted.
 export interface HostInput {
@@ -10,6 +16,7 @@ export interface HostInput {
     user: string;
     sshKey: SecretRef;
     port?: number;
+    updatePolicy?: UpdatePolicy;
 }
 
 // The Cloudflare account an app is exposed through. Only the API token is authored: the zone is discovered

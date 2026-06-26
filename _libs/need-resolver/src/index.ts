@@ -11,6 +11,7 @@ export type {
     ServiceInput,
     ServiceKind,
     TeamInput,
+    UpdatePolicy,
     UserInput,
 } from "./inputs.js";
 export type { AppIntent, BackupIntent, CloudflareIntent, HostIntent, IntentSet, ServiceIntent, TeamIntent, UserIntent } from "./intent.js";

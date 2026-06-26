@@ -1,5 +1,6 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
+import { guardedUpdate } from "./guarded-update.js";
 import { gitProvider, parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshSession } from "./ssh.js";
 import { type SshExecutor, sshExecutor } from "./ssh.js";
@@ -28,6 +29,11 @@ const komodoSchema = sshSchema.extend({
     peripheryImage: z.string(),
     ferretdbImage: z.string(),
     postgresImage: z.string(),
+    // Guarded-update inputs, present only when the host opted into updatePolicy:"guarded" + declared a backup.
+    // A version bump then snapshots the data volumes, recreates, health-gates, and rolls images + data back on
+    // failure. The restic password/creds come from the on-host restic.env the backup provider writes.
+    guardRepo: z.string().optional(),
+    resticImage: z.string().optional(),
 });
 type KomodoInputs = z.infer<typeof komodoSchema>;
 const parse = (inputs: ResolvedInputs): KomodoInputs => parseInputs(komodoSchema, inputs, "komodo");
@@ -79,22 +85,22 @@ const desiredImages = (parsed: KomodoInputs): Record<string, string> => ({
 // onboarding key needed for a single host). Written verbatim over SSH; the $... secrets are interpolated by
 // docker compose from the .env beside it. Image refs are the fully-pinned inputs inlined into the YAML (NOT
 // the write-once .env) so a bump recreates the service on the next `up -d`.
-const composeYaml = (parsed: KomodoInputs): string =>
+const composeYaml = (images: Record<string, string>): string =>
     [
         "services:",
         "  postgres:",
-        `    image: ${parsed.postgresImage}`,
+        `    image: ${images["postgres"]}`,
         "    restart: unless-stopped",
         "    environment: { POSTGRES_USER: $KOMODO_DATABASE_USERNAME, POSTGRES_PASSWORD: $KOMODO_DATABASE_PASSWORD, POSTGRES_DB: postgres }",
         "    volumes: [ postgres-data:/var/lib/postgresql/data ]",
         "  ferretdb:",
-        `    image: ${parsed.ferretdbImage}`,
+        `    image: ${images["ferretdb"]}`,
         "    restart: unless-stopped",
         "    depends_on: [ postgres ]",
         "    environment: { FERRETDB_POSTGRESQL_URL: postgres://$KOMODO_DATABASE_USERNAME:$KOMODO_DATABASE_PASSWORD@postgres:5432/postgres }",
         "    volumes: [ ferretdb-state:/state ]",
         "  core:",
-        `    image: ${parsed.coreImage}`,
+        `    image: ${images["core"]}`,
         "    restart: unless-stopped",
         "    depends_on: [ ferretdb ]",
         `    ports: [ "${CORE_PORT}:9120" ]`,
@@ -109,7 +115,7 @@ const composeYaml = (parsed: KomodoInputs): string =>
         // be refused). Co-located on this private compose network, the shared keys volume persists each side's
         // Noise keypair and the handshake needs no pre-shared passkey or pinned core key.
         "  periphery:",
-        `    image: ${parsed.peripheryImage}`,
+        `    image: ${images["periphery"]}`,
         "    restart: unless-stopped",
         "    volumes: [ /var/run/docker.sock:/var/run/docker.sock, /proc:/proc, keys:/config/keys ]",
         "volumes: { postgres-data: {}, ferretdb-state: {}, keys: {} }",
@@ -137,9 +143,9 @@ const configToml = (parsed: KomodoInputs): string => {
 
 // Write the compose file + provider config.toml (always) and the .env (once — Core/Periphery secrets must
 // survive restarts). passkey/jwt/db secrets are host-generated once and never surface as outputs.
-const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<void> => {
+const ensureFiles = async (session: SshSession, parsed: KomodoInputs, images: Record<string, string>): Promise<void> => {
     await session.exec(`mkdir -p ${STATE_DIR}`);
-    await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml(parsed)}COMPOSE_EOF`);
+    await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml(images)}COMPOSE_EOF`);
     await session.exec(`cat > ${STATE_DIR}/config.toml <<'CONFIG_EOF'\n${configToml(parsed)}CONFIG_EOF`);
     // Each line is a separate printf argument so `printf '%s\n'` emits one KEY=value per line. Joining with
     // "\n" into a single arg would print the literal characters \n (printf %s does not interpret escapes),
@@ -226,21 +232,52 @@ export const createKomodoProvider = (executor: SshExecutor = sshExecutor): Provi
         }
         return { action: "noop" };
     },
-    apply: async (inputs) => {
+    apply: async (inputs, observed, ctx) => {
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));
         try {
-            await ensureFiles(session, parsed);
-            // --env-file/--project-directory pin the .env we wrote as both the interpolation source (the
-            // $COMPOSE_KOMODO_IMAGE_TAG etc. in compose.yaml) and the core service's runtime env; without
-            // them compose looks in the SSH working dir, leaving the image tags blank.
-            const up = await session.exec(
-                `docker compose -p komodo --project-directory ${STATE_DIR} --env-file ${STATE_DIR}/.env -f ${STATE_DIR}/compose.yaml up -d`,
-            );
-            if (up.code !== 0) {
-                throw new Error(`failed to bring up komodo stack: exited ${up.code}: ${up.stderr.trim()}`);
+            // Render compose with a given image set + `up -d` + wait healthy; throws if the stack never gets
+            // healthy. --env-file/--project-directory pin the .env we wrote as the interpolation source for the
+            // $secrets in compose.yaml and the core service's runtime env; without them compose looks in the
+            // SSH working dir, leaving them blank.
+            const bringUp = async (images: Record<string, string>): Promise<void> => {
+                await ensureFiles(session, parsed, images);
+                const up = await session.exec(
+                    `docker compose -p komodo --project-directory ${STATE_DIR} --env-file ${STATE_DIR}/.env -f ${STATE_DIR}/compose.yaml up -d`,
+                );
+                if (up.code !== 0) {
+                    throw new Error(`failed to bring up komodo stack: exited ${up.code}: ${up.stderr.trim()}`);
+                }
+                await waitHealthy(session, parsed);
+            };
+            // On a guarded version bump (existing stack + a backup repo), wrap the recreate in a snapshot +
+            // health-gate + image/data rollback transaction; otherwise just bring up the desired images.
+            const oldImages = observed?.detail?.["images"];
+            if (
+                observed !== undefined &&
+                parsed.guardRepo !== undefined &&
+                parsed.resticImage !== undefined &&
+                typeof oldImages === "object" &&
+                oldImages !== null
+            ) {
+                await guardedUpdate({
+                    session,
+                    repo: parsed.guardRepo,
+                    resticImage: parsed.resticImage,
+                    volumes: ["komodo_postgres-data", "komodo_keys", "komodo_ferretdb-state"],
+                    tag: `intentic-preupdate-${CORE}`,
+                    recreate: () => bringUp(desiredImages(parsed)),
+                    stop: async () => {
+                        await session.exec(
+                            'ids=$(docker ps -aq -f label=com.docker.compose.project=komodo); [ -n "$ids" ] && docker rm -f $ids || true',
+                        );
+                    },
+                    rollback: () => bringUp(oldImages as Record<string, string>),
+                    log: ctx.log,
+                });
+            } else {
+                await bringUp(desiredImages(parsed));
             }
-            await waitHealthy(session, parsed);
             return outputsFor(parsed);
         } finally {
             await session.dispose();

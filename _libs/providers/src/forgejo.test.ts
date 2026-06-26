@@ -178,6 +178,24 @@ test("apply propagates an SSH connection failure", async () => {
     await expect(createForgejoProvider(unreachable).apply(inputs, undefined, ctx())).rejects.toThrow("ECONNREFUSED");
 });
 
+test("a guarded update snapshots the data volume before recreating; the happy path issues no restore", async () => {
+    const ssh = fakeSsh({ healthy: true, token: "tok-123", gitToken: "gtok-456", packagesToken: "ptok-789" });
+    const observed = { outputs: {}, detail: { image: "codeberg.org/forgejo/forgejo:14.0.0@sha256:old" } };
+    await createForgejoProvider(ssh.executor).apply(
+        { ...inputs, guardRepo: "s3:s3.example.com/bucket", resticImage: "restic/restic:0.19.0@sha256:r" },
+        observed,
+        ctx(),
+    );
+    expect(ssh.commands.some((c) => c.includes("backup /v --tag intentic-preupdate-host-git") && c.includes("intentic-forgejo-data"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("restore latest --tag"))).toBe(false);
+});
+
+test("a non-guarded apply issues no restic commands (Phase-1 behavior)", async () => {
+    const ssh = fakeSsh({ healthy: true, token: "tok-123", gitToken: "gtok-456", packagesToken: "ptok-789" });
+    await createForgejoProvider(ssh.executor).apply(inputs, undefined, ctx());
+    expect(ssh.commands.some((c) => c.includes("restic") || c.includes("intentic-preupdate"))).toBe(false);
+});
+
 test("malformed inputs are rejected", async () => {
     await expect(createForgejoProvider(fakeSsh().executor).read({ ...inputs, adminPassword: 5 }, ctx())).rejects.toThrow(/forgejo inputs malformed/);
 });

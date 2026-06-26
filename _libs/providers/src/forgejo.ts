@@ -1,5 +1,6 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
+import { guardedUpdate } from "./guarded-update.js";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshExecutor, SshSession } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
@@ -12,6 +13,11 @@ const forgejoSchema = sshSchema.extend({
     // The fully-pinned image (repo:tag@sha256) the resolver records in the desired-state graph. read observes
     // the running container's image and diff recreates on a mismatch, so a version bump rolls forward.
     image: z.string(),
+    // Guarded-update inputs, present only when the host opted into updatePolicy:"guarded" + declared a backup.
+    // A version bump then snapshots the data volume, recreates, health-gates, and rolls image + data back on
+    // failure. The restic password/creds come from the on-host restic.env the backup provider writes.
+    guardRepo: z.string().optional(),
+    resticImage: z.string().optional(),
 });
 type ForgejoInputs = z.infer<typeof forgejoSchema>;
 const parse = (inputs: ResolvedInputs): ForgejoInputs => parseInputs(forgejoSchema, inputs, "forgejo");
@@ -112,22 +118,45 @@ export const createForgejoProvider = (executor: SshExecutor = sshExecutor): Prov
         }
         return { action: "noop" };
     },
-    apply: async (inputs, _observed, ctx) => {
+    apply: async (inputs, observed, ctx) => {
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));
         try {
             await session.exec(`mkdir -p ${STATE_DIR}`);
-            await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
-            const run = await session.exec(
-                `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
-                    `-v ${CONTAINER}-data:/data ` +
-                    `-e FORGEJO__security__INSTALL_LOCK=true -e FORGEJO__database__DB_TYPE=sqlite3 ` +
-                    `-e FORGEJO__server__ROOT_URL=https://${parsed.domain} -e FORGEJO__server__DOMAIN=${parsed.domain} ${parsed.image}`,
-            );
-            if (run.code !== 0) {
-                throw new Error(`failed to start forgejo on host: exited ${run.code}: ${run.stderr.trim()}`);
+            // (Re)create the container on a given image and wait for health; throws if it never gets healthy.
+            const bringUp = async (image: string): Promise<void> => {
+                await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+                const run = await session.exec(
+                    `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
+                        `-v ${CONTAINER}-data:/data ` +
+                        `-e FORGEJO__security__INSTALL_LOCK=true -e FORGEJO__database__DB_TYPE=sqlite3 ` +
+                        `-e FORGEJO__server__ROOT_URL=https://${parsed.domain} -e FORGEJO__server__DOMAIN=${parsed.domain} ${image}`,
+                );
+                if (run.code !== 0) {
+                    throw new Error(`failed to start forgejo on host: exited ${run.code}: ${run.stderr.trim()}`);
+                }
+                await waitHealthy(session);
+            };
+            // On a guarded version bump (existing container + a backup repo), wrap the recreate in a snapshot +
+            // health-gate + image/data rollback transaction; otherwise just bring up the desired image.
+            const oldImage = observed?.detail?.["image"];
+            if (observed !== undefined && parsed.guardRepo !== undefined && parsed.resticImage !== undefined && typeof oldImage === "string") {
+                await guardedUpdate({
+                    session,
+                    repo: parsed.guardRepo,
+                    resticImage: parsed.resticImage,
+                    volumes: [`${CONTAINER}-data`],
+                    tag: `intentic-preupdate-${ctx.id}`,
+                    recreate: () => bringUp(parsed.image),
+                    stop: async () => {
+                        await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+                    },
+                    rollback: () => bringUp(oldImage),
+                    log: ctx.log,
+                });
+            } else {
+                await bringUp(parsed.image);
             }
-            await waitHealthy(session);
             // Idempotent admin bootstrap: tolerate the user already existing, propagate anything else.
             const admin = await session.exec(
                 `docker exec -u git ${CONTAINER} forgejo admin user create --admin --username ${parsed.adminUser} ` +

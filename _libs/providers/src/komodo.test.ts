@@ -137,6 +137,26 @@ test("apply writes compose + a once-guarded env, brings the stack up, waits for 
     expect(ssh.commands.some((c) => c.includes("docker compose -p komodo") && c.includes("up -d"))).toBe(true);
 });
 
+test("a guarded update snapshots the postgres/keys/ferretdb volumes before recreating; the happy path issues no restore", async () => {
+    const ssh = fakeSsh({ healthy: true });
+    const observed = { outputs: {}, detail: { images: { ...DEFAULT_IMAGES, core: "ghcr.io/moghtech/komodo-core:2.0.0@sha256:old" } } };
+    await createKomodoProvider(ssh.executor).apply(
+        { ...inputs, guardRepo: "s3:s3.example.com/bucket", resticImage: "restic/restic:0.19.0@sha256:r" },
+        observed,
+        ctx(),
+    );
+    for (const volume of ["komodo_postgres-data", "komodo_keys", "komodo_ferretdb-state"]) {
+        expect(ssh.commands.some((c) => c.includes(`backup /v --tag intentic-preupdate-intentic-komodo-core`) && c.includes(volume))).toBe(true);
+    }
+    expect(ssh.commands.some((c) => c.includes("restore latest --tag"))).toBe(false);
+});
+
+test("a non-guarded apply issues no restic commands (Phase-1 behavior)", async () => {
+    const ssh = fakeSsh({ healthy: true });
+    await createKomodoProvider(ssh.executor).apply(inputs, undefined, ctx());
+    expect(ssh.commands.some((c) => c.includes("restic") || c.includes("intentic-preupdate"))).toBe(false);
+});
+
 test("apply throws when docker compose up exits non-zero", async () => {
     const ssh = fakeSsh({ upFails: true });
     await expect(createKomodoProvider(ssh.executor).apply(inputs, undefined, ctx())).rejects.toThrow(/failed to bring up komodo/);
