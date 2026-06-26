@@ -1,6 +1,11 @@
 name: Setup
 description: Install pnpm, Node.js, and project dependencies
 
+inputs:
+  registry-url:
+    description: npm registry URL (set for publish steps)
+    required: false
+
 runs:
   using: composite
   steps:
@@ -9,5 +14,6 @@ runs:
       with:
         node-version: 24.14.0
         cache: pnpm
+        registry-url: ${{ inputs.registry-url }}
     - run: pnpm install --frozen-lockfile
       shell: bash
