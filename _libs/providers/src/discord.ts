@@ -66,7 +66,7 @@ export const createDiscordProvider = (api: DiscordApi = discordApi): Provider =>
         const name = guildName(parsed.zone);
         try {
             const guilds = await api.listGuilds(parsed.botToken);
-            const guild = guilds.find((g) => g.name === name);
+            const guild = guilds.find((g) => g.name === name) ?? guilds[0];
             if (guild === undefined) {
                 return undefined;
             }
@@ -142,12 +142,20 @@ export const createDiscordProvider = (api: DiscordApi = discordApi): Provider =>
         const parsed = parse(inputs);
         const name = guildName(parsed.zone);
 
-        // Find or create the guild.
+        // Find or create the guild. Discord restricts POST /guilds for most bots (error 20001),
+        // so we try to create and fall back to the first guild the bot is already in.
         const guilds = await api.listGuilds(parsed.botToken);
-        let guild = guilds.find((g) => g.name === name);
+        let guild = guilds.find((g) => g.name === name) ?? guilds[0];
         if (guild === undefined) {
-            ctx.log(`discord "${ctx.id}": creating guild "${name}"`);
-            guild = await api.createGuild(parsed.botToken, name);
+            try {
+                ctx.log(`discord "${ctx.id}": creating guild "${name}"`);
+                guild = await api.createGuild(parsed.botToken, name);
+            } catch {
+                throw new Error(
+                    `discord "${ctx.id}": the bot is not in any guild and cannot create one. ` +
+                        "Invite the bot to a Discord server first, then re-run apply.",
+                );
+            }
         }
 
         // Fetch current channels (including the defaults Discord creates).
