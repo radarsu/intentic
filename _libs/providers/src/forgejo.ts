@@ -147,4 +147,16 @@ export const createForgejoProvider = (executor: SshExecutor = sshExecutor): Prov
             await session.dispose();
         }
     },
+    delete: async (inputs) => {
+        const parsed = parse(inputs);
+        const session = await executor.connect(sshTarget(parsed));
+        try {
+            // Remove the container, its SQLite data volume, and the host-side token state — a full teardown.
+            await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+            await session.exec(`docker volume rm ${CONTAINER}-data 2>/dev/null || true`);
+            await session.exec(`rm -rf ${STATE_DIR}`);
+        } finally {
+            await session.dispose();
+        }
+    },
 });

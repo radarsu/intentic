@@ -38,6 +38,10 @@ export interface Provider {
     readonly apply: (inputs: ResolvedInputs, observed: Observed | undefined, ctx: ProviderContext) => Promise<Record<string, unknown>>;
     // Optional: stamped ids of this kind that exist in infra, for orphan detection.
     readonly list?: (ctx: ProviderContext) => Promise<readonly string[]>;
+    // Optional: tear a resource down. Called by prune for a node present in the last-applied graph but
+    // absent from the new one, with that node's PREVIOUS resolved inputs. Must be idempotent (the resource
+    // may already be gone). A provider without `delete` is left in place and logged (converge-forward).
+    readonly delete?: (inputs: ResolvedInputs, ctx: ProviderContext) => Promise<void>;
 }
 
 // A node whose `type` has no registered provider is a hard error at reconcile time.

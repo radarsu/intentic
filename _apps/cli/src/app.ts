@@ -1,14 +1,16 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { createStore, plan, reconcile, resolveInputs } from "@intentic/engine";
-import { createProviders, createSshProbe, hostTarget } from "@intentic/providers";
+import { createStore, plan, prune, reconcile, resolveInputs } from "@intentic/engine";
+import { createProviders, createSshProbe, forgejoApi, hostTarget } from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
 import { collectAccess, formatAccessSummary, writeAccessFile } from "./access.js";
 import { adoptRepos } from "./adopt.js";
+import { GIT_TOKEN_SECRET, GIT_USER_SECRET, type PipelineInputs, setRepoSecrets, writeControlPlaneWorkflows } from "./adopt-pipelines.js";
 import {
     ACCESS_FILE,
+    ARTIFACT_FILE,
     ARTIFACT_PATH,
     CONFIG_FILE,
     CONFIG_PATH,
@@ -107,6 +109,7 @@ const planCommand = buildCommand<{ artifact?: string }>({
 interface ApplyFlags {
     readonly artifact?: string;
     readonly maxIterations?: number;
+    readonly previous?: string;
 }
 
 const apply = buildCommand<ApplyFlags>({
@@ -119,6 +122,12 @@ const apply = buildCommand<ApplyFlags>({
                 parse: numberParser,
                 optional: true,
                 brief: `Max reconcile iterations (default ${DEFAULT_MAX_ITERATIONS})`,
+            },
+            previous: {
+                kind: "parsed",
+                parse: String,
+                optional: true,
+                brief: "Path to the last successfully-applied artifact; resources absent from the new one are pruned after convergence",
             },
         },
     },
@@ -147,6 +156,14 @@ const apply = buildCommand<ApplyFlags>({
             iterations: result.iterations,
             steps: result.outcome.steps,
         });
+        // Prune AFTER convergence (reconcile throws if it never converges, so a failed apply never deletes):
+        // tear down every resource in the last successfully-applied artifact that the new one no longer
+        // declares. Deletes need the kept platform nodes' creds, hence the same providers/env as the apply.
+        if (flags.previous !== undefined) {
+            const previous = await readArtifact(flags.previous);
+            const outcome = await prune(previous, graph, { providers: createProviders(), log, env: process.env });
+            log(`pruned ${outcome.deleted.length} resource(s)${outcome.skipped.length > 0 ? `, ${outcome.skipped.length} left in place` : ""}`);
+        }
         const access = collectAccess(graph, result.outcome.outputs, process.env);
         log(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
         if (access.length > 0) {
@@ -183,12 +200,47 @@ const adopt = buildCommand<{ artifact?: string }>({
         if (ref === undefined) {
             throw new Error("forgejo resource is missing its adminPassword secret");
         }
-        const password = ref.source === "generated" ? (await readGeneratedSecrets(targetDir))[ref.key] : process.env[ref.key];
+        const generatedValues = await readGeneratedSecrets(targetDir);
+        const password = ref.source === "generated" ? generatedValues[ref.key] : process.env[ref.key];
         if (password === undefined || password === "") {
             throw new Error(`forgejo admin password (${ref.source} secret ${ref.key}) is not available`);
         }
+
+        // Split the graph's secrets by source and resolve their values: env from the loaded process.env,
+        // generated from .secrets.json. These move into Forgejo Actions secrets so the pipelines authenticate
+        // without the files (which never leave the operator's machine).
+        const { env: envKeys, generated: generatedKeys } = collectSecrets(graph);
+        const desiredStateSecrets: Record<string, string> = {};
+        for (const key of envKeys) {
+            const value = process.env[key];
+            if (value !== undefined && value !== "") {
+                desiredStateSecrets[key] = value;
+            }
+        }
+        for (const key of generatedKeys) {
+            const value = generatedValues[key];
+            if (value !== undefined) {
+                desiredStateSecrets[key] = value;
+            }
+        }
+
+        const inputs: PipelineInputs = {
+            cliVersion: version,
+            user,
+            domain,
+            configFile: CONFIG_FILE,
+            artifactFile: ARTIFACT_FILE,
+            intentRepo: INTENT_DIR,
+            desiredStateRepo: TARGET_DIR,
+            applySecretKeys: Object.keys(desiredStateSecrets).sort(),
+            forgejoPasswordKey: ref.key,
+        };
+        // Seed the pipelines into the repo dirs BEFORE the push, so adopt's normal commit/push carries them.
+        await writeControlPlaneWorkflows(intentDir, targetDir, inputs);
+
+        const baseUrl = `https://${domain}`;
         await adoptRepos({
-            baseUrl: `https://${domain}`,
+            baseUrl,
             user,
             password,
             repos: [
@@ -197,6 +249,18 @@ const adopt = buildCommand<{ artifact?: string }>({
             ],
             log,
         });
+
+        // The apply pipeline needs every secret; the resolve pipeline needs the Cloudflare token (for zone
+        // discovery) plus the git-push credential it pushes the artifact to the desired-state repo with.
+        const intentSecrets: Record<string, string> = { [GIT_USER_SECRET]: user, [GIT_TOKEN_SECRET]: password };
+        if (desiredStateSecrets["CLOUDFLARE_API_TOKEN"] !== undefined) {
+            intentSecrets["CLOUDFLARE_API_TOKEN"] = desiredStateSecrets["CLOUDFLARE_API_TOKEN"];
+        }
+        await setRepoSecrets({ api: forgejoApi, baseUrl, user, password, owner: user, name: INTENT_DIR, secrets: intentSecrets });
+        await setRepoSecrets({ api: forgejoApi, baseUrl, user, password, owner: user, name: TARGET_DIR, secrets: desiredStateSecrets });
+        log(
+            `set ${Object.keys(intentSecrets).length} secret(s) on ${user}/${INTENT_DIR}, ${Object.keys(desiredStateSecrets).length} on ${user}/${TARGET_DIR}`,
+        );
     },
 });
 

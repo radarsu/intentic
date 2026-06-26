@@ -48,4 +48,11 @@ export const createForgejoUserProvider = (api: ForgejoApi = forgejoApi): Provide
         }
         return {};
     },
+    delete: async (inputs) => {
+        if (typeof inputs["forgejoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        await api.deleteUser({ baseUrl: parsed.forgejoUrl, user: parsed.adminUser, password: parsed.adminPassword, username: parsed.username });
+    },
 });

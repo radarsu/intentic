@@ -31,6 +31,18 @@ export interface ApplyOutcome {
     readonly orphans: readonly Orphan[];
 }
 
+export interface PrunedResource {
+    readonly id: string;
+    readonly type: ResourceType;
+}
+
+export interface PruneOutcome {
+    // Resources removed from desired state that were torn down.
+    readonly deleted: readonly PrunedResource[];
+    // Resources removed from desired state whose provider has no `delete` — left in place (logged).
+    readonly skipped: readonly PrunedResource[];
+}
+
 export interface EngineConfig {
     readonly providers: Providers;
     readonly env?: Readonly<Record<string, string | undefined>>; // default: process.env

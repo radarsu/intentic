@@ -107,4 +107,15 @@ export const createForgejoRunnerProvider = (executor: SshExecutor = sshExecutor)
             await session.dispose();
         }
     },
+    delete: async (inputs) => {
+        const parsed = parse(inputs);
+        const session = await executor.connect(sshTarget(parsed));
+        try {
+            await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+            await session.exec(`docker volume rm ${CONTAINER}-data 2>/dev/null || true`);
+            await session.exec(`rm -rf ${CONFIG_DIR}`);
+        } finally {
+            await session.dispose();
+        }
+    },
 });

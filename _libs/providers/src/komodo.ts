@@ -201,4 +201,18 @@ export const createKomodoProvider = (executor: SshExecutor = sshExecutor): Provi
             await session.dispose();
         }
     },
+    delete: async (inputs) => {
+        const parsed = parse(inputs);
+        const session = await executor.connect(sshTarget(parsed));
+        try {
+            // `down -v` stops the stack and drops its named volumes (postgres/ferretdb/keys); then remove the
+            // host-side compose + secrets dir. Tolerant of a stack that is already gone.
+            await session.exec(
+                `docker compose -p komodo --project-directory ${STATE_DIR} --env-file ${STATE_DIR}/.env -f ${STATE_DIR}/compose.yaml down -v 2>/dev/null || true`,
+            );
+            await session.exec(`rm -rf ${STATE_DIR}`);
+        } finally {
+            await session.dispose();
+        }
+    },
 });

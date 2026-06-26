@@ -122,4 +122,16 @@ export const createDeploymentProvider = (api: KomodoApi = komodoApi): Provider =
         // roll it out. apply only registers the desired deployment.
         return outputsFor(parsed);
     },
+    delete: async (inputs, ctx) => {
+        if (typeof inputs["komodoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        const jwt = await api.login({ baseUrl: parsed.komodoUrl, username: parsed.adminUser, password: parsed.adminPassword });
+        const existing = (await api.listDeployments({ baseUrl: parsed.komodoUrl, jwt })).find((item) => item.name === ctx.id);
+        if (existing === undefined) {
+            return;
+        }
+        await api.deleteDeployment({ baseUrl: parsed.komodoUrl, jwt, id: existing.id });
+    },
 });

@@ -83,8 +83,12 @@ export interface KomodoApi {
         readonly id: string;
         readonly config: Readonly<Record<string, unknown>>;
     }) => Promise<void>;
+    // write/DeleteDeployment {id} — tear a deployment down (used by prune). Stops + removes the container too.
+    readonly deleteDeployment: (args: { readonly baseUrl: string; readonly jwt: string; readonly id: string }) => Promise<void>;
     // read/ListUsers {service_users:"Include"} -> every user (id from "_id", username, enabled).
     readonly listUsers: (args: { readonly baseUrl: string; readonly jwt: string }) => Promise<readonly KomodoUser[]>;
+    // write/DeleteUser {id} — remove a user account (used by prune). The exact op is confirmed at integration time.
+    readonly deleteUser: (args: { readonly baseUrl: string; readonly jwt: string; readonly userId: string }) => Promise<void>;
     // write/CreateLocalUser {username,password}; admin-only, creates the user DISABLED (enable separately).
     readonly createUser: (args: {
         readonly baseUrl: string;
@@ -116,6 +120,8 @@ export interface KomodoApi {
         readonly id: string;
         readonly config: AlerterConfig;
     }) => Promise<void>;
+    // write/DeleteAlerter {id} — remove an alerter (used by prune).
+    readonly deleteAlerter: (args: { readonly baseUrl: string; readonly jwt: string; readonly id: string }) => Promise<void>;
 }
 
 type Module = "read" | "write" | "execute";
@@ -180,12 +186,18 @@ export const komodoApi: KomodoApi = {
     updateDeployment: async ({ baseUrl, jwt, id, config }) => {
         await post({ baseUrl, module: "write", type: "UpdateDeployment", params: { id, config }, jwt });
     },
+    deleteDeployment: async ({ baseUrl, jwt, id }) => {
+        await post({ baseUrl, module: "write", type: "DeleteDeployment", params: { id }, jwt });
+    },
     listUsers: async ({ baseUrl, jwt }) => {
         const users = await read({ baseUrl, module: "read", type: "ListUsers", params: { service_users: "Include" }, jwt }, z.array(rawUserSchema));
         return users.map((user) => ({ id: user._id, username: user.username, enabled: user.enabled }));
     },
     createUser: async ({ baseUrl, jwt, username, password }) => {
         await post({ baseUrl, module: "write", type: "CreateLocalUser", params: { username, password }, jwt });
+    },
+    deleteUser: async ({ baseUrl, jwt, userId }) => {
+        await post({ baseUrl, module: "write", type: "DeleteUser", params: { id: userId }, jwt });
     },
     enableUser: async ({ baseUrl, jwt, userId }) => {
         await post({ baseUrl, module: "write", type: "UpdateUserBasePermissions", params: { user_id: userId, enabled: true }, jwt });
@@ -212,5 +224,8 @@ export const komodoApi: KomodoApi = {
     },
     updateAlerter: async ({ baseUrl, jwt, id, config }) => {
         await post({ baseUrl, module: "write", type: "UpdateAlerter", params: { id, config }, jwt });
+    },
+    deleteAlerter: async ({ baseUrl, jwt, id }) => {
+        await post({ baseUrl, module: "write", type: "DeleteAlerter", params: { id }, jwt });
     },
 };

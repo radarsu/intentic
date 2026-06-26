@@ -61,4 +61,16 @@ export const createKomodoUserProvider = (api: KomodoApi = komodoApi): Provider =
         }
         return {};
     },
+    delete: async (inputs) => {
+        if (typeof inputs["komodoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        const jwt = await api.login({ baseUrl: parsed.komodoUrl, username: parsed.adminUser, password: parsed.adminPassword });
+        const user = (await api.listUsers({ baseUrl: parsed.komodoUrl, jwt })).find((candidate) => candidate.username === parsed.username);
+        if (user === undefined) {
+            return;
+        }
+        await api.deleteUser({ baseUrl: parsed.komodoUrl, jwt, userId: user.id });
+    },
 });

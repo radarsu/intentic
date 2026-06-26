@@ -83,4 +83,12 @@ export const createCfRouteProvider = (
         await awaitPropagation(hostname, ctx.log);
         return { url: `https://${hostname}` };
     },
+    delete: async (inputs) => {
+        const { hostname, zoneId, apiToken } = parse(inputs);
+        const record = await api.findDnsRecord({ apiToken, zoneId, name: hostname });
+        if (record === undefined) {
+            return;
+        }
+        await api.deleteDnsRecord({ apiToken, zoneId, recordId: record.id });
+    },
 });

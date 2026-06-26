@@ -35,14 +35,26 @@ describe("ensureGeneratedSecrets", () => {
         expect(await readFile(secretsPath(dir), "utf8")).toBe(stored);
     });
 
-    it("is authoritative: the stored value is force-set into env even if env already holds a different one", async () => {
+    it("is env-first: an injected env value wins and is never persisted (the pipeline path)", async () => {
+        const dir = await newDir();
+        const env: Record<string, string | undefined> = { FORGEJO_ADMIN_PASSWORD: "from-forgejo-secret" };
+        await ensureGeneratedSecrets(dir, ["FORGEJO_ADMIN_PASSWORD"], env);
+
+        expect(env["FORGEJO_ADMIN_PASSWORD"]).toBe("from-forgejo-secret");
+        // With env supplying the value, .secrets.json is neither needed nor written — which is exactly what
+        // lets the pipeline run without the file (and never mint a new, locking-out password).
+        expect(existsSync(secretsPath(dir))).toBe(false);
+    });
+
+    it("env-first does not override a persisted store value either (env wins, the store is left untouched)", async () => {
         const dir = await newDir();
         await ensureGeneratedSecrets(dir, ["FORGEJO_ADMIN_PASSWORD"], {});
-        const stored = (JSON.parse(await readFile(secretsPath(dir), "utf8")) as Record<string, string>)["FORGEJO_ADMIN_PASSWORD"];
+        const stored = await readFile(secretsPath(dir), "utf8");
 
-        const env: Record<string, string | undefined> = { FORGEJO_ADMIN_PASSWORD: "stale-from-env" };
+        const env: Record<string, string | undefined> = { FORGEJO_ADMIN_PASSWORD: "from-env" };
         await ensureGeneratedSecrets(dir, ["FORGEJO_ADMIN_PASSWORD"], env);
-        expect(env["FORGEJO_ADMIN_PASSWORD"]).toBe(stored);
+        expect(env["FORGEJO_ADMIN_PASSWORD"]).toBe("from-env");
+        expect(await readFile(secretsPath(dir), "utf8")).toBe(stored);
     });
 
     it("is a no-op when there are no generated keys", async () => {

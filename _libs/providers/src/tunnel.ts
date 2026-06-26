@@ -124,4 +124,19 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
         await runConnector(executor, parsed, tunnel.id, token);
         return { tunnelId: tunnel.id, cname: cname(tunnel.id) };
     },
+    delete: async (inputs) => {
+        const parsed = parse(inputs);
+        const tunnel = await api.findTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, name: parsed.name });
+        if (tunnel === undefined) {
+            return;
+        }
+        // Remove the host connector first, then delete the (now-disconnected) tunnel in Cloudflare.
+        const session = await executor.connect(sshTarget(parsed));
+        try {
+            await session.exec(`docker rm -f ${containerName(tunnel.id)} 2>/dev/null || true`);
+        } finally {
+            await session.dispose();
+        }
+        await api.deleteTunnel({ accountId: parsed.accountId, apiToken: parsed.apiToken, tunnelId: tunnel.id });
+    },
 });

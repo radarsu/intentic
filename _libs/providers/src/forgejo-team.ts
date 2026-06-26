@@ -63,4 +63,16 @@ export const createForgejoTeamProvider = (api: ForgejoApi = forgejoApi): Provide
         }
         return {};
     },
+    delete: async (inputs) => {
+        if (typeof inputs["forgejoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        const auth = { baseUrl: parsed.forgejoUrl, user: parsed.adminUser, password: parsed.adminPassword };
+        const existing = await api.findTeam({ ...auth, org: parsed.org, name: parsed.name });
+        if (existing === undefined) {
+            return;
+        }
+        await api.deleteTeam({ ...auth, teamId: existing.id });
+    },
 });

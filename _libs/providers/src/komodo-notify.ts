@@ -83,4 +83,16 @@ export const createKomodoNotifyProvider = (api: KomodoApi = komodoApi): Provider
         }
         return {};
     },
+    delete: async (inputs, ctx) => {
+        if (typeof inputs["komodoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        const jwt = await api.login({ baseUrl: parsed.komodoUrl, username: parsed.adminUser, password: parsed.adminPassword });
+        const existing = (await api.listAlerters({ baseUrl: parsed.komodoUrl, jwt })).find((item) => item.name === ctx.id);
+        if (existing === undefined) {
+            return;
+        }
+        await api.deleteAlerter({ baseUrl: parsed.komodoUrl, jwt, id: existing.id });
+    },
 });

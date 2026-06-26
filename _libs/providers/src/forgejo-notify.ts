@@ -100,4 +100,22 @@ export const createForgejoNotifyProvider = (api: ForgejoApi = forgejoApi): Provi
         }
         return {};
     },
+    delete: async (inputs) => {
+        if (typeof inputs["forgejoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        const auth = {
+            baseUrl: parsed.forgejoUrl,
+            user: parsed.adminUser,
+            password: parsed.adminPassword,
+            owner: parsed.owner,
+            name: parsed.repoName,
+        };
+        const existing = findDiscordHook(await api.listHooks(auth), parsed.webhook);
+        if (existing === undefined) {
+            return;
+        }
+        await api.deleteHook({ ...auth, id: existing.id });
+    },
 });

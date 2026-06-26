@@ -52,4 +52,9 @@ export const createHostProvider = (executor: SshExecutor = sshExecutor): Provide
             await session.dispose();
         }
     },
+    // The host is OWNED infra, not provisioned by intentic — removing it from desired state never deletes the
+    // machine. Implemented as a logged no-op so prune treats it as handled rather than an unhandled orphan.
+    delete: async (_inputs, ctx) => {
+        ctx.log(`host "${ctx.id}" removed from desired state — owned infra is never torn down by intentic`);
+    },
 });

@@ -39,4 +39,11 @@ export const createForgejoOrgProvider = (api: ForgejoApi = forgejoApi): Provider
         }
         return {};
     },
+    delete: async (inputs) => {
+        if (typeof inputs["forgejoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        await api.deleteOrg({ baseUrl: parsed.forgejoUrl, user: parsed.adminUser, password: parsed.adminPassword, org: parsed.org });
+    },
 });

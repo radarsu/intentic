@@ -168,4 +168,22 @@ export const createCiProvider = (api: ForgejoApi = forgejoApi): Provider => ({
         });
         return {};
     },
+    delete: async (inputs) => {
+        if (typeof inputs["forgejoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        const repo = {
+            baseUrl: parsed.forgejoUrl,
+            user: parsed.adminUser,
+            password: parsed.adminPassword,
+            owner: parsed.owner,
+            name: parsed.repoName,
+        };
+        // Drop the workflow file and the secrets it consumed. The repo itself may be pruned separately (its
+        // own provider), so every call here is idempotent on a 404.
+        await api.deleteFile({ ...repo, branch: parsed.branch, path: workflowPath(parsed.tag), message: "intentic: remove ci workflow" });
+        await api.deleteRepoSecret({ ...repo, secretName: SECRET_REGISTRY });
+        await api.deleteRepoSecret({ ...repo, secretName: SECRET_KOMODO });
+    },
 });

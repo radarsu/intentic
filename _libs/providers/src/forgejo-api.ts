@@ -192,6 +192,60 @@ export interface ForgejoApi {
         readonly secretName: string;
         readonly data: string;
     }) => Promise<void>;
+    // The teardown surface prune drives. Each is idempotent: a 404 (the resource is already gone) is success.
+    // Delete a repo (and all its content). `owner` is the org or admin user the repo lives under.
+    readonly deleteRepo: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+    }) => Promise<void>;
+    // Delete `path` on `branch`, committing with `message` (looks up the current blob sha the API requires).
+    readonly deleteFile: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly branch: string;
+        readonly path: string;
+        readonly message: string;
+    }) => Promise<void>;
+    // Delete a repo Actions secret by name.
+    readonly deleteRepoSecret: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly secretName: string;
+    }) => Promise<void>;
+    // Delete a webhook by id.
+    readonly deleteHook: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly owner: string;
+        readonly name: string;
+        readonly id: number;
+    }) => Promise<void>;
+    // Delete a user account (admin endpoint; `purge` removes its repos/issues too).
+    readonly deleteUser: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly username: string;
+    }) => Promise<void>;
+    // Delete an organization by login.
+    readonly deleteOrg: (args: { readonly baseUrl: string; readonly user: string; readonly password: string; readonly org: string }) => Promise<void>;
+    // Delete a team by its numeric id.
+    readonly deleteTeam: (args: {
+        readonly baseUrl: string;
+        readonly user: string;
+        readonly password: string;
+        readonly teamId: number;
+    }) => Promise<void>;
 }
 
 const authHeader = (user: string, password: string): string => `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
@@ -218,6 +272,14 @@ const ok = async (response: Response, method: string, path: string): Promise<Res
         throw new Error(`Forgejo API ${method} ${path} failed (HTTP ${response.status}): ${await response.text()}`);
     }
     return response;
+};
+
+// A delete that is idempotent: a 404 means the resource is already gone, which is the desired end state.
+const okOrMissing = async (response: Response, method: string, path: string): Promise<void> => {
+    if (response.status === 404) {
+        return;
+    }
+    await ok(response, method, path);
 };
 
 const toRepo = (raw: z.infer<typeof rawRepoSchema>): ForgejoRepo => ({ cloneUrl: raw.clone_url, sshUrl: raw.ssh_url });
@@ -339,5 +401,42 @@ export const forgejoApi: ForgejoApi = {
         const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/secrets/${encodeURIComponent(secretName)}`;
         // PUT is create-or-replace; Forgejo accepts the plaintext value as `data`. 201 (created) / 204 (updated) both ok().
         await ok(await request({ method: "PUT", baseUrl, path, user, password, body: { data } }), "PUT", path);
+    },
+    deleteRepo: async ({ baseUrl, user, password, owner, name }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+        await okOrMissing(await request({ method: "DELETE", baseUrl, path, user, password }), "DELETE", path);
+    },
+    deleteFile: async ({ baseUrl, user, password, owner, name, branch, path: filePath, message }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/contents/${encodePath(filePath)}`;
+        const existing = await request({ method: "GET", baseUrl, path: `${path}?ref=${encodeURIComponent(branch)}`, user, password });
+        if (existing.status === 404) {
+            return;
+        }
+        const current = parseResponse(rawContentSchema, await (await ok(existing, "GET", path)).json(), `Forgejo API GET ${path}`);
+        await okOrMissing(
+            await request({ method: "DELETE", baseUrl, path, user, password, body: { message, branch, sha: current.sha } }),
+            "DELETE",
+            path,
+        );
+    },
+    deleteRepoSecret: async ({ baseUrl, user, password, owner, name, secretName }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/secrets/${encodeURIComponent(secretName)}`;
+        await okOrMissing(await request({ method: "DELETE", baseUrl, path, user, password }), "DELETE", path);
+    },
+    deleteHook: async ({ baseUrl, user, password, owner, name, id }) => {
+        const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/hooks/${id}`;
+        await okOrMissing(await request({ method: "DELETE", baseUrl, path, user, password }), "DELETE", path);
+    },
+    deleteUser: async ({ baseUrl, user, password, username }) => {
+        const path = `/admin/users/${encodeURIComponent(username)}?purge=true`;
+        await okOrMissing(await request({ method: "DELETE", baseUrl, path, user, password }), "DELETE", path);
+    },
+    deleteOrg: async ({ baseUrl, user, password, org }) => {
+        const path = `/orgs/${encodeURIComponent(org)}`;
+        await okOrMissing(await request({ method: "DELETE", baseUrl, path, user, password }), "DELETE", path);
+    },
+    deleteTeam: async ({ baseUrl, user, password, teamId }) => {
+        const path = `/teams/${teamId}`;
+        await okOrMissing(await request({ method: "DELETE", baseUrl, path, user, password }), "DELETE", path);
     },
 };

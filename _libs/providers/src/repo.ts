@@ -75,4 +75,17 @@ export const createRepoProvider = (api: ForgejoApi = forgejoApi): Provider => ({
         }
         return outputsFor(parsed);
     },
+    delete: async (inputs) => {
+        if (typeof inputs["forgejoUrl"] !== "string") {
+            return;
+        }
+        const parsed = parse(inputs);
+        await api.deleteRepo({
+            baseUrl: parsed.forgejoUrl,
+            user: parsed.adminUser,
+            password: parsed.adminPassword,
+            owner: parsed.owner,
+            name: parsed.name,
+        });
+    },
 });

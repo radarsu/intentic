@@ -19,6 +19,9 @@ const api = (overrides: Partial<KomodoApi>): KomodoApi => ({
     getAlerter: NOT_USED,
     createAlerter: NOT_USED,
     updateAlerter: NOT_USED,
+    deleteDeployment: NOT_USED,
+    deleteUser: NOT_USED,
+    deleteAlerter: NOT_USED,
     ...overrides,
 });
 
