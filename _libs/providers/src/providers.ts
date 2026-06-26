@@ -6,6 +6,9 @@ import { createCloudflareProvider } from "./cloudflare.js";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
 import { createDeploymentProvider } from "./deployment.js";
+import type { DiscordApi } from "./discord-api.js";
+import { discordApi } from "./discord-api.js";
+import { createDiscordProvider } from "./discord.js";
 import { createForgejoProvider } from "./forgejo.js";
 import type { ForgejoApi } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";
@@ -43,6 +46,7 @@ export interface ProviderDeps {
     readonly forgejo?: ForgejoApi;
     readonly komodo?: KomodoApi;
     readonly github?: GitHubApi;
+    readonly discord?: DiscordApi;
     // The cf-route DNS-propagation wait; defaults to the real DoH probe. In-memory tests inject a no-op so
     // they never hit the network.
     readonly dnsPropagation?: DnsPropagationWait;
@@ -56,6 +60,7 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
     const forgejo = deps.forgejo ?? forgejoApi;
     const komodo = deps.komodo ?? komodoApi;
     const github = deps.github ?? githubApi;
+    const discord = deps.discord ?? discordApi;
     return {
         host: createHostProvider(ssh),
         cloudflare: createCloudflareProvider(cloudflare),
@@ -81,5 +86,6 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "gh-repo": createGhRepoProvider(github),
         "gh-ci": createGhCiProvider(github),
         "gh-deployment": createGhDeploymentProvider(ssh),
+        discord: createDiscordProvider(discord),
     };
 };

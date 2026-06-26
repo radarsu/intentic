@@ -2,10 +2,10 @@ import type {
     AppTeamGrantInput,
     BackupInput,
     CloudflareInput,
+    DiscordInput,
     EnvironmentInput,
     GitHubInput,
     HostInput,
-    NotifyInput,
     ServiceInput,
     TeamInput,
     UserInput,
@@ -38,6 +38,11 @@ export interface GitHubIntent {
     readonly input: GitHubInput;
 }
 
+export interface DiscordIntent {
+    readonly id: string;
+    readonly input: DiscordInput;
+}
+
 export interface UserIntent {
     readonly id: string;
     readonly input: UserInput;
@@ -52,7 +57,6 @@ export interface AppIntent {
     readonly id: string;
     readonly on: string;
     readonly expose: string;
-    readonly notify?: NotifyInput;
     // The id of a service (i.want.service) this app sends telemetry to. The resolver injects that service's
     // OTLP endpoint into each deployment's env and depends the deployment on it. Absent = no telemetry.
     readonly observe?: string;
@@ -77,6 +81,7 @@ export interface IntentSet {
     readonly hosts: readonly HostIntent[];
     readonly cloudflare?: CloudflareIntent;
     readonly github?: GitHubIntent;
+    readonly discord?: DiscordIntent;
     readonly backup?: BackupIntent;
     readonly users: readonly UserIntent[];
     readonly teams: readonly TeamIntent[];

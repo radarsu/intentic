@@ -8,6 +8,9 @@ import type { ResourceType } from "./resource-types.js";
 export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object.freeze({
     host: ["internalIp", "publicIp"],
     cloudflare: ["zoneId", "accountId"],
+    // The Discord guild (server) + the webhook URL for the #reconcile channel. Per-app webhook URLs are
+    // internal to the discord provider; it creates them and passes them to the notify nodes as refs.
+    discord: ["guildId", "reconcileWebhook"],
     "cf-route": ["url"],
     tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken", "gitToken", "packagesToken"],

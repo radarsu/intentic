@@ -6,7 +6,7 @@ import { resolveApp } from "./app.js";
 import { resolveBackup } from "./backup.js";
 import { emitGitHub } from "./emit-github.js";
 import { resolveIdentities } from "./identity.js";
-import { adminUsername, tunnelId, tunnelName } from "./ids.js";
+import { adminUsername, discordId, tunnelId, tunnelName } from "./ids.js";
 import { IMAGES } from "./images.js";
 import { resolvePlatform } from "./platform.js";
 import type { IngressPair } from "./route.js";
@@ -95,6 +95,22 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         explicitDependsOn: [],
     });
 
+    // The Discord back-communication channel: guild + categories + channels + webhooks. The provider
+    // creates per-app webhooks that the forgejo-notify/komodo-notify nodes reference.
+    const hasDiscord = intent.discord !== undefined;
+    if (intent.discord !== undefined) {
+        nodes.push({
+            id: discordId(),
+            type: "discord",
+            inputs: {
+                botToken: intent.discord.input.botToken,
+                zone,
+                apps: intent.apps.map((app) => app.id),
+            },
+            explicitDependsOn: [],
+        });
+    }
+
     // Per-host ingress buckets (for tunnel aggregation).
     const ingressByHost = new Map<string, IngressPair[]>();
 
@@ -164,7 +180,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         // --- Apps: all go through the shared platform ---
 
         for (const app of intent.apps) {
-            const resolved = resolveApp(app, platform.refs, apiToken, zone, cpId);
+            const resolved = resolveApp(app, platform.refs, apiToken, zone, cpId, hasDiscord);
             nodes.push(...resolved.nodes);
             // Route ingress goes to the host the app runs ON (its tunnel), not the CP host.
             const hostIngress = ingressByHost.get(app.on) ?? [];

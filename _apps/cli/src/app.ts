@@ -181,6 +181,27 @@ const apply = buildCommand<ApplyFlags>({
             await writeAccessFile(join(dir, ACCESS_FILE), access);
             log(formatAccessSummary(access));
         }
+        // Post a reconcile summary to the Discord #reconcile channel if the graph has a discord resource.
+        const reconcileWebhook = result.outcome.outputs["discord"]?.["reconcileWebhook"];
+        if (typeof reconcileWebhook === "string" && reconcileWebhook !== "") {
+            const creates = result.outcome.steps.filter((s) => s.action === "create").length;
+            const updates = result.outcome.steps.filter((s) => s.action === "update").length;
+            const noops = result.outcome.steps.filter((s) => s.action === "noop").length;
+            const summary = [
+                `**intentic apply** — ${result.converged ? "✅ converged" : "⚠️ did not converge"} in ${result.iterations} iteration(s)`,
+                `📊 ${result.outcome.steps.length} resources: ${creates} created, ${updates} updated, ${noops} unchanged`,
+                ...(result.outcome.orphans.length > 0 ? [`🗑️ ${result.outcome.orphans.length} orphan(s) detected`] : []),
+            ].join("\n");
+            try {
+                await fetch(reconcileWebhook, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content: summary }),
+                });
+            } catch {
+                log("discord: failed to post reconcile summary (non-fatal)");
+            }
+        }
     },
 });
 

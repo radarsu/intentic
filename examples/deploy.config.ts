@@ -22,6 +22,13 @@ export const intent = defineIntent((i) => {
         apiToken: env("CLOUDFLARE_API_TOKEN"),
     });
 
+    // What I have: a Discord bot that intentic uses as the back-communication channel. intentic owns the
+    // full server structure (categories, channels, webhooks); the operator supplies only the bot token.
+    // CI/CD notifications + reconcile summaries are posted automatically.
+    i.have.discord("discord", {
+        botToken: env("DISCORD_BOT_TOKEN"),
+    });
+
     // What I want (a shared service): SignOz for observability, deployed onto the host and exposed at its own
     // domain. Apps wire to it via `observe` below; intentic injects its OTLP endpoint into each deployment.
     const obs = i.want.service("obs", {

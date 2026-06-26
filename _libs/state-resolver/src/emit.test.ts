@@ -98,10 +98,11 @@ test("an unsupported option assignment throws", () => {
     expect(() => emit(intent, { byNeed }, "example.com")).toThrow('unsupported option "gitlab"');
 });
 
-test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to the app's stack", () => {
+test("discord declared derives forgejo-notify (CI) + komodo-notify (CD) for every app, wired to the discord node's webhooks", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
+        discord: { id: "discord", input: { botToken: env("DISCORD_BOT_TOKEN") } },
         users: [],
         teams: [],
         services: [],
@@ -110,7 +111,6 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
                 id: "app",
                 on: "host",
                 expose: "cf",
-                notify: { discord: env("DISCORD_WEBHOOK_URL") },
                 environments: { prod: { domain: "app.example.com", branch: "main" } },
             },
         ],
@@ -121,16 +121,16 @@ test("notify derives a Forgejo webhook (CI) and a Komodo alerter (CD), wired to 
     const komodoNotify = nodes.find((node) => node.id === "app-notify");
 
     expect(forgejoNotify?.type).toBe("forgejo-notify");
-    expect(forgejoNotify?.explicitDependsOn).toEqual(["host-git", "cf-git-example-com", "app-repo"]);
+    expect(forgejoNotify?.explicitDependsOn).toContain("discord");
     expect(komodoNotify?.type).toBe("komodo-notify");
-    expect(komodoNotify?.explicitDependsOn).toEqual(["host-deploy", "cf-deploy-example-com", "app.prod"]);
+    expect(komodoNotify?.explicitDependsOn).toContain("discord");
 
-    // The webhook secret passes through unresolved — the engine resolves it per apply.
-    expect(forgejoNotify?.inputs["webhook"]).toEqual(env("DISCORD_WEBHOOK_URL"));
-    expect(komodoNotify?.inputs["webhook"]).toEqual(env("DISCORD_WEBHOOK_URL"));
+    // The webhook comes from the discord provider's per-app output, not a raw env secret.
+    expect(forgejoNotify?.inputs["webhook"]).toEqual(makeRef("discord", "appWebhook:app"));
+    expect(komodoNotify?.inputs["webhook"]).toEqual(makeRef("discord", "appWebhook:app"));
 });
 
-test("an app without notify derives no notification sinks", () => {
+test("no discord declared derives no notification sinks", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
@@ -143,12 +143,14 @@ test("an app without notify derives no notification sinks", () => {
     const types = emit(intent, assign(intent), "example.com").map((node) => node.type);
     expect(types.filter((type) => type === "forgejo-notify")).toHaveLength(0);
     expect(types.filter((type) => type === "komodo-notify")).toHaveLength(0);
+    expect(types.filter((type) => type === "discord")).toHaveLength(0);
 });
 
-test("notification sinks are derived per app, while the platform stays shared per host", () => {
+test("discord declared derives notification sinks per app, while the platform stays shared per host", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
+        discord: { id: "discord", input: { botToken: env("DISCORD_BOT_TOKEN") } },
         users: [],
         teams: [],
         services: [],
@@ -157,14 +159,12 @@ test("notification sinks are derived per app, while the platform stays shared pe
                 id: "one",
                 on: "host",
                 expose: "cf",
-                notify: { discord: env("WEBHOOK") },
                 environments: { prod: { domain: "one.example.com", branch: "main" } },
             },
             {
                 id: "two",
                 on: "host",
                 expose: "cf",
-                notify: { discord: env("WEBHOOK") },
                 environments: { prod: { domain: "two.example.com", branch: "main" } },
             },
         ],
@@ -175,6 +175,11 @@ test("notification sinks are derived per app, while the platform stays shared pe
     expect(types.filter((type) => type === "komodo-notify")).toHaveLength(2);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
+    expect(types.filter((type) => type === "discord")).toHaveLength(1);
+
+    // The discord node carries the app ids so it knows which channels/webhooks to create.
+    const discordNode = emit(intent, assign(intent), "example.com").find((node) => node.type === "discord");
+    expect(discordNode?.inputs["apps"]).toEqual(["one", "two"]);
 });
 
 test("a services-only intent emits the service + its route + tunnel, but no app platform", () => {

@@ -3,18 +3,30 @@ export type {
     BackupInput,
     BackupRetention,
     CloudflareInput,
+    DiscordInput,
     EnvironmentInput,
     ForgejoRole,
     GitHubInput,
     HostInput,
     KomodoRole,
-    NotifyInput,
     ServiceInput,
     ServiceKind,
     TeamInput,
     UpdatePolicy,
     UserInput,
 } from "./inputs.js";
-export type { AppIntent, BackupIntent, CloudflareIntent, GitHubIntent, HostIntent, IntentSet, ServiceIntent, TeamIntent, UserIntent } from "./intent.js";
+export type {
+    AppIntent,
+    BackupIntent,
+    CloudflareIntent,
+    DiscordIntent,
+    GitHubIntent,
+    HostIntent,
+    IntentSet,
+    ServiceIntent,
+    TeamIntent,
+    UserIntent,
+} from "./intent.js";
 export type { Capability, Need, Plane } from "./needs.js";
 export { controlPlaneHostId, needKey, resolveNeeds } from "./needs.js";
+

@@ -233,7 +233,6 @@ const fullEnv = {
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
-    DISCORD_WEBHOOK: "https://discord.test/wh",
 };
 
 const buildGraph = () =>
@@ -243,7 +242,6 @@ const buildGraph = () =>
         i.want.app("my-app", {
             on: host,
             expose: cf,
-            notify: { discord: env("DISCORD_WEBHOOK") },
             environments: { production: { domain: "app.example.com", branch: "main" } },
         });
     }, "example.com");
@@ -260,12 +258,12 @@ const realProviders = () =>
 
 const base = { env: fullEnv, probe: async () => true, log: () => {} };
 
-test("the full provider suite reconciles a notify-enabled app end-to-end, then is idempotent", async () => {
+test("the full provider suite reconciles an app end-to-end, then is idempotent", async () => {
     const graph = buildGraph();
     const providers = realProviders();
 
     const first = await apply(graph, { ...base, providers });
-    // Owned inventory (host, cf) reads as existing; every derived platform/app/notify node is created.
+    // Owned inventory (host, cf) reads as existing; every derived platform/app node is created.
     const byId = new Map(first.steps.map((step) => [step.id, step.action]));
     expect(byId.get("host")).toBe("noop");
     expect(byId.get("cf")).toBe("noop");
@@ -274,7 +272,7 @@ test("the full provider suite reconciles a notify-enabled app end-to-end, then i
             expect(action, `expected ${id} to be created`).toBe("create");
         }
     }
-    // The whole derived suite is present: git/CI, deploy, repo, ci, deployment, routes, notify.
+    // The whole derived suite is present: git/CI, deploy, repo, ci, deployment, routes.
     expect([...byId.keys()].sort()).toEqual(
         [
             "host",
@@ -288,8 +286,6 @@ test("the full provider suite reconciles a notify-enabled app end-to-end, then i
             "my-app.production-ci",
             "my-app.production",
             "cf-app-example-com",
-            "my-app-repo-notify",
-            "my-app-notify",
             "host-tunnel",
         ].sort(),
     );

@@ -5,6 +5,8 @@ import type {
     BackupIntent,
     CloudflareInput,
     CloudflareIntent,
+    DiscordInput,
+    DiscordIntent,
     EnvironmentInput,
     GitHubInput,
     GitHubIntent,
@@ -22,6 +24,7 @@ import type {
     Backup,
     Cloudflare,
     Deployment,
+    Discord,
     GitHub,
     Host,
     Repo,
@@ -56,6 +59,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         hosts: HostIntent[];
         cloudflare?: CloudflareIntent;
         github?: GitHubIntent;
+        discord?: DiscordIntent;
         backup?: BackupIntent;
         users: UserIntent[];
         teams: TeamIntent[];
@@ -96,13 +100,21 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze({ ...makeRef(id), owner: makeRef<string>(id, "owner") }) as GitHub;
     };
 
+    const discord = (id: string, input: DiscordInput): Discord => {
+        if (intent.discord !== undefined) {
+            throw new Error("a Discord account is already declared; intentic supports a single Discord account");
+        }
+        claim(id);
+        intent.discord = { id, input };
+        return Object.freeze(makeRef(id)) as Discord;
+    };
+
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
         claim(id);
         apps.push({
             id,
             on: input.on.resourceId,
             expose: input.expose.resourceId,
-            ...(input.notify !== undefined ? { notify: input.notify } : {}),
             ...(input.observe !== undefined ? { observe: input.observe.resourceId } : {}),
             ...(input.teams !== undefined ? { teams: input.teams.map((grant) => ({ team: grant.team.resourceId, role: grant.role })) } : {}),
             environments: input.environments,
@@ -146,6 +158,6 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze(makeRef(id)) as Team;
     };
 
-    const stack: Stack = { have: { host, cloudflare, github, backup }, want: { app, service, user, team } };
+    const stack: Stack = { have: { host, cloudflare, github, backup, discord }, want: { app, service, user, team } };
     return { stack, intent };
 };

@@ -40,10 +40,11 @@ export interface EnvironmentInput {
     readyWhen?: Readiness;
 }
 
-// Author-supplied CI/CD notification sinks. A write-only webhook secret; the resolver derives the
-// Forgejo repo webhook (CI) and Komodo alerter (CD) that target it. Absent = no notifications.
-export interface NotifyInput {
-    discord: SecretRef;
+// The Discord bot token intentic uses to own the back-communication channel. intentic creates and
+// manages the guild, categories, channels, and webhooks; the user supplies only the bot token.
+// Absent = no Discord integration (no CI/CD notifications, no reconcile summaries).
+export interface DiscordInput {
+    botToken: SecretRef;
 }
 
 // How long restic keeps snapshots before `forget --prune` drops them. Omitted fields fall back to the

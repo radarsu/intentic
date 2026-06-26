@@ -2,12 +2,12 @@ import type { Ref } from "@intentic/graph";
 import type {
     BackupInput,
     CloudflareInput,
+    DiscordInput,
     EnvironmentInput,
     ForgejoRole,
     GitHubInput,
     HostInput,
     KomodoRole,
-    NotifyInput,
     ServiceInput,
     UserInput,
 } from "@intentic/need-resolver";
@@ -62,6 +62,10 @@ export type Team = Ref<"forgejo-team">;
 // it exists only to record that backups are wanted and where they go.
 export type Backup = Ref<"backup">;
 
+// The Discord back-communication channel (i.have.discord). A bare ref — the provider owns the guild/channels
+// structure; the resolver references its webhook outputs to wire notifications.
+export type Discord = Ref<"discord">;
+
 // A team's members are User handles; its Komodo role applies to the deployments of the apps it manages.
 export interface WantTeamInput {
     members: readonly User[];
@@ -88,7 +92,6 @@ export interface Service extends Ref<"signoz"> {
 export interface WantAppInput {
     on: Host;
     expose: Cloudflare;
-    notify?: NotifyInput;
     // A service to send this app's telemetry to; the resolver injects its OTLP endpoint into each deployment.
     observe?: Service;
     // The teams that manage this app, each at a Forgejo role. The first grant's team owns the repo (its org is
@@ -107,6 +110,7 @@ export interface Have {
     cloudflare(id: string, input: CloudflareInput): Cloudflare;
     github(id: string, input: GitHubInput): GitHub;
     backup(id: string, input: BackupInput): Backup;
+    discord(id: string, input: DiscordInput): Discord;
 }
 
 export interface Want {
