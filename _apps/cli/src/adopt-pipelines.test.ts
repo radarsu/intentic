@@ -1,6 +1,14 @@
 import { fakeForgejoApi } from "@intentic/providers";
 import { expect, test } from "vitest";
-import { applyWorkflowYaml, GIT_TOKEN_SECRET, GIT_USER_SECRET, intentWorkflowYaml, type PipelineInputs, setRepoSecrets } from "./adopt-pipelines.js";
+import {
+    applyWorkflowYaml,
+    forgejoSecretName,
+    GIT_TOKEN_SECRET,
+    GIT_USER_SECRET,
+    intentWorkflowYaml,
+    type PipelineInputs,
+    setRepoSecrets,
+} from "./adopt-pipelines.js";
 
 const inputs: PipelineInputs = {
     cliVersion: "1.2.3",
@@ -27,9 +35,11 @@ test("the intent workflow resolves and pushes to the desired-state repo with the
 
 test("the apply workflow injects every secret, diffs against the applied tag, and re-stamps it on success", () => {
     const yaml = applyWorkflowYaml(inputs);
+    // The env var name stays the real key; the lookup uses the (possibly reserved-prefix-sanitized) store name.
     for (const key of inputs.applySecretKeys) {
-        expect(yaml).toContain(`${key}: \${{ secrets.${key} }}`);
+        expect(yaml).toContain(`${key}: \${{ secrets.${forgejoSecretName(key)} }}`);
     }
+    expect(yaml).toContain(`FORGEJO_ADMIN_PASSWORD: \${{ secrets.INTENTIC_FORGEJO_ADMIN_PASSWORD }}`);
     expect(yaml).toContain("pnpm dlx @intentic/cli@1.2.3 apply --artifact desired-state.json $PREV");
     // The prune baseline is the last successfully-applied commit, read from the intentic-applied tag.
     expect(yaml).toContain("git show intentic-applied:desired-state.json > /tmp/previous.json");
@@ -55,8 +65,18 @@ test("setRepoSecrets PUTs each name/value onto the repo via the Forgejo API", as
         secrets: { HOST_SSH_KEY: "key", FORGEJO_ADMIN_PASSWORD: "pw" },
     });
 
+    // The reserved-prefix key is stored under its sanitized name; the value is unchanged.
     expect(calls).toEqual([
         { name: "desired-state", secretName: "HOST_SSH_KEY", data: "key" },
-        { name: "desired-state", secretName: "FORGEJO_ADMIN_PASSWORD", data: "pw" },
+        { name: "desired-state", secretName: "INTENTIC_FORGEJO_ADMIN_PASSWORD", data: "pw" },
     ]);
+});
+
+test("forgejoSecretName prefixes reserved-prefix keys and passes the rest through", () => {
+    expect(forgejoSecretName("FORGEJO_ADMIN_PASSWORD")).toBe("INTENTIC_FORGEJO_ADMIN_PASSWORD");
+    expect(forgejoSecretName("GITHUB_TOKEN")).toBe("INTENTIC_GITHUB_TOKEN");
+    expect(forgejoSecretName("GITEA_FOO")).toBe("INTENTIC_GITEA_FOO");
+    expect(forgejoSecretName("KOMODO_ADMIN_PASSWORD")).toBe("KOMODO_ADMIN_PASSWORD");
+    expect(forgejoSecretName("CLOUDFLARE_API_TOKEN")).toBe("CLOUDFLARE_API_TOKEN");
+    expect(forgejoSecretName("INTENTIC_GIT_TOKEN")).toBe("INTENTIC_GIT_TOKEN");
 });
