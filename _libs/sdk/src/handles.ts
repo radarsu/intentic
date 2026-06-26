@@ -1,5 +1,6 @@
 import type { Ref } from "@intentic/graph";
 import type {
+    BackupInput,
     CloudflareInput,
     EnvironmentInput,
     ForgejoRole,
@@ -52,6 +53,10 @@ export interface App<Names extends string = string> extends Ref<"app"> {
 export type User = Ref<"forgejo-user">;
 export type Team = Ref<"forgejo-team">;
 
+// The backup destination (i.have.backup). A bare ref like User/Team — nothing references an output off it;
+// it exists only to record that backups are wanted and where they go.
+export type Backup = Ref<"backup">;
+
 // A team's members are User handles; its Komodo role applies to the deployments of the apps it manages.
 export interface WantTeamInput {
     members: readonly User[];
@@ -95,6 +100,7 @@ export interface WantServiceInput extends ServiceInput {
 export interface Have {
     host(id: string, input: HostInput): Host;
     cloudflare(id: string, input: CloudflareInput): Cloudflare;
+    backup(id: string, input: BackupInput): Backup;
 }
 
 export interface Want {

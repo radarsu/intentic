@@ -1,6 +1,8 @@
 import { makeRef } from "@intentic/graph";
 import type {
     AppIntent,
+    BackupInput,
+    BackupIntent,
     CloudflareInput,
     CloudflareIntent,
     EnvironmentInput,
@@ -15,6 +17,7 @@ import type {
 import { deploymentId, repoId } from "@intentic/state-resolver";
 import type {
     App,
+    Backup,
     Cloudflare,
     Deployment,
     Host,
@@ -48,6 +51,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const intent: {
         host?: HostIntent;
         cloudflare?: CloudflareIntent;
+        backup?: BackupIntent;
         users: UserIntent[];
         teams: TeamIntent[];
         apps: AppIntent[];
@@ -70,6 +74,15 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         claim(id);
         intent.cloudflare = { id, input };
         return Object.freeze({ ...makeRef(id), zoneId: makeRef<string>(id, "zoneId"), accountId: makeRef<string>(id, "accountId") }) as Cloudflare;
+    };
+
+    const backup = (id: string, input: BackupInput): Backup => {
+        if (intent.backup !== undefined) {
+            throw new Error("a backup is already declared; intentic supports a single backup destination");
+        }
+        claim(id);
+        intent.backup = { id, input };
+        return Object.freeze(makeRef(id)) as Backup;
     };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
@@ -122,6 +135,6 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze(makeRef(id)) as Team;
     };
 
-    const stack: Stack = { have: { host, cloudflare }, want: { app, service, user, team } };
+    const stack: Stack = { have: { host, cloudflare, backup }, want: { app, service, user, team } };
     return { stack, intent };
 };

@@ -21,7 +21,8 @@ export type ResourceType =
     | "deployment"
     | "forgejo-notify"
     | "komodo-notify"
-    | "signoz";
+    | "signoz"
+    | "backup";
 
 // A RawNode whose kind is constrained to this stack's vocabulary. Resolvers build ResolvedNodes so an
 // invalid kind is a compile error here; they flow out as plain RawNodes (ResourceType ⊆ string).

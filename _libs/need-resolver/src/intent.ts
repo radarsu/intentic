@@ -1,4 +1,14 @@
-import type { AppTeamGrantInput, CloudflareInput, EnvironmentInput, HostInput, NotifyInput, ServiceInput, TeamInput, UserInput } from "./inputs.js";
+import type {
+    AppTeamGrantInput,
+    BackupInput,
+    CloudflareInput,
+    EnvironmentInput,
+    HostInput,
+    NotifyInput,
+    ServiceInput,
+    TeamInput,
+    UserInput,
+} from "./inputs.js";
 
 // The intent the builder records and the resolver consumes — "what you have" + "what you want" as pure
 // data. App `on`/`expose` are resource-id strings (not handles), so the intent stays serializable and
@@ -12,6 +22,13 @@ export interface HostIntent {
 export interface CloudflareIntent {
     readonly id: string;
     readonly input: CloudflareInput;
+}
+
+// The backup destination the operator declared (i.have.backup). Like host/cloudflare, a singleton — one
+// restic repository protects the host's control-plane state.
+export interface BackupIntent {
+    readonly id: string;
+    readonly input: BackupInput;
 }
 
 export interface UserIntent {
@@ -51,6 +68,7 @@ export interface ServiceIntent extends ServiceInput {
 export interface IntentSet {
     readonly host?: HostIntent;
     readonly cloudflare?: CloudflareIntent;
+    readonly backup?: BackupIntent;
     readonly users: readonly UserIntent[];
     readonly teams: readonly TeamIntent[];
     readonly apps: readonly AppIntent[];

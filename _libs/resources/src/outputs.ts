@@ -26,4 +26,6 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     "forgejo-notify": [],
     "komodo-notify": [],
     signoz: ["url", "internalUrl", "otlpEndpoint"],
+    // A scheduled backup job — a pure sink (nothing refs an output off it), like ci/forgejo-runner.
+    backup: [],
 });

@@ -1,4 +1,5 @@
 export { resolveApp } from "./app.js";
+export { resolveBackup } from "./backup.js";
 export type { Catalog, Option } from "./catalog.js";
 export { defaultCatalog } from "./catalog.js";
 export type { Assignment } from "./emit.js";

@@ -32,6 +32,28 @@ export interface NotifyInput {
     discord: SecretRef;
 }
 
+// How long restic keeps snapshots before `forget --prune` drops them. Omitted fields fall back to the
+// provider's defaults (7 daily / 4 weekly / 6 monthly).
+export interface BackupRetention {
+    daily?: number;
+    weekly?: number;
+    monthly?: number;
+}
+
+// The backup destination the operator provides: a restic repository plus the secrets to reach + decrypt it.
+// `repo` is a restic repo URL (s3:…, b2:…, sftp:…, rest:…). `password` is the restic encryption password.
+// `credentials` are the backend's access keys (e.g. AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, B2_ACCOUNT_ID/…),
+// keyed by the env var restic expects. `schedule` is a cron expression (default daily at 03:00). `signoz`
+// opts the (large, reconstructable) observability volumes into the backup set; off by default.
+export interface BackupInput {
+    repo: string;
+    password: SecretRef;
+    credentials?: Record<string, SecretRef>;
+    schedule?: string;
+    retention?: BackupRetention;
+    signoz?: boolean;
+}
+
 // An off-the-shelf shared service the host runs, named by `kind` from the service catalog. Unlike apps
 // (built from source through the platform), a service is deployed directly onto the host from a pinned
 // image and exposed at its own `domain`. Today's catalog: SignOz (observability).

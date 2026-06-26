@@ -1,4 +1,5 @@
 import type { Providers } from "@intentic/engine";
+import { createBackupProvider } from "./backup.js";
 import { createCfRouteProvider, type DnsPropagationWait } from "./cf-route.js";
 import { createCiProvider } from "./ci.js";
 import { createCloudflareProvider } from "./cloudflare.js";
@@ -63,5 +64,6 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "forgejo-notify": createForgejoNotifyProvider(forgejo),
         "komodo-notify": createKomodoNotifyProvider(komodo),
         signoz: createSignozProvider(ssh),
+        backup: createBackupProvider(ssh),
     };
 };

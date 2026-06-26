@@ -41,4 +41,8 @@ export const IMAGES = Object.freeze({
     signozOtelCollector: "signoz/signoz-otel-collector:0.111.5@sha256:d5210dc6ad4f5d5e2c5126c059de0b58bb19bc2019753d0d022aef0bdb879e0f",
     // renovate: datasource=docker depName=signoz/signoz-schema-migrator
     signozSchemaMigrator: "signoz/signoz-schema-migrator:0.111.5@sha256:7fce30f15229f096b72360ee5adc6f6a491ced60ae57d842bc03163445e1c10c",
+    // The scheduled-backup container: alpine-based, carries restic + busybox crond. It has no docker CLI, so
+    // the backup provider bind-mounts the host's docker binary (the forgejo-runner pattern) for the
+    // app-consistent `docker exec` dumps. renovate: datasource=docker depName=restic/restic
+    backup: "restic/restic:0.19.0@sha256:7f44e0057b82348597568ea209360762d0b38f8e1dbc8ad859661ac1055e45f2",
 } as const);

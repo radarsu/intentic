@@ -6,6 +6,8 @@ export const forgejoId = (hostId: string): string => `${hostId}-git`;
 export const runnerId = (hostId: string): string => `${forgejoId(hostId)}-runner`;
 export const komodoId = (hostId: string): string => `${hostId}-deploy`;
 export const tunnelId = (hostId: string): string => `${hostId}-tunnel`;
+// The scheduled restic backup job for a host, host-scoped (one backup destination per host).
+export const backupId = (hostId: string): string => `${hostId}-backup`;
 // The human-facing Cloudflare tunnel name (must be stable + unique within the account).
 export const tunnelName = (hostId: string): string => `intentic-${hostId}`;
 export const repoId = (appId: string): string => `${appId}-repo`;

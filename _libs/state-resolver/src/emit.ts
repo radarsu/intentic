@@ -2,6 +2,7 @@ import { makeRef } from "@intentic/graph";
 import type { IntentSet } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
+import { resolveBackup } from "./backup.js";
 import { resolveIdentities } from "./identity.js";
 import { tunnelId, tunnelName } from "./ids.js";
 import { IMAGES } from "./images.js";
@@ -96,6 +97,13 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         const resolved = resolveService(service, host.input, zone, apiToken);
         nodes.push(...resolved.nodes);
         ingress.push(...resolved.ingress);
+    }
+
+    // The scheduled backup, when declared: a host container that dumps Forgejo + Komodo (and SignOz when both
+    // opted in and declared) to the operator's restic repo. Emitted only alongside the control plane it dumps.
+    if (intent.backup !== undefined && intent.apps.length > 0) {
+        const signozService = intent.services.find((service) => service.kind === "signoz");
+        nodes.push(resolveBackup(host.id, host.input, intent.backup.input, signozService?.id));
     }
 
     // One Cloudflare Tunnel for the host: cloudflared runs on the host (hence the SSH creds), connects

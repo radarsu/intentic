@@ -1,3 +1,5 @@
+export { createBackupProvider } from "./backup.js";
+export { type RestoreArgs, type RestoreScope, restoreBackup } from "./backup-restore.js";
 export { createCfRouteProvider } from "./cf-route.js";
 export { createCiProvider } from "./ci.js";
 export { createCloudflareProvider } from "./cloudflare.js";
