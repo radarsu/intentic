@@ -2,7 +2,7 @@ import { env } from "@intentic/graph";
 import type { IntentSet } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
 import type { Catalog } from "./catalog.js";
-import { defaultCatalog } from "./catalog.js";
+import { forgejoCatalog } from "./catalog.js";
 import { resolveState } from "./state.js";
 
 const intent: IntentSet = {
@@ -27,7 +27,7 @@ test("no apps resolve to an empty desired state", () => {
 });
 
 test("a need with no option throws", () => {
-    const empty: Catalog = { optionsFor: (capability) => (capability === "infra-control" ? [] : defaultCatalog.optionsFor(capability)) };
+    const empty: Catalog = { optionsFor: (capability) => (capability === "infra-control" ? [] : forgejoCatalog.optionsFor(capability)) };
     expect(() => resolveState(intent, "example.com", empty)).toThrow('no option satisfies "infra-control"');
 });
 
@@ -35,8 +35,8 @@ test("an ambiguous capability throws — the state resolver makes no choice", ()
     const ambiguous: Catalog = {
         optionsFor: (capability) =>
             capability === "infra-control"
-                ? [...defaultCatalog.optionsFor(capability), { id: "nomad", provides: ["infra-control"] }]
-                : defaultCatalog.optionsFor(capability),
+                ? [...forgejoCatalog.optionsFor(capability), { id: "nomad", provides: ["infra-control"] }]
+                : forgejoCatalog.optionsFor(capability),
     };
     expect(() => resolveState(intent, "example.com", ambiguous)).toThrow(/ambiguous: "infra-control"/);
 });

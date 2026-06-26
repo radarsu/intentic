@@ -3,7 +3,7 @@ import type { CloudflareIntent, HostIntent, IntentSet } from "@intentic/need-res
 import { needKey, resolveNeeds } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
 
-import { defaultCatalog } from "./catalog.js";
+import { forgejoCatalog } from "./catalog.js";
 import type { Assignment } from "./emit.js";
 import { emit } from "./emit.js";
 
@@ -16,7 +16,7 @@ const cloudflare: CloudflareIntent = { id: "cf", input: { apiToken: env("CLOUDFL
 const assign = (intent: IntentSet): Assignment => {
     const byNeed = new Map<string, string>();
     for (const need of resolveNeeds(intent)) {
-        const option = defaultCatalog.optionsFor(need.capability)[0];
+        const option = forgejoCatalog.optionsFor(need.capability)[0];
         if (option === undefined) {
             throw new Error(`no option for ${need.capability}`);
         }

@@ -1,4 +1,4 @@
-import type { Capability } from "@intentic/need-resolver";
+import type { Capability, IntentSet } from "@intentic/need-resolver";
 
 // A concrete way to satisfy one or more capabilities. One option can fill several needs at once — Forgejo
 // (the "Gitea" option) provides both source control and a Docker registry — which couples those needs to
@@ -12,16 +12,30 @@ export interface Catalog {
     optionsFor(capability: Capability): readonly Option[];
 }
 
-// Today's fixed stack as the default catalog: exactly one option per capability. The state resolver makes
-// no choice, so the catalog stays single-option-per-capability; supporting an alternative (e.g. Gitlab for
-// source-control + docker-registry) would mean the intent itself selecting between them.
-const options: readonly Option[] = [
+// The Forgejo+Komodo stack: self-hosted git, CI, registry, and deploy orchestration. Default when no
+// i.have.github is declared.
+const forgejoOptions: readonly Option[] = [
     { id: "forgejo", provides: ["source-control", "docker-registry"] },
     { id: "komodo", provides: ["infra-control"] },
     { id: "ssh-linux", provides: ["deployment-target"] },
     { id: "cloudflare-tunnel", provides: ["domain"] },
 ];
 
-export const defaultCatalog: Catalog = Object.freeze({
-    optionsFor: (capability: Capability): readonly Option[] => options.filter((option) => option.provides.includes(capability)),
-});
+// The GitHub stack: hosted git + CI + registry (GHCR), with direct SSH deployment (no Komodo). Selected
+// when i.have.github is declared.
+const githubOptions: readonly Option[] = [
+    { id: "github", provides: ["source-control", "docker-registry"] },
+    { id: "github-actions", provides: ["infra-control"] },
+    { id: "ssh-linux", provides: ["deployment-target"] },
+    { id: "cloudflare-tunnel", provides: ["domain"] },
+];
+
+const makeCatalog = (options: readonly Option[]): Catalog =>
+    Object.freeze({ optionsFor: (capability: Capability): readonly Option[] => options.filter((option) => option.provides.includes(capability)) });
+
+export const forgejoCatalog: Catalog = makeCatalog(forgejoOptions);
+export const githubCatalog: Catalog = makeCatalog(githubOptions);
+
+// Select the catalog based on the intent: if i.have.github is declared, all apps use the GitHub stack;
+// otherwise they use the self-hosted Forgejo+Komodo stack.
+export const catalogFor = (intent: IntentSet): Catalog => (intent.github !== undefined ? githubCatalog : forgejoCatalog);

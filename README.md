@@ -1,6 +1,6 @@
 # intentic
 
-Intentic is infrastructure as intent for self-hosters. You declare what you want — an app, a domain, the things it needs — plus the handful of assets only you can provide (your server, your DNS account). Intentic derives everything in between: it picks and wires the providers (source control, a deployer, a container runtime), resolves your intent into a desired-state graph, and runs a reconcile loop that drives your real infrastructure toward that desired state, fixing drift until reality matches.
+Intentic is opinionated infrastructure as intent for self-hosters. You declare what you want — an app, a domain, the things it needs — plus the handful of assets only you can provide (your server, your DNS account). Intentic derives everything in between: it picks and wires the providers (source control, a deployer, a container runtime), resolves your intent into a desired-state graph, and runs a reconcile loop that drives your real infrastructure toward that desired state, fixing drift until reality matches.
 
 Choose a declarative, versioned source of truth instead of clicking through dashboards. With intentic you never wire the integrations yourself — you declare clean interfaces and Intentic does the gluing, derived from code intent, reviewed through git, no jumping between apps.
 

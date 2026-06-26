@@ -45,3 +45,8 @@ export const adminUsername = "intentic";
 // ALL hosts (control-plane and workers alike) through the Cloudflare tunnel. CI pushes over HTTPS, all
 // deploy orchestrator instances pull from the same URL. The port-less authority uses the default HTTPS port (443).
 export const registryAuthority = (zone: string): string => gitDomain(zone);
+
+// GitHub-path IDs. gh-repo reuses repoId (same shape, different provider). gh-ci parallels ciId. The
+// deployment id is shared (deploymentId) so the tunnel ingress port derivation matches; the resource type
+// distinguishes the provider (gh-deployment vs deployment).
+export const ghCiId = (appId: string, environment: string): string => `${deploymentId(appId, environment)}-gh-ci`;

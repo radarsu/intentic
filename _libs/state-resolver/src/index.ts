@@ -1,9 +1,11 @@
 export { resolveApp } from "./app.js";
+export { resolveAppGitHub } from "./app-github.js";
 export { resolveBackup } from "./backup.js";
 export type { Catalog, Option } from "./catalog.js";
-export { defaultCatalog } from "./catalog.js";
+export { catalogFor, forgejoCatalog, githubCatalog } from "./catalog.js";
 export type { Assignment } from "./emit.js";
 export { emit } from "./emit.js";
+export { emitGitHub } from "./emit-github.js";
 export { resolveIdentities } from "./identity.js";
 export {
     adminUsername,
@@ -12,6 +14,7 @@ export {
     forgejoOrgId,
     forgejoTeamId,
     forgejoUserId,
+    ghCiId,
     komodoUserId,
     orgName,
     repoId,

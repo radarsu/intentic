@@ -12,6 +12,12 @@ export type { ForgejoApi, ForgejoHook, ForgejoRepo } from "./forgejo-api.js";
 export { forgejoApi } from "./forgejo-api.js";
 export { createForgejoNotifyProvider } from "./forgejo-notify.js";
 export { createForgejoRunnerProvider } from "./forgejo-runner.js";
+export { createGhCiProvider } from "./gh-ci.js";
+export { createGhDeploymentProvider } from "./gh-deployment.js";
+export { createGhRepoProvider } from "./gh-repo.js";
+export { createGitHubProvider } from "./github.js";
+export type { GitHubApi } from "./github-api.js";
+export { githubApi } from "./github-api.js";
 export { createHostProvider } from "./host.js";
 export { parseInputs } from "./inputs.js";
 export { createKomodoProvider } from "./komodo.js";
@@ -25,3 +31,4 @@ export type { SshExecutor, SshResult, SshSession, SshTarget } from "./ssh.js";
 export { sshExecutor } from "./ssh.js";
 export { createSshProbe, hostTarget } from "./ssh-probe.js";
 export { createTunnelProvider } from "./tunnel.js";
+

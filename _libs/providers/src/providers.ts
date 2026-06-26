@@ -14,6 +14,12 @@ import { createForgejoOrgProvider } from "./forgejo-org.js";
 import { createForgejoRunnerProvider } from "./forgejo-runner.js";
 import { createForgejoTeamProvider } from "./forgejo-team.js";
 import { createForgejoUserProvider } from "./forgejo-user.js";
+import { createGhCiProvider } from "./gh-ci.js";
+import { createGhDeploymentProvider } from "./gh-deployment.js";
+import { createGhRepoProvider } from "./gh-repo.js";
+import { createGitHubProvider } from "./github.js";
+import type { GitHubApi } from "./github-api.js";
+import { githubApi } from "./github-api.js";
 import { createHostProvider } from "./host.js";
 import { createKomodoProvider } from "./komodo.js";
 import type { KomodoApi } from "./komodo-api.js";
@@ -36,6 +42,7 @@ export interface ProviderDeps {
     readonly cloudflare?: CloudflareApi;
     readonly forgejo?: ForgejoApi;
     readonly komodo?: KomodoApi;
+    readonly github?: GitHubApi;
     // The cf-route DNS-propagation wait; defaults to the real DoH probe. In-memory tests inject a no-op so
     // they never hit the network.
     readonly dnsPropagation?: DnsPropagationWait;
@@ -48,6 +55,7 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
     const cloudflare = deps.cloudflare ?? cloudflareApi;
     const forgejo = deps.forgejo ?? forgejoApi;
     const komodo = deps.komodo ?? komodoApi;
+    const github = deps.github ?? githubApi;
     return {
         host: createHostProvider(ssh),
         cloudflare: createCloudflareProvider(cloudflare),
@@ -69,5 +77,9 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "komodo-notify": createKomodoNotifyProvider(komodo),
         signoz: createSignozProvider(ssh),
         backup: createBackupProvider(ssh),
+        github: createGitHubProvider(github),
+        "gh-repo": createGhRepoProvider(github),
+        "gh-ci": createGhCiProvider(github),
+        "gh-deployment": createGhDeploymentProvider(ssh),
     };
 };

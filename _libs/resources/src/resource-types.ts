@@ -6,6 +6,7 @@ import type { RawNode } from "@intentic/graph";
 export type ResourceType =
     | "host"
     | "cloudflare"
+    | "github"
     | "cf-route"
     | "tunnel"
     | "forgejo"
@@ -24,7 +25,10 @@ export type ResourceType =
     | "forgejo-notify"
     | "komodo-notify"
     | "signoz"
-    | "backup";
+    | "backup"
+    | "gh-repo"
+    | "gh-ci"
+    | "gh-deployment";
 
 // A RawNode whose kind is constrained to this stack's vocabulary. Resolvers build ResolvedNodes so an
 // invalid kind is a compile error here; they flow out as plain RawNodes (ResourceType ⊆ string).

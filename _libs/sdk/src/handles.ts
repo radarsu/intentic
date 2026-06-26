@@ -4,6 +4,7 @@ import type {
     CloudflareInput,
     EnvironmentInput,
     ForgejoRole,
+    GitHubInput,
     HostInput,
     KomodoRole,
     NotifyInput,
@@ -27,6 +28,10 @@ export interface Host extends Ref<"host"> {
 export interface Cloudflare extends Ref<"cloudflare"> {
     readonly zoneId: Ref<string>;
     readonly accountId: Ref<string>;
+}
+
+export interface GitHub extends Ref<"github"> {
+    readonly owner: Ref<string>;
 }
 
 // --- The app, its source repo, and its environments ---
@@ -100,6 +105,7 @@ export interface WantServiceInput extends ServiceInput {
 export interface Have {
     host(id: string, input: HostInput): Host;
     cloudflare(id: string, input: CloudflareInput): Cloudflare;
+    github(id: string, input: GitHubInput): GitHub;
     backup(id: string, input: BackupInput): Backup;
 }
 

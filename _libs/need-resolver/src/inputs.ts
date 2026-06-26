@@ -26,6 +26,13 @@ export interface CloudflareInput {
     apiToken: SecretRef;
 }
 
+// A GitHub account the apps are sourced through: repos, CI (GitHub Actions), and container registry (GHCR).
+// The PAT authenticates every API call; `owner` defaults to the token's authenticated user when omitted.
+export interface GitHubInput {
+    token: SecretRef;
+    owner?: string;
+}
+
 export interface EnvironmentInput {
     domain: string;
     branch: string;

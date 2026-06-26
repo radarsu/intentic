@@ -5,6 +5,7 @@ export type {
     CloudflareInput,
     EnvironmentInput,
     ForgejoRole,
+    GitHubInput,
     HostInput,
     KomodoRole,
     NotifyInput,
@@ -14,6 +15,6 @@ export type {
     UpdatePolicy,
     UserInput,
 } from "./inputs.js";
-export type { AppIntent, BackupIntent, CloudflareIntent, HostIntent, IntentSet, ServiceIntent, TeamIntent, UserIntent } from "./intent.js";
+export type { AppIntent, BackupIntent, CloudflareIntent, GitHubIntent, HostIntent, IntentSet, ServiceIntent, TeamIntent, UserIntent } from "./intent.js";
 export type { Capability, Need, Plane } from "./needs.js";
 export { controlPlaneHostId, needKey, resolveNeeds } from "./needs.js";

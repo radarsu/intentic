@@ -4,6 +4,7 @@ import { controlPlaneHostId } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
 import { resolveBackup } from "./backup.js";
+import { emitGitHub } from "./emit-github.js";
 import { resolveIdentities } from "./identity.js";
 import { adminUsername, tunnelId, tunnelName } from "./ids.js";
 import { IMAGES } from "./images.js";
@@ -34,6 +35,18 @@ const sshOf = (input: HostInput): Record<string, unknown> => ({
 // in outbound mode and are registered as Komodo Servers. Each host with ingress gets its own Cloudflare
 // Tunnel. All apps share one git/CI/deploy platform regardless of which host they run on.
 export const emit = (intent: IntentSet, assignment: Assignment, zone: string | undefined): ResolvedNode[] => {
+    // GitHub path: when the assignment resolved source-control to "github", delegate entirely — no Forgejo,
+    // no Komodo, no runner. The two paths share host/cloudflare/tunnel/cf-route/service.
+    const isGitHub = [...assignment.byNeed.values()].includes("github");
+    if (isGitHub) {
+        if (zone === undefined && (intent.apps.length > 0 || intent.services.length > 0)) {
+            throw new Error(
+                "intent exposes apps/services through Cloudflare but no zone was provided; the CLI discovers it from the API token before resolving",
+            );
+        }
+        return emitGitHub(intent, zone!);
+    }
+
     for (const optionId of assignment.byNeed.values()) {
         if (!supportedOptions.has(optionId)) {
             throw new Error(`unsupported option "${optionId}"; the emitter only implements ${[...supportedOptions].join("/")}`);

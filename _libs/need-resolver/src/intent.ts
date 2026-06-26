@@ -3,6 +3,7 @@ import type {
     BackupInput,
     CloudflareInput,
     EnvironmentInput,
+    GitHubInput,
     HostInput,
     NotifyInput,
     ServiceInput,
@@ -30,6 +31,11 @@ export interface CloudflareIntent {
 export interface BackupIntent {
     readonly id: string;
     readonly input: BackupInput;
+}
+
+export interface GitHubIntent {
+    readonly id: string;
+    readonly input: GitHubInput;
 }
 
 export interface UserIntent {
@@ -70,6 +76,7 @@ export interface ServiceIntent extends ServiceInput {
 export interface IntentSet {
     readonly hosts: readonly HostIntent[];
     readonly cloudflare?: CloudflareIntent;
+    readonly github?: GitHubIntent;
     readonly backup?: BackupIntent;
     readonly users: readonly UserIntent[];
     readonly teams: readonly TeamIntent[];

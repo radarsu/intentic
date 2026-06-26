@@ -32,4 +32,12 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     signoz: ["url", "internalUrl", "otlpEndpoint"],
     // A scheduled backup job — a pure sink (nothing refs an output off it), like ci/forgejo-runner.
     backup: [],
+    // GitHub inventory node — resolves the PAT's owner (user or org).
+    github: ["owner"],
+    // GitHub repo — same output shape as the Forgejo "repo" type.
+    "gh-repo": ["cloneUrl", "sshUrl"],
+    // GitHub Actions workflow + repo secrets — a pure sink, like "ci".
+    "gh-ci": [],
+    // Container on the host managed via SSH (no Komodo) — same output shape as "deployment".
+    "gh-deployment": ["internalUrl", "url"],
 });

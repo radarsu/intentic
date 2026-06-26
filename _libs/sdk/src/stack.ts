@@ -6,6 +6,8 @@ import type {
     CloudflareInput,
     CloudflareIntent,
     EnvironmentInput,
+    GitHubInput,
+    GitHubIntent,
     HostInput,
     HostIntent,
     IntentSet,
@@ -20,6 +22,7 @@ import type {
     Backup,
     Cloudflare,
     Deployment,
+    GitHub,
     Host,
     Repo,
     Service,
@@ -52,6 +55,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const intent: {
         hosts: HostIntent[];
         cloudflare?: CloudflareIntent;
+        github?: GitHubIntent;
         backup?: BackupIntent;
         users: UserIntent[];
         teams: TeamIntent[];
@@ -81,6 +85,15 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         claim(id);
         intent.backup = { id, input };
         return Object.freeze(makeRef(id)) as Backup;
+    };
+
+    const github = (id: string, input: GitHubInput): GitHub => {
+        if (intent.github !== undefined) {
+            throw new Error("a GitHub account is already declared; intentic supports a single GitHub account");
+        }
+        claim(id);
+        intent.github = { id, input };
+        return Object.freeze({ ...makeRef(id), owner: makeRef<string>(id, "owner") }) as GitHub;
     };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
@@ -133,6 +146,6 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze(makeRef(id)) as Team;
     };
 
-    const stack: Stack = { have: { host, cloudflare, backup }, want: { app, service, user, team } };
+    const stack: Stack = { have: { host, cloudflare, github, backup }, want: { app, service, user, team } };
     return { stack, intent };
 };
