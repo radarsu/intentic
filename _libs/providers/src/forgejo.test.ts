@@ -4,6 +4,8 @@ import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 
+const IMAGE = "codeberg.org/forgejo/forgejo:15.0.3@sha256:aaaa";
+
 interface FakeOpts {
     readonly running?: boolean;
     readonly healthy?: boolean;
@@ -12,6 +14,7 @@ interface FakeOpts {
     readonly packagesToken?: string;
     readonly adminExists?: boolean;
     readonly runFails?: boolean;
+    readonly image?: string;
 }
 
 const fakeSsh = (opts: FakeOpts = {}): { executor: SshExecutor; commands: string[] } => {
@@ -19,6 +22,9 @@ const fakeSsh = (opts: FakeOpts = {}): { executor: SshExecutor; commands: string
     const session: SshSession = {
         exec: async (command) => {
             commands.push(command);
+            if (command.includes("docker inspect")) {
+                return res(opts.image ?? IMAGE);
+            }
             if (command.includes("docker ps")) {
                 return res(opts.running ? "intentic-forgejo" : "");
             }
@@ -71,6 +77,7 @@ const inputs = {
     domain: "git.example.com",
     adminUser: "admin",
     adminPassword: "pw",
+    image: IMAGE,
 };
 
 test("read returns undefined when the host is unreachable over SSH", async () => {
@@ -127,11 +134,17 @@ test("read returns the deterministic url/internalUrl + the persisted runner, git
             gitToken: "gtok-456",
             packagesToken: "ptok-789",
         },
+        detail: { image: IMAGE },
     });
 });
 
-test("diff is always noop", () => {
-    expect(createForgejoProvider(fakeSsh().executor).diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
+test("diff is noop when the running image matches the desired pin", () => {
+    expect(createForgejoProvider(fakeSsh().executor).diff(inputs, { outputs: {}, detail: { image: IMAGE } })).toEqual({ action: "noop" });
+});
+
+test("diff is update when the running image differs from the desired pin", () => {
+    const observed = { outputs: {}, detail: { image: "codeberg.org/forgejo/forgejo:14.0.0@sha256:bbbb" } };
+    expect(createForgejoProvider(fakeSsh().executor).diff(inputs, observed).action).toBe("update");
 });
 
 test("apply runs forgejo with INSTALL_LOCK + the stamp label, bootstraps admin, mints all tokens, and returns outputs", async () => {

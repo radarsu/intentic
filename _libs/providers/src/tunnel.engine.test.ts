@@ -49,6 +49,7 @@ const fakeCloudflare = (): CloudflareApi => {
 // remembers the connector container once `docker run` has executed.
 const fakeSsh = (): SshExecutor => {
     let running: string | undefined;
+    let image: string | undefined;
     return {
         connect: async () => ({
             exec: async (command): Promise<SshResult> => {
@@ -58,11 +59,15 @@ const fakeSsh = (): SshExecutor => {
                 if (command.includes("ip -4 -o route")) {
                     return { stdout: "10.0.0.5\n", stderr: "", code: 0 };
                 }
+                if (command.includes("docker inspect")) {
+                    return { stdout: running !== undefined ? (image ?? "") : "", stderr: "", code: 0 };
+                }
                 if (command.includes("docker ps")) {
                     return { stdout: running ?? "", stderr: "", code: 0 };
                 }
                 if (command.includes("docker run")) {
                     running = /--name (\S+)/.exec(command)?.[1];
+                    image = /(\S+@sha256:[0-9a-f]+)/.exec(command)?.[1];
                     return { stdout: "container-id", stderr: "", code: 0 };
                 }
                 return { stdout: "", stderr: "", code: 0 };
@@ -101,6 +106,7 @@ const graph: DesiredStateGraph = {
                 sshKey: { $secret: { source: "env", key: "HOST_SSH_KEY" } },
                 internalIp: { $ref: "host.internalIp" },
                 ingress: [{ hostname: "app.example.com", port: 3000 }],
+                image: "cloudflare/cloudflared:2026.6.1@sha256:aaaa",
             },
             dependsOn: ["cf", "host"],
         },

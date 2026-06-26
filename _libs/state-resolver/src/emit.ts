@@ -4,6 +4,7 @@ import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
 import { resolveIdentities } from "./identity.js";
 import { tunnelId, tunnelName } from "./ids.js";
+import { IMAGES } from "./images.js";
 import { resolvePlatform } from "./platform.js";
 import type { IngressPair } from "./route.js";
 import { resolveService } from "./service.js";
@@ -111,6 +112,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
             ...ssh,
             internalIp: makeRef(host.id, "internalIp"),
             ingress,
+            image: IMAGES.cloudflared,
         },
         explicitDependsOn: [cloudflare.id, host.id],
     });

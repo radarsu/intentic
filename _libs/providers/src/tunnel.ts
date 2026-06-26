@@ -12,6 +12,8 @@ const tunnelSchema = sshSchema.extend({
     apiToken: z.string(),
     internalIp: z.string(),
     ingress: z.array(z.object({ hostname: z.string(), port: z.coerce.number() })),
+    // The pinned cloudflared image. The connector is stateless, so a version bump just recreates it.
+    image: z.string(),
 });
 type TunnelInputs = z.infer<typeof tunnelSchema>;
 const parse = (inputs: ResolvedInputs): TunnelInputs => parseInputs(tunnelSchema, inputs, "tunnel");
@@ -40,21 +42,30 @@ const ingressEqual = (a: readonly IngressRule[], b: readonly IngressRule[]): boo
     });
 };
 
-// Is the cloudflared connector container running on the host? A read-only SSH check; a host that is not
-// reachable is reported as not-running (and logged) so a plan proceeds rather than aborting — apply will
-// surface the connection failure as a hard error.
-const checkConnector = async (executor: SshExecutor, parsed: TunnelInputs, tunnelId: string, ctx: ProviderContext): Promise<boolean> => {
+// Is the cloudflared connector running on the host, and on which image? A read-only SSH check; a host that
+// is not reachable is reported as not-running (and logged) so a plan proceeds rather than aborting — apply
+// will surface the connection failure as a hard error. The image lets diff recreate on a version bump.
+const checkConnector = async (
+    executor: SshExecutor,
+    parsed: TunnelInputs,
+    tunnelId: string,
+    ctx: ProviderContext,
+): Promise<{ running: boolean; image: string | undefined }> => {
     let session: SshSession;
     try {
         session = await executor.connect(sshTarget(parsed));
     } catch (error) {
         ctx.log(`tunnel "${ctx.id}": host not reachable over SSH to check the connector: ${String(error)}`);
-        return false;
+        return { running: false, image: undefined };
     }
     try {
         const name = containerName(tunnelId);
         const result = await session.exec(`docker ps --filter "name=^${name}$" --format '{{.Names}}'`);
-        return result.stdout.trim() === name;
+        if (result.stdout.trim() !== name) {
+            return { running: false, image: undefined };
+        }
+        const image = (await session.exec(`docker inspect --format '{{.Config.Image}}' ${name} 2>/dev/null || true`)).stdout.trim();
+        return { running: true, image };
     } finally {
         await session.dispose();
     }
@@ -69,7 +80,7 @@ const runConnector = async (executor: SshExecutor, parsed: TunnelInputs, tunnelI
         const name = containerName(tunnelId);
         await session.exec(`docker rm -f ${name} 2>/dev/null || true`);
         const run = await session.exec(
-            `docker run -d --restart unless-stopped --network host --name ${name} cloudflare/cloudflared:latest tunnel --no-autoupdate run --token ${token}`,
+            `docker run -d --restart unless-stopped --network host --name ${name} ${parsed.image} tunnel --no-autoupdate run --token ${token}`,
         );
         if (run.code !== 0) {
             throw new Error(`failed to start cloudflared on host: exited ${run.code}: ${run.stderr.trim()}`);
@@ -91,14 +102,20 @@ export const createTunnelProvider = (api: CloudflareApi = cloudflareApi, executo
             return undefined;
         }
         const ingress = await api.getTunnelIngress({ accountId: parsed.accountId, apiToken: parsed.apiToken, tunnelId: tunnel.id });
-        const connectorRunning = await checkConnector(executor, parsed, tunnel.id, ctx);
-        return { outputs: { tunnelId: tunnel.id, cname: cname(tunnel.id) }, detail: { ingress: ingress ?? [], connectorRunning } };
+        const connector = await checkConnector(executor, parsed, tunnel.id, ctx);
+        return {
+            outputs: { tunnelId: tunnel.id, cname: cname(tunnel.id) },
+            detail: { ingress: ingress ?? [], connectorRunning: connector.running, image: connector.image },
+        };
     },
     diff: (inputs, observed) => {
         const parsed = parse(inputs);
         const detail = observed.detail;
         if (detail === undefined || detail["connectorRunning"] !== true) {
             return { action: "update", reason: "cloudflared connector is not running on the host" };
+        }
+        if (detail["image"] !== parsed.image) {
+            return { action: "update", reason: `cloudflared image differs (running ${String(detail["image"])}, want ${parsed.image})` };
         }
         const current = detail["ingress"];
         const actual = Array.isArray(current) ? (current as IngressRule[]) : [];

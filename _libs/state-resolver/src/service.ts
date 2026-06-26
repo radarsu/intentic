@@ -2,6 +2,7 @@ import type { SecretRef } from "@intentic/graph";
 import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput, ServiceIntent, ServiceKind } from "@intentic/need-resolver";
 import type { ResolvedNode, ResourceType } from "@intentic/resources";
+import { IMAGES } from "./images.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
@@ -13,10 +14,22 @@ import { exposeRoute } from "./route.js";
 interface ServiceSpec {
     readonly type: ResourceType;
     readonly port: number;
+    // The pinned images this service's provider deploys, by input key. Carried here so adding a service is
+    // one catalog entry (type + port + its images), and so the versions land in the desired-state graph.
+    readonly images: Readonly<Record<string, string>>;
 }
 
 const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
-    signoz: { type: "signoz", port: 8080 },
+    signoz: {
+        type: "signoz",
+        port: 8080,
+        images: {
+            clickhouseImage: IMAGES.clickhouse,
+            signozImage: IMAGES.signoz,
+            otelImage: IMAGES.signozOtelCollector,
+            schemaMigratorImage: IMAGES.signozSchemaMigrator,
+        },
+    },
 };
 
 // The admin identity intentic seeds for a service's dashboard. Services authenticate by email (unlike the
@@ -52,6 +65,7 @@ export const resolveService = (
                 domain: intent.domain,
                 adminUser: serviceAdminEmail(zone),
                 adminPassword: generated("SIGNOZ_ADMIN_PASSWORD"),
+                ...spec.images,
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(intent.id, "internalUrl"), { timeout: "180s" }),

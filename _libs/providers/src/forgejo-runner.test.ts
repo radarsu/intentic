@@ -4,11 +4,22 @@ import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 
-const fakeSsh = (opts: { running?: boolean; registered?: boolean; runFails?: boolean } = {}): { executor: SshExecutor; commands: string[] } => {
+const IMAGE = "data.forgejo.org/forgejo/runner:6.4.0@sha256:aaaa";
+const JOB_IMAGE = "data.forgejo.org/oci/node:20-bullseye@sha256:bbbb";
+
+const fakeSsh = (
+    opts: { running?: boolean; registered?: boolean; runFails?: boolean; image?: string; jobImage?: string } = {},
+): { executor: SshExecutor; commands: string[] } => {
     const commands: string[] = [];
     const session: SshSession = {
         exec: async (command) => {
             commands.push(command);
+            if (command.includes("docker inspect")) {
+                return res(opts.image ?? IMAGE);
+            }
+            if (command.includes("config.yaml 2>/dev/null")) {
+                return res(`  labels: [ "docker:docker://${opts.jobImage ?? JOB_IMAGE}" ]`);
+            }
             if (command.includes("docker ps")) {
                 return res(opts.running ? "intentic-forgejo-runner" : "");
             }
@@ -46,7 +57,16 @@ const ctx = (log: (message: string) => void = () => {}) => ({
     },
 });
 
-const inputs = { server: "host", address: "203.0.113.10", user: "deploy", sshKey: "key", instanceUrl: "https://git.example.com", token: "tok-123" };
+const inputs = {
+    server: "host",
+    address: "203.0.113.10",
+    user: "deploy",
+    sshKey: "key",
+    instanceUrl: "https://git.example.com",
+    token: "tok-123",
+    image: IMAGE,
+    jobImage: JOB_IMAGE,
+};
 
 test("read returns undefined when the host is unreachable over SSH", async () => {
     expect(await createForgejoRunnerProvider(unreachable).read(inputs, ctx())).toBeUndefined();
@@ -60,12 +80,26 @@ test("read returns undefined when the runner is not registered to the desired in
     expect(await createForgejoRunnerProvider(fakeSsh({ running: true, registered: false }).executor).read(inputs, ctx())).toBeUndefined();
 });
 
-test("read returns empty outputs when running and registered to the instance", async () => {
-    expect(await createForgejoRunnerProvider(fakeSsh({ running: true, registered: true }).executor).read(inputs, ctx())).toEqual({ outputs: {} });
+test("read returns empty outputs plus the observed runner + job images when running and registered", async () => {
+    expect(await createForgejoRunnerProvider(fakeSsh({ running: true, registered: true }).executor).read(inputs, ctx())).toEqual({
+        outputs: {},
+        detail: { image: IMAGE, jobImage: JOB_IMAGE },
+    });
 });
 
-test("diff is always noop", () => {
-    expect(createForgejoRunnerProvider(fakeSsh().executor).diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
+test("diff is noop when both the runner and job images match the desired pins", () => {
+    const observed = { outputs: {}, detail: { image: IMAGE, jobImage: JOB_IMAGE } };
+    expect(createForgejoRunnerProvider(fakeSsh().executor).diff(inputs, observed)).toEqual({ action: "noop" });
+});
+
+test("diff is update when the runner image differs", () => {
+    const observed = { outputs: {}, detail: { image: "data.forgejo.org/forgejo/runner:6.0.0@sha256:cccc", jobImage: JOB_IMAGE } };
+    expect(createForgejoRunnerProvider(fakeSsh().executor).diff(inputs, observed).action).toBe("update");
+});
+
+test("diff is update when the job image in config differs", () => {
+    const observed = { outputs: {}, detail: { image: IMAGE, jobImage: "data.forgejo.org/oci/node:18-bullseye@sha256:dddd" } };
+    expect(createForgejoRunnerProvider(fakeSsh().executor).diff(inputs, observed).action).toBe("update");
 });
 
 test("apply registers against the instance + token and starts the daemon, returning empty outputs", async () => {

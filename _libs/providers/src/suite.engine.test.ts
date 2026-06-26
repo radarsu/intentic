@@ -9,10 +9,32 @@ import type { AlerterConfig, DeploymentConfig, KomodoApi } from "./komodo-api.js
 import { createProviders } from "./providers.js";
 import type { SshExecutor, SshResult } from "./ssh.js";
 
-// A stateful host shared by host/forgejo/forgejo-runner/komodo/tunnel: Docker-ready, default route ->
-// 10.0.0.5, and it remembers which containers have been started so a second apply reads them as running.
+// Parse a compose YAML literal into a service -> image map, mirroring the providers' `{{.Config.Image}}`
+// observation: each `  <service>:` header followed by an `    image: <ref>` line.
+const serviceImages = (yaml: string): Record<string, string> => {
+    const images: Record<string, string> = {};
+    let service: string | undefined;
+    for (const line of yaml.split("\n")) {
+        const header = /^ {2}([\w-]+):\s*$/.exec(line);
+        if (header?.[1] !== undefined) {
+            service = header[1];
+            continue;
+        }
+        const image = /^ {4}image:\s*(\S+)/.exec(line);
+        if (image?.[1] !== undefined && service !== undefined) {
+            images[service] = image[1];
+        }
+    }
+    return images;
+};
+
+// A stateful host shared by host/forgejo/forgejo-runner/komodo/tunnel/signoz: Docker-ready, default route ->
+// 10.0.0.5, and it remembers which containers have been started (and on which image) so a second apply reads
+// them as running on the desired pin — exercising the image-drift diff's idempotency.
 const fakeSsh = (): SshExecutor => {
     const started = new Set<string>();
+    const containerImages = new Map<string, string>();
+    const files = new Map<string, string>();
     let tokenPersisted = false;
     let gitTokenPersisted = false;
     let packagesTokenPersisted = false;
@@ -22,6 +44,12 @@ const fakeSsh = (): SshExecutor => {
             exec: async (command): Promise<SshResult> => {
                 if (command.includes("docker version")) return ok("24.0.0");
                 if (command.includes("ip -4 -o route")) return ok("10.0.0.5\n");
+                // Capture every heredoc-written file (compose.yaml, config.toml, runner config.yaml, ...).
+                const write = /cat > (\S+) <<'(\w+)'\n([\s\S]*)\2/.exec(command);
+                if (write?.[1] !== undefined && write[3] !== undefined) {
+                    files.set(write[1], write[3]);
+                    return ok();
+                }
                 if (command.includes("generate-runner-token")) {
                     tokenPersisted = true;
                     return ok("rtok");
@@ -36,6 +64,21 @@ const fakeSsh = (): SshExecutor => {
                 }
                 if (command.includes("command -v docker")) return ok("/usr/local/bin/docker");
                 if (command.includes("docker-buildx")) return ok("/usr/local/libexec/docker/cli-plugins/docker-buildx");
+                // Compose-project image inspect (komodo/signoz): report each running service's image from the
+                // compose file the provider wrote.
+                const project = /com\.docker\.compose\.project=(\w+)/.exec(command);
+                if (project?.[1] !== undefined) {
+                    if (!started.has(`intentic-${project[1]}`)) return ok("");
+                    const images = serviceImages(files.get(`/opt/intentic/${project[1]}/compose.yaml`) ?? "");
+                    return ok(
+                        Object.entries(images)
+                            .map(([service, image]) => `${service}=${image}`)
+                            .join("\n"),
+                    );
+                }
+                // Single-container image inspect (forgejo/forgejo-runner/tunnel).
+                const inspect = /docker inspect --format '\{\{\.Config\.Image\}\}' (\S+)/.exec(command);
+                if (inspect?.[1] !== undefined) return ok(containerImages.get(inspect[1]) ?? "");
                 const label = /docker ps --filter "label=intentic.id=([^"]+)"/.exec(command);
                 if (label?.[1] !== undefined) return ok(started.has(label[1]) ? "komodo-core-1" : "");
                 const ps = /docker ps --filter "name=\^([^$]+)\$"/.exec(command);
@@ -43,14 +86,24 @@ const fakeSsh = (): SshExecutor => {
                 const run = /docker run .*--name (\S+)/.exec(command);
                 if (run?.[1] !== undefined) {
                     started.add(run[1]);
+                    const image = /(\S+@sha256:[0-9a-f]+)/.exec(command);
+                    if (image?.[1] !== undefined) containerImages.set(run[1], image[1]);
                     return ok("cid");
                 }
                 if (command.includes("docker compose") && command.includes("up -d")) {
-                    started.add("intentic-komodo-core");
+                    const proj = /docker compose -p (\w+)/.exec(command);
+                    if (proj?.[1] !== undefined) {
+                        started.add(`intentic-${proj[1]}`);
+                        // komodo's running() check matches the core container's intentic.id label, not the project marker.
+                        if (proj[1] === "komodo") started.add("intentic-komodo-core");
+                    }
                     return ok("up");
                 }
                 if (command.includes("wget -q --spider")) return ok("", started.has("intentic-forgejo") ? 0 : 1);
                 if (command.includes("cat /data/.runner")) return ok(started.has("intentic-forgejo-runner") ? "http://10.0.0.5:3000" : "");
+                // Runner config read (configuredJobImage): return the file the provider wrote.
+                const read = /cat (\/\S+) 2>\/dev\/null/.exec(command);
+                if (read?.[1] !== undefined && files.has(read[1])) return ok(files.get(read[1]));
                 if (command.includes("packages-token")) return ok(packagesTokenPersisted ? "ptok" : "");
                 if (command.includes("git-token")) return ok(gitTokenPersisted ? "gtok" : "");
                 if (command.includes("runner-token")) return ok(tokenPersisted ? "rtok" : "");

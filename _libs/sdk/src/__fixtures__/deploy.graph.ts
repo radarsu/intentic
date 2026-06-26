@@ -63,6 +63,7 @@ export const expectedGraph: DesiredStateGraph = {
                         key: "FORGEJO_ADMIN_PASSWORD",
                     },
                 },
+                image: "codeberg.org/forgejo/forgejo:15.0.3@sha256:55bb42bec9abef5223744804f164e37d37b20df7e8b8b4807ba213ad4f071d6d",
             },
             dependsOn: ["host"],
             readyWhen: {
@@ -94,6 +95,8 @@ export const expectedGraph: DesiredStateGraph = {
                 token: {
                     $ref: "host-git.runnerToken",
                 },
+                image: "data.forgejo.org/forgejo/runner:6.4.0@sha256:e8dd2880f2fc81984d2308b93f1bc064dfb41187942300676536c09a3b30043d",
+                jobImage: "data.forgejo.org/oci/node:20-bullseye@sha256:c0122351f25f04facee976f9db7214789eabadb489f4e4aea9cd00a0d6af77c4",
             },
             dependsOn: ["host", "host-git"],
         },
@@ -137,6 +140,11 @@ export const expectedGraph: DesiredStateGraph = {
                 packagesToken: {
                     $ref: "host-git.packagesToken",
                 },
+                coreImage: "ghcr.io/moghtech/komodo-core:2.1.0@sha256:4915d91b5c6e9de4e8fd59391eed5cad090ec84dcf6a1a9233d97edfdbbb88e7",
+                peripheryImage: "ghcr.io/moghtech/komodo-periphery:2.1.0@sha256:f5b272e3d9acd60d4eac69ea4fa0292dcaddfdecfc2be64ba5575e5ae18e72ae",
+                ferretdbImage: "ghcr.io/ferretdb/ferretdb:2.7.0@sha256:5706414241eb84f0515512c37b46db0f1b1eac9e5ceb7e4c2523211c184b1985",
+                postgresImage:
+                    "ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0@sha256:2386795ec2aa7ae559304361979f1dc5708d383ee9020ae63dadc2940dfe58f7",
             },
             dependsOn: ["host", "host-git"],
             readyWhen: {
@@ -533,6 +541,7 @@ export const expectedGraph: DesiredStateGraph = {
                         port: 23104,
                     },
                 ],
+                image: "cloudflare/cloudflared:2026.6.1@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283",
             },
             dependsOn: ["cf", "host"],
         },

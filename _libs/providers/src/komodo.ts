@@ -21,6 +21,13 @@ const komodoSchema = sshSchema.extend({
     // admin's packages token — written as a [[docker_registry]] account so a private image can be pulled.
     registry: z.string(),
     packagesToken: z.string(),
+    // The fully-pinned images for the four compose services. Written into the compose YAML literal (not the
+    // write-once .env), so a version bump lands on the next apply and `docker compose up -d` recreates the
+    // changed service; read observes each running image and diff drives the update.
+    coreImage: z.string(),
+    peripheryImage: z.string(),
+    ferretdbImage: z.string(),
+    postgresImage: z.string(),
 });
 type KomodoInputs = z.infer<typeof komodoSchema>;
 const parse = (inputs: ResolvedInputs): KomodoInputs => parseInputs(komodoSchema, inputs, "komodo");
@@ -41,25 +48,53 @@ const running = async (session: SshSession): Promise<boolean> => {
     return result.stdout.trim() !== "";
 };
 
+// The create-time image of each compose service, keyed by its compose service name. Inspecting .Config.Image
+// (not `docker ps`'s truncated .Image) returns the exact repo:tag@sha256 ref written into compose.yaml, so a
+// bump there reads as drift here. Returns {} when the stack is down.
+const PROJECT = "komodo";
+const runningImages = async (session: SshSession): Promise<Record<string, string>> => {
+    const result = await session.exec(
+        `ids=$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT}"); ` +
+            `[ -n "$ids" ] && docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}={{.Config.Image}}' $ids || true`,
+    );
+    const images: Record<string, string> = {};
+    for (const line of result.stdout.trim().split("\n")) {
+        const eq = line.indexOf("=");
+        if (eq > 0) {
+            images[line.slice(0, eq)] = line.slice(eq + 1);
+        }
+    }
+    return images;
+};
+
+// Map each compose service to its desired pinned image, so diff can report exactly which one drifted.
+const desiredImages = (parsed: KomodoInputs): Record<string, string> => ({
+    postgres: parsed.postgresImage,
+    ferretdb: parsed.ferretdbImage,
+    core: parsed.coreImage,
+    periphery: parsed.peripheryImage,
+});
+
 // FerretDB + Core + Periphery, co-located so Periphery trusts Core via the shared keys volume (no
-// onboarding key needed for a single host). Written verbatim over SSH; ${...} interpolation is read by
-// docker compose from the .env beside it. Image tags are pinned defaults, centralized for easy bumping.
-const composeYaml = (): string =>
+// onboarding key needed for a single host). Written verbatim over SSH; the $... secrets are interpolated by
+// docker compose from the .env beside it. Image refs are the fully-pinned inputs inlined into the YAML (NOT
+// the write-once .env) so a bump recreates the service on the next `up -d`.
+const composeYaml = (parsed: KomodoInputs): string =>
     [
         "services:",
         "  postgres:",
-        "    image: ghcr.io/ferretdb/postgres-documentdb:latest",
+        `    image: ${parsed.postgresImage}`,
         "    restart: unless-stopped",
         "    environment: { POSTGRES_USER: $KOMODO_DATABASE_USERNAME, POSTGRES_PASSWORD: $KOMODO_DATABASE_PASSWORD, POSTGRES_DB: postgres }",
         "    volumes: [ postgres-data:/var/lib/postgresql/data ]",
         "  ferretdb:",
-        "    image: ghcr.io/ferretdb/ferretdb:latest",
+        `    image: ${parsed.ferretdbImage}`,
         "    restart: unless-stopped",
         "    depends_on: [ postgres ]",
         "    environment: { FERRETDB_POSTGRESQL_URL: postgres://$KOMODO_DATABASE_USERNAME:$KOMODO_DATABASE_PASSWORD@postgres:5432/postgres }",
         "    volumes: [ ferretdb-state:/state ]",
         "  core:",
-        "    image: ghcr.io/moghtech/komodo-core:$COMPOSE_KOMODO_IMAGE_TAG",
+        `    image: ${parsed.coreImage}`,
         "    restart: unless-stopped",
         "    depends_on: [ ferretdb ]",
         `    ports: [ "${CORE_PORT}:9120" ]`,
@@ -74,7 +109,7 @@ const composeYaml = (): string =>
         // be refused). Co-located on this private compose network, the shared keys volume persists each side's
         // Noise keypair and the handshake needs no pre-shared passkey or pinned core key.
         "  periphery:",
-        "    image: ghcr.io/moghtech/komodo-periphery:$COMPOSE_KOMODO_IMAGE_TAG",
+        `    image: ${parsed.peripheryImage}`,
         "    restart: unless-stopped",
         "    volumes: [ /var/run/docker.sock:/var/run/docker.sock, /proc:/proc, keys:/config/keys ]",
         "volumes: { postgres-data: {}, ferretdb-state: {}, keys: {} }",
@@ -104,14 +139,13 @@ const configToml = (parsed: KomodoInputs): string => {
 // survive restarts). passkey/jwt/db secrets are host-generated once and never surface as outputs.
 const ensureFiles = async (session: SshSession, parsed: KomodoInputs): Promise<void> => {
     await session.exec(`mkdir -p ${STATE_DIR}`);
-    await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml()}COMPOSE_EOF`);
+    await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml(parsed)}COMPOSE_EOF`);
     await session.exec(`cat > ${STATE_DIR}/config.toml <<'CONFIG_EOF'\n${configToml(parsed)}CONFIG_EOF`);
     // Each line is a separate printf argument so `printf '%s\n'` emits one KEY=value per line. Joining with
     // "\n" into a single arg would print the literal characters \n (printf %s does not interpret escapes),
     // leaving compose unable to parse the file — the image tags would come through blank.
     const staticEnv = [
         "TZ=Etc/UTC",
-        "COMPOSE_KOMODO_IMAGE_TAG=2",
         "KOMODO_LOCAL_AUTH=true",
         "KOMODO_CONFIG_PATH=/config/config.toml",
         `KOMODO_INIT_ADMIN_USERNAME=${parsed.adminUser}`,
@@ -175,12 +209,23 @@ export const createKomodoProvider = (executor: SshExecutor = sshExecutor): Provi
             if (!(await running(session)) || !(await healthy(session, parsed))) {
                 return undefined;
             }
-            return { outputs: outputsFor(parsed) };
+            return { outputs: outputsFor(parsed), detail: { images: await runningImages(session) } };
         } finally {
             await session.dispose();
         }
     },
-    diff: () => ({ action: "noop" }),
+    // `up -d` recreates only the services whose pinned image in compose.yaml changed; the named volumes
+    // (postgres-data/ferretdb-state/keys) survive, so a bump is a safe in-place update gated on health.
+    diff: (inputs, observed) => {
+        const parsed = parse(inputs);
+        const images = (observed.detail?.["images"] ?? {}) as Record<string, string>;
+        for (const [service, desired] of Object.entries(desiredImages(parsed))) {
+            if (images[service] !== desired) {
+                return { action: "update", reason: `komodo ${service} image differs (running ${String(images[service])}, want ${desired})` };
+            }
+        }
+        return { action: "noop" };
+    },
     apply: async (inputs) => {
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));

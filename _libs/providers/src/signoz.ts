@@ -10,6 +10,12 @@ const signozSchema = sshSchema.extend({
     // The dashboard admin SignOz authenticates by email; intentic generates the password and reports it.
     adminUser: z.string(),
     adminPassword: z.string(),
+    // The fully-pinned images for the four compose services, inlined into the compose YAML literal so a bump
+    // recreates the changed service on the next apply; read observes each running image and diff drives it.
+    clickhouseImage: z.string(),
+    signozImage: z.string(),
+    otelImage: z.string(),
+    schemaMigratorImage: z.string(),
 });
 type SignozInputs = z.infer<typeof signozSchema>;
 const parse = (inputs: ResolvedInputs): SignozInputs => parseInputs(signozSchema, inputs, "signoz");
@@ -39,15 +45,40 @@ const running = async (session: SshSession): Promise<boolean> => {
     return result.stdout.trim() !== "";
 };
 
+// The create-time image of each long-running compose service, keyed by compose service name. The one-shot
+// schema-migrator-sync exits after running so it never shows here; its version tracks the otel collector's
+// (same release line), so diffing the collector covers it. Returns {} when the stack is down.
+const PROJECT = "signoz";
+const runningImages = async (session: SshSession): Promise<Record<string, string>> => {
+    const result = await session.exec(
+        `ids=$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT}"); ` +
+            `[ -n "$ids" ] && docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}={{.Config.Image}}' $ids || true`,
+    );
+    const images: Record<string, string> = {};
+    for (const line of result.stdout.trim().split("\n")) {
+        const eq = line.indexOf("=");
+        if (eq > 0) {
+            images[line.slice(0, eq)] = line.slice(eq + 1);
+        }
+    }
+    return images;
+};
+
+const desiredImages = (parsed: SignozInputs): Record<string, string> => ({
+    clickhouse: parsed.clickhouseImage,
+    signoz: parsed.signozImage,
+    "otel-collector": parsed.otelImage,
+});
+
 // ClickHouse (single-node cluster "cluster" SigNoz's migrations expect, backed by ClickHouse Keeper) +
-// schema migrators + the SigNoz query/UI server + the OTLP collector. Written verbatim over SSH; ${...}
-// interpolation is read by docker compose from the .env beside it. Image tags are pinned defaults,
-// centralized here for easy bumping.
-const composeYaml = (): string =>
+// schema migrators + the SigNoz query/UI server + the OTLP collector. Written verbatim over SSH. Image refs
+// are the fully-pinned inputs inlined into the YAML (no .env interpolation — SigNoz holds no secrets), so a
+// bump recreates the service on the next `up -d`.
+const composeYaml = (parsed: SignozInputs): string =>
     [
         "services:",
         "  clickhouse:",
-        "    image: clickhouse/clickhouse-server:$COMPOSE_CLICKHOUSE_IMAGE_TAG",
+        `    image: ${parsed.clickhouseImage}`,
         "    restart: unless-stopped",
         "    volumes:",
         "      - clickhouse-data:/var/lib/clickhouse",
@@ -58,22 +89,22 @@ const composeYaml = (): string =>
         "      timeout: 5s",
         "      retries: 10",
         "  schema-migrator-sync:",
-        "    image: signoz/signoz-schema-migrator:$COMPOSE_OTEL_IMAGE_TAG",
+        `    image: ${parsed.schemaMigratorImage}`,
         "    command: [ sync, --dsn=tcp://clickhouse:9000, --up= ]",
         "    depends_on: { clickhouse: { condition: service_healthy } }",
         "    restart: on-failure",
         "  signoz:",
-        "    image: signoz/signoz:$COMPOSE_SIGNOZ_IMAGE_TAG",
+        `    image: ${parsed.signozImage}`,
         "    restart: unless-stopped",
         "    depends_on: [ schema-migrator-sync ]",
         `    ports: [ "${UI_PORT}:8080" ]`,
-        "    env_file: ./.env",
         "    environment:",
+        "      - TZ=Etc/UTC",
         "      - SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://clickhouse:9000",
         "    volumes: [ signoz-data:/var/lib/signoz ]",
         `    labels: [ "intentic.id=${APP}" ]`,
         "  otel-collector:",
-        "    image: signoz/signoz-otel-collector:$COMPOSE_OTEL_IMAGE_TAG",
+        `    image: ${parsed.otelImage}`,
         "    restart: unless-stopped",
         "    depends_on: [ signoz ]",
         "    command: [ --config=/etc/otel-collector-config.yaml ]",
@@ -122,22 +153,13 @@ const otelCollectorConfig = (): string =>
         "",
     ].join("\n");
 
-// Write the compose + config files (always) and the .env (once — image tags survive restarts). No secrets
-// live in SigNoz's env; the dashboard admin is seeded post-health via the register API below.
-const ensureFiles = async (session: SshSession, _parsed: SignozInputs): Promise<void> => {
+// Write the compose + config files (always). No .env: SigNoz holds no secrets and the image refs are inlined
+// in the compose YAML, so there is nothing to interpolate. The dashboard admin is seeded post-health below.
+const ensureFiles = async (session: SshSession, parsed: SignozInputs): Promise<void> => {
     await session.exec(`mkdir -p ${STATE_DIR}`);
-    await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml()}COMPOSE_EOF`);
+    await session.exec(`cat > ${STATE_DIR}/compose.yaml <<'COMPOSE_EOF'\n${composeYaml(parsed)}COMPOSE_EOF`);
     await session.exec(`cat > ${STATE_DIR}/clickhouse-cluster.xml <<'CH_EOF'\n${clickhouseClusterXml()}CH_EOF`);
     await session.exec(`cat > ${STATE_DIR}/otel-collector-config.yaml <<'OTEL_EOF'\n${otelCollectorConfig()}OTEL_EOF`);
-    const staticEnv = [
-        "TZ=Etc/UTC",
-        "COMPOSE_CLICKHOUSE_IMAGE_TAG=24.1.2-alpine",
-        "COMPOSE_SIGNOZ_IMAGE_TAG=0.64.0",
-        "COMPOSE_OTEL_IMAGE_TAG=0.111.5",
-    ]
-        .map((line) => `'${line}'`)
-        .join(" ");
-    await session.exec(`test -f ${STATE_DIR}/.env || printf '%s\\n' ${staticEnv} > ${STATE_DIR}/.env`);
 };
 
 // Probe the UI FROM THE HOST over SSH (SigNoz publishes 8080 on the host), so the check works regardless of
@@ -191,20 +213,29 @@ export const createSignozProvider = (executor: SshExecutor = sshExecutor): Provi
             if (!(await running(session)) || !(await healthy(session, parsed))) {
                 return undefined;
             }
-            return { outputs: outputsFor(parsed) };
+            return { outputs: outputsFor(parsed), detail: { images: await runningImages(session) } };
         } finally {
             await session.dispose();
         }
     },
-    diff: () => ({ action: "noop" }),
+    // `up -d` recreates only the services whose pinned image in compose.yaml changed; the named volumes
+    // (clickhouse-data/signoz-data) survive, so a bump is a safe in-place update gated on health.
+    diff: (inputs, observed) => {
+        const parsed = parse(inputs);
+        const images = (observed.detail?.["images"] ?? {}) as Record<string, string>;
+        for (const [service, desired] of Object.entries(desiredImages(parsed))) {
+            if (images[service] !== desired) {
+                return { action: "update", reason: `signoz ${service} image differs (running ${String(images[service])}, want ${desired})` };
+            }
+        }
+        return { action: "noop" };
+    },
     apply: async (inputs, _observed, ctx) => {
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));
         try {
             await ensureFiles(session, parsed);
-            const up = await session.exec(
-                `docker compose -p signoz --project-directory ${STATE_DIR} --env-file ${STATE_DIR}/.env -f ${STATE_DIR}/compose.yaml up -d`,
-            );
+            const up = await session.exec(`docker compose -p signoz --project-directory ${STATE_DIR} -f ${STATE_DIR}/compose.yaml up -d`);
             if (up.code !== 0) {
                 throw new Error(`failed to bring up signoz stack: exited ${up.code}: ${up.stderr.trim()}`);
             }
@@ -219,9 +250,7 @@ export const createSignozProvider = (executor: SshExecutor = sshExecutor): Provi
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));
         try {
-            await session.exec(
-                `docker compose -p signoz --project-directory ${STATE_DIR} --env-file ${STATE_DIR}/.env -f ${STATE_DIR}/compose.yaml down -v 2>/dev/null || true`,
-            );
+            await session.exec(`docker compose -p signoz --project-directory ${STATE_DIR} -f ${STATE_DIR}/compose.yaml down -v 2>/dev/null || true`);
             await session.exec(`rm -rf ${STATE_DIR}`);
         } finally {
             await session.dispose();

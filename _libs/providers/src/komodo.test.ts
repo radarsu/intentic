@@ -4,13 +4,29 @@ import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 
-// Drives the komodo provider entirely over SSH: docker ps reports the core container, the /api/health
-// wget reports liveness, and docker compose up can be made to fail.
-const fakeSsh = (opts: { running?: boolean; upFails?: boolean; healthy?: boolean } = {}): { executor: SshExecutor; commands: string[] } => {
+const CORE_IMAGE = "ghcr.io/moghtech/komodo-core:2.1.0@sha256:aaaa";
+const PERIPHERY_IMAGE = "ghcr.io/moghtech/komodo-periphery:2.1.0@sha256:bbbb";
+const FERRETDB_IMAGE = "ghcr.io/ferretdb/ferretdb:2.7.0@sha256:cccc";
+const POSTGRES_IMAGE = "ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0@sha256:dddd";
+// The service=image lines `docker inspect` reports for the running compose project, mirroring runningImages.
+const composeImages = (images: Record<string, string>): string =>
+    Object.entries(images)
+        .map(([service, image]) => `${service}=${image}`)
+        .join("\n");
+const DEFAULT_IMAGES = { postgres: POSTGRES_IMAGE, ferretdb: FERRETDB_IMAGE, core: CORE_IMAGE, periphery: PERIPHERY_IMAGE };
+
+// Drives the komodo provider entirely over SSH: docker ps reports the core container, the project inspect
+// reports each service's image, the /api/health wget reports liveness, and docker compose up can be made to fail.
+const fakeSsh = (
+    opts: { running?: boolean; upFails?: boolean; healthy?: boolean; images?: Record<string, string> } = {},
+): { executor: SshExecutor; commands: string[] } => {
     const commands: string[] = [];
     const session: SshSession = {
         exec: async (command) => {
             commands.push(command);
+            if (command.includes("com.docker.compose.project")) {
+                return res(opts.running ? composeImages(opts.images ?? DEFAULT_IMAGES) : "");
+            }
             if (command.includes("docker ps")) {
                 return res(opts.running ? "intentic-komodo-core" : "");
             }
@@ -57,6 +73,10 @@ const inputs = {
     gitToken: "gtok-456",
     registry: "127.0.0.1:3000",
     packagesToken: "ptok-789",
+    coreImage: CORE_IMAGE,
+    peripheryImage: PERIPHERY_IMAGE,
+    ferretdbImage: FERRETDB_IMAGE,
+    postgresImage: POSTGRES_IMAGE,
 };
 
 test("read returns undefined when the host is unreachable over SSH", async () => {
@@ -72,13 +92,21 @@ test("read returns undefined when core is not yet healthy", async () => {
     expect(await provider.read(inputs, ctx())).toBeUndefined();
 });
 
-test("read returns the deterministic url/internalUrl (no passkey) when running and healthy", async () => {
+test("read returns the deterministic url/internalUrl plus the observed service images when running and healthy", async () => {
     const provider = createKomodoProvider(fakeSsh({ running: true, healthy: true }).executor);
-    expect(await provider.read(inputs, ctx())).toEqual({ outputs: { url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" } });
+    expect(await provider.read(inputs, ctx())).toEqual({
+        outputs: { url: "https://komodo.example.com", internalUrl: "http://10.0.0.5:9120" },
+        detail: { images: DEFAULT_IMAGES },
+    });
 });
 
-test("diff is always noop", () => {
-    expect(createKomodoProvider(fakeSsh().executor).diff(inputs, { outputs: {} })).toEqual({ action: "noop" });
+test("diff is noop when every service runs on its desired image", () => {
+    expect(createKomodoProvider(fakeSsh().executor).diff(inputs, { outputs: {}, detail: { images: DEFAULT_IMAGES } })).toEqual({ action: "noop" });
+});
+
+test("diff is update when a service image differs from the desired pin", () => {
+    const observed = { outputs: {}, detail: { images: { ...DEFAULT_IMAGES, core: "ghcr.io/moghtech/komodo-core:2.0.0@sha256:eeee" } } };
+    expect(createKomodoProvider(fakeSsh().executor).diff(inputs, observed).action).toBe("update");
 });
 
 test("apply writes compose + a once-guarded env, brings the stack up, waits for health, and returns outputs", async () => {

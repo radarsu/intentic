@@ -9,12 +9,14 @@ const forgejoSchema = sshSchema.extend({
     domain: z.string(),
     adminUser: z.string(),
     adminPassword: z.string(),
+    // The fully-pinned image (repo:tag@sha256) the resolver records in the desired-state graph. read observes
+    // the running container's image and diff recreates on a mismatch, so a version bump rolls forward.
+    image: z.string(),
 });
 type ForgejoInputs = z.infer<typeof forgejoSchema>;
 const parse = (inputs: ResolvedInputs): ForgejoInputs => parseInputs(forgejoSchema, inputs, "forgejo");
 
 const CONTAINER = "intentic-forgejo";
-const IMAGE = "codeberg.org/forgejo/forgejo:15";
 const HTTP_PORT = 3000;
 // The runner registration token + a scoped git access token + a packages access token are minted once and
 // persisted on the host, then read back every run, so they are STABLE outputs (re-minting would rotate them,
@@ -39,6 +41,13 @@ const outputsFor = (parsed: ForgejoInputs, runnerToken: string, gitToken: string
 const running = async (session: SshSession): Promise<boolean> => {
     const result = await session.exec(`docker ps --filter "name=^${CONTAINER}$" --format '{{.Names}}'`);
     return result.stdout.trim() === CONTAINER;
+};
+
+// The image reference the running container was created with (the exact repo:tag@sha256 string), so diff can
+// compare it against the desired pin and recreate on a version bump.
+const runningImage = async (session: SshSession): Promise<string> => {
+    const result = await session.exec(`docker inspect --format '{{.Config.Image}}' ${CONTAINER} 2>/dev/null || true`);
+    return result.stdout.trim();
 };
 
 const healthy = async (session: SshSession): Promise<boolean> => {
@@ -89,12 +98,20 @@ export const createForgejoProvider = (executor: SshExecutor = sshExecutor): Prov
             if (runnerToken === "" || gitToken === "" || packagesToken === "") {
                 return undefined;
             }
-            return { outputs: outputsFor(parsed, runnerToken, gitToken, packagesToken) };
+            return { outputs: outputsFor(parsed, runnerToken, gitToken, packagesToken), detail: { image: await runningImage(session) } };
         } finally {
             await session.dispose();
         }
     },
-    diff: () => ({ action: "noop" }),
+    // The SQLite data volume + host token files survive the rm/run recreation in apply, so a version bump is a
+    // safe in-place update: recreate on the new image, then the readiness gate re-checks health.
+    diff: (inputs, observed) => {
+        const desired = parse(inputs).image;
+        if (observed.detail?.["image"] !== desired) {
+            return { action: "update", reason: `forgejo image differs (running ${String(observed.detail?.["image"])}, want ${desired})` };
+        }
+        return { action: "noop" };
+    },
     apply: async (inputs, _observed, ctx) => {
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));
@@ -105,7 +122,7 @@ export const createForgejoProvider = (executor: SshExecutor = sshExecutor): Prov
                 `docker run -d --restart unless-stopped --network host --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
                     `-v ${CONTAINER}-data:/data ` +
                     `-e FORGEJO__security__INSTALL_LOCK=true -e FORGEJO__database__DB_TYPE=sqlite3 ` +
-                    `-e FORGEJO__server__ROOT_URL=https://${parsed.domain} -e FORGEJO__server__DOMAIN=${parsed.domain} ${IMAGE}`,
+                    `-e FORGEJO__server__ROOT_URL=https://${parsed.domain} -e FORGEJO__server__DOMAIN=${parsed.domain} ${parsed.image}`,
             );
             if (run.code !== 0) {
                 throw new Error(`failed to start forgejo on host: exited ${run.code}: ${run.stderr.trim()}`);

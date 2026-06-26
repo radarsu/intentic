@@ -3,6 +3,7 @@ import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { adminUsername, forgejoId, gitDomain, komodoDomain, komodoId, registryAuthority, runnerId } from "./ids.js";
+import { IMAGES } from "./images.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
@@ -58,6 +59,7 @@ export const resolvePlatform = (
                 domain: gitDomain(zone),
                 adminUser: adminUsername,
                 adminPassword: generated("FORGEJO_ADMIN_PASSWORD"),
+                image: IMAGES.forgejo,
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(forgejo, "internalUrl"), { timeout: "120s" }),
@@ -67,7 +69,14 @@ export const resolvePlatform = (
             type: "forgejo-runner",
             // The runner runs ON the host, so it reaches Forgejo at its internal url directly — using the
             // public url would force a needless round-trip through the tunnel (and depend on DNS being live).
-            inputs: { server, ...ssh, instanceUrl: makeRef<string>(forgejo, "internalUrl"), token: makeRef<string>(forgejo, "runnerToken") },
+            inputs: {
+                server,
+                ...ssh,
+                instanceUrl: makeRef<string>(forgejo, "internalUrl"),
+                token: makeRef<string>(forgejo, "runnerToken"),
+                image: IMAGES.forgejoRunner,
+                jobImage: IMAGES.forgejoRunnerJob,
+            },
             explicitDependsOn: [],
         },
         {
@@ -90,6 +99,10 @@ export const resolvePlatform = (
                 // account so Komodo can pull the private app images CI pushes.
                 registry: registryAuthority,
                 packagesToken: makeRef<string>(forgejo, "packagesToken"),
+                coreImage: IMAGES.komodoCore,
+                peripheryImage: IMAGES.komodoPeriphery,
+                ferretdbImage: IMAGES.ferretdb,
+                postgresImage: IMAGES.postgresDocumentdb,
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(deploy, "internalUrl"), { timeout: "90s" }),

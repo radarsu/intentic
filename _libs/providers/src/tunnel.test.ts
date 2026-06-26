@@ -23,14 +23,20 @@ const api = (overrides: Partial<CloudflareApi>): CloudflareApi => ({
     ...overrides,
 });
 
+const IMAGE = "cloudflare/cloudflared:2026.6.1@sha256:aaaa";
+
 // A fake host: records commands and reports the connector container running once a matching `docker run`
-// has executed (or from an initial name, to drive read without an apply).
-const fakeSsh = (running?: string): { executor: SshExecutor; commands: string[] } => {
+// has executed (or from an initial name, to drive read without an apply). `docker inspect` reports the
+// running image so the image-drift diff can be exercised.
+const fakeSsh = (running?: string, image: string = IMAGE): { executor: SshExecutor; commands: string[] } => {
     const commands: string[] = [];
     let current = running;
     const session: SshSession = {
         exec: async (command): Promise<SshResult> => {
             commands.push(command);
+            if (command.includes("docker inspect")) {
+                return { stdout: current !== undefined ? image : "", stderr: "", code: 0 };
+            }
             if (command.includes("docker ps")) {
                 return { stdout: current ?? "", stderr: "", code: 0 };
             }
@@ -65,6 +71,7 @@ const inputs = {
     sshKey: "key",
     internalIp: "10.0.0.5",
     ingress: [{ hostname: "app.example.com", port: 3000 }],
+    image: IMAGE,
 };
 
 test("read returns undefined when the tunnel does not exist", async () => {
@@ -79,13 +86,13 @@ test("read returns the tunnel facts plus connector/ingress detail when it exists
     );
     expect(await provider.read(inputs, ctx())).toEqual({
         outputs: { tunnelId: "tunnel-abc", cname: "tunnel-abc.cfargotunnel.com" },
-        detail: { ingress: [appRule, catchAll], connectorRunning: true },
+        detail: { ingress: [appRule, catchAll], connectorRunning: true, image: IMAGE },
     });
 });
 
-test("diff is noop when the connector runs and the ingress matches", () => {
+test("diff is noop when the connector runs on the desired image and the ingress matches", () => {
     const provider = createTunnelProvider(api({}), fakeSsh().executor);
-    const observed = { outputs: {}, detail: { ingress: [appRule, catchAll], connectorRunning: true } };
+    const observed = { outputs: {}, detail: { ingress: [appRule, catchAll], connectorRunning: true, image: IMAGE } };
     expect(provider.diff(inputs, observed)).toEqual({ action: "noop" });
 });
 
@@ -95,9 +102,18 @@ test("diff is update when the connector is not running", () => {
     expect(provider.diff(inputs, observed).action).toBe("update");
 });
 
+test("diff is update when the connector runs on a different image", () => {
+    const provider = createTunnelProvider(api({}), fakeSsh().executor);
+    const observed = {
+        outputs: {},
+        detail: { ingress: [appRule, catchAll], connectorRunning: true, image: "cloudflare/cloudflared:old@sha256:bbbb" },
+    };
+    expect(provider.diff(inputs, observed).action).toBe("update");
+});
+
 test("diff is update when the ingress differs from desired", () => {
     const provider = createTunnelProvider(api({}), fakeSsh().executor);
-    const observed = { outputs: {}, detail: { ingress: [catchAll], connectorRunning: true } };
+    const observed = { outputs: {}, detail: { ingress: [catchAll], connectorRunning: true, image: IMAGE } };
     expect(provider.diff(inputs, observed).action).toBe("update");
 });
 
