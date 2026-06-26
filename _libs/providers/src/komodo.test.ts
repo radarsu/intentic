@@ -55,7 +55,7 @@ const inputs = {
     adminPassword: "pw",
     gitAccount: "intentic",
     gitToken: "gtok-456",
-    registry: "localhost:3000",
+    registry: "127.0.0.1:3000",
     packagesToken: "ptok-789",
 };
 
@@ -101,7 +101,7 @@ test("apply writes compose + a once-guarded env, brings the stack up, waits for 
     expect(
         ssh.commands.some(
             (c) =>
-                c.includes("cat > /opt/intentic/komodo/config.toml") && c.includes('domain = "localhost:3000"') && c.includes('token = "ptok-789"'),
+                c.includes("cat > /opt/intentic/komodo/config.toml") && c.includes('domain = "127.0.0.1:3000"') && c.includes('token = "ptok-789"'),
         ),
     ).toBe(true);
     // The resource poll interval is baked into the once-guarded .env so auto_update can roll out new images.

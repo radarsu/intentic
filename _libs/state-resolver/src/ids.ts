@@ -28,6 +28,9 @@ export const deploymentPort = (deploymentId: string): number =>
 export const adminUsername = "intentic";
 // The Forgejo built-in container registry authority. Addressed host-locally so the CI runner (push,
 // --network host) and Komodo Periphery (pull, host docker socket) both reach Forgejo on the SAME host
-// dockerd, which trusts localhost registries as insecure-by-default — no daemon.json change needed, and it
-// sidesteps that git.<zone> does not resolve inside the host. The port mirrors Forgejo's HTTP port (3000).
-export const registryAuthority = "localhost:3000";
+// dockerd, which trusts 127.0.0.0/8 registries as insecure-by-default — no daemon.json change needed, and it
+// sidesteps that git.<zone> does not resolve inside the host. The dotted loopback IP (NOT "localhost") is
+// deliberate: Komodo's image-reference parser only treats a dotted host[:port] first segment as a registry —
+// it does not honor Docker's `localhost` special-case — so a `localhost:3000/...` image resolves to docker.io
+// and misses this account ("did not find token ... domain docker.io"). The port mirrors Forgejo's HTTP port.
+export const registryAuthority = "127.0.0.1:3000";

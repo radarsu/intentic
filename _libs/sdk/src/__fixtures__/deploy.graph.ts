@@ -133,7 +133,7 @@ export const expectedGraph: DesiredStateGraph = {
                 gitToken: {
                     $ref: "host-git.gitToken",
                 },
-                registry: "localhost:3000",
+                registry: "127.0.0.1:3000",
                 packagesToken: {
                     $ref: "host-git.packagesToken",
                 },
@@ -229,7 +229,7 @@ export const expectedGraph: DesiredStateGraph = {
                 },
                 repoName: "my-app",
                 branch: "develop",
-                registry: "localhost:3000",
+                registry: "127.0.0.1:3000",
                 tag: "staging",
                 packagesToken: {
                     $ref: "host-git.packagesToken",
@@ -246,7 +246,7 @@ export const expectedGraph: DesiredStateGraph = {
             type: "deployment",
             inputs: {
                 repoName: "my-app",
-                registry: "localhost:3000",
+                registry: "127.0.0.1:3000",
                 tag: "staging",
                 domain: "staging.example.com",
                 internalIp: {
@@ -316,7 +316,7 @@ export const expectedGraph: DesiredStateGraph = {
                 },
                 repoName: "my-app",
                 branch: "main",
-                registry: "localhost:3000",
+                registry: "127.0.0.1:3000",
                 tag: "production",
                 packagesToken: {
                     $ref: "host-git.packagesToken",
@@ -333,7 +333,7 @@ export const expectedGraph: DesiredStateGraph = {
             type: "deployment",
             inputs: {
                 repoName: "my-app",
-                registry: "localhost:3000",
+                registry: "127.0.0.1:3000",
                 tag: "production",
                 domain: "app.example.com",
                 internalIp: {

@@ -15,7 +15,7 @@ const ciSchema = z.object({
     repoName: z.string(),
     // The env branch the workflow triggers on (production -> "main").
     branch: z.string(),
-    // The Forgejo built-in registry authority (e.g. "localhost:3000"); image = registry/owner/repo:tag.
+    // The Forgejo built-in registry authority (e.g. "127.0.0.1:3000"); image = registry/owner/repo:tag.
     registry: z.string(),
     // The image tag = the environment name, so co-located environments publish to distinct tags.
     tag: z.string(),

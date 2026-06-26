@@ -12,7 +12,7 @@ const deploymentSchema = z.object({
     adminUser: z.string(),
     adminPassword: z.string(),
     repoName: z.string(),
-    // The Forgejo built-in registry authority (e.g. "localhost:3000") + the image tag (= environment name);
+    // The Forgejo built-in registry authority (e.g. "127.0.0.1:3000") + the image tag (= environment name);
     // image = registry/<adminUser>/<repoName>:<tag>, matching exactly what the CI workflow pushes.
     registry: z.string(),
     tag: z.string(),

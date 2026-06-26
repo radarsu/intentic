@@ -29,7 +29,7 @@ const ctx = () => ({
 
 const inputs = {
     repoName: "my-app",
-    registry: "localhost:3000",
+    registry: "127.0.0.1:3000",
     tag: "staging",
     domain: "staging.example.com",
     internalIp: "10.0.0.5",
@@ -50,7 +50,7 @@ test("read returns undefined when the deployment does not exist", async () => {
 
 const observedConfig = {
     server_id: "Local",
-    image: { type: "Image", params: { image: "localhost:3000/admin/my-app:staging" } },
+    image: { type: "Image", params: { image: "127.0.0.1:3000/admin/my-app:staging" } },
     environment: [],
 } as const;
 
@@ -102,7 +102,7 @@ test("apply creates the deployment from the registry image with poll + auto_upda
         name: "my-app.staging",
         config: {
             server_id: "Local",
-            image: { type: "Image", params: { image: "localhost:3000/admin/my-app:staging" } },
+            image: { type: "Image", params: { image: "127.0.0.1:3000/admin/my-app:staging" } },
             image_registry_account: "admin",
             poll_for_updates: true,
             auto_update: true,

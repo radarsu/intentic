@@ -18,7 +18,7 @@ const inputs = {
     komodoPassword: "kpw",
     repoName: "my-app",
     branch: "main",
-    registry: "localhost:3000",
+    registry: "127.0.0.1:3000",
     tag: "production",
     packagesToken: "ptok",
     komodoUrl: "http://10.0.0.5:9120",
@@ -81,7 +81,7 @@ test("apply sets both repo secrets, seeds a Dockerfile when absent, and commits 
     expect(secrets["REGISTRY_TOKEN"]).toBe("ptok");
     expect(secrets["KOMODO_PASSWORD"]).toBe("kpw");
     expect(commits["Dockerfile"]).toContain("FROM busybox");
-    expect(commits[WORKFLOW_PATH]).toContain("localhost:3000/intentic/my-app:production");
+    expect(commits[WORKFLOW_PATH]).toContain("127.0.0.1:3000/intentic/my-app:production");
     expect(commits[WORKFLOW_PATH]).toContain('"deployment":"my-app.production"');
 });
 

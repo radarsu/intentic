@@ -17,7 +17,7 @@ const komodoSchema = sshSchema.extend({
     // git.<zone> name does not resolve there). gitAccount/gitToken are the admin + its scoped read token.
     gitAccount: z.string(),
     gitToken: z.string(),
-    // The Forgejo built-in container registry (e.g. "localhost:3000") Komodo PULLS app images from, with the
+    // The Forgejo built-in container registry (e.g. "127.0.0.1:3000") Komodo PULLS app images from, with the
     // admin's packages token — written as a [[docker_registry]] account so a private image can be pulled.
     registry: z.string(),
     packagesToken: z.string(),

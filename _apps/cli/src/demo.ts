@@ -166,6 +166,13 @@ const up = async (): Promise<void> => {
         "run",
         "-d",
         "--privileged",
+        // dockerd resolves git.<zone> for the registry-token realm (Forgejo's public ROOT_URL); point the host
+        // at Cloudflare's resolver so it never hits the negative-caching Docker Desktop DNS (192.168.65.7).
+        // This is the docker-daemon counterpart of the DoH hook the CLI children use for the same zone.
+        "--dns",
+        "1.1.1.1",
+        "--dns",
+        "1.0.0.1",
         "--name",
         CONTAINER,
         "-e",

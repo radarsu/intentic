@@ -17,7 +17,7 @@ const JOB_IMAGE = "data.forgejo.org/oci/node:20-bullseye";
 
 // act_runner config so each job container builds with the HOST docker: host networking + the daemon socket
 // auto-mounted (docker_host: automount) + the host's static docker CLI and buildx plugin bind-mounted in, so
-// the CI workflow's docker/* actions push to localhost:3000 via the host daemon and the notify step reaches
+// the CI workflow's docker/* actions push to 127.0.0.1:3000 via the host daemon and the notify step reaches
 // Komodo's host-internal url. dockerBin/buildxPlugin are discovered on the host (paths vary by distro).
 const runnerConfig = (dockerBin: string, buildxPlugin: string): string =>
     [
