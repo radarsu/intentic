@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { CONFIG_FILE, ENV_FILE, INTENT_DIR, SECRETS_FILE, TARGET_DIR } from "./artifact.js";
+import { CONFIG_FILE, ENV_FILE, INTENT_DIR, LAST_APPLIED_FILE, SECRETS_FILE, TARGET_DIR } from "./artifact.js";
 
 const exec = promisify(execFile);
 
@@ -31,11 +31,12 @@ export const intent = defineIntent((i) => {
 });
 `;
 
-// Keep the secret files out of the PR-managed desired-state repo: the user-supplied `.env` and the
-// intentic-generated `.secrets.json` (Forgejo/Komodo admin credentials). The matching `.env.example` is not
-// written here — `resolve` generates it from the graph, the only complete source of the required keys (the
-// resolver injects platform secrets the authored config never names).
-const TARGET_GITIGNORE = `${ENV_FILE}\n${SECRETS_FILE}\n`;
+// Keep secret + local-only files out of the PR-managed desired-state repo: the user-supplied `.env`, the
+// intentic-generated `.secrets.json`, and the `.last-applied.json` prune baseline (local snapshot of the
+// last successfully-applied artifact). The matching `.env.example` is not written here — `resolve`
+// generates it from the graph, the only complete source of the required keys (the resolver injects
+// platform secrets the authored config never names).
+const TARGET_GITIGNORE = `${ENV_FILE}\n${SECRETS_FILE}\n${LAST_APPLIED_FILE}\n`;
 
 // The intent repo is a self-contained TS project; `init` runs `pnpm install` in it, producing a
 // node_modules/ that must stay out of the repo.

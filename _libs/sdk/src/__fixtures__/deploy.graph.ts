@@ -255,7 +255,6 @@ export const expectedGraph: DesiredStateGraph = {
             id: "my-app.staging",
             type: "deployment",
             inputs: {
-                server: "host",
                 owner: "squad",
                 repoName: "my-app",
                 registry: "git.example.com",
@@ -345,7 +344,6 @@ export const expectedGraph: DesiredStateGraph = {
             id: "my-app.production",
             type: "deployment",
             inputs: {
-                server: "host",
                 owner: "squad",
                 repoName: "my-app",
                 registry: "git.example.com",

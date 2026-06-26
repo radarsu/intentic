@@ -9,6 +9,7 @@ export const INTENT_DIR = "intent";
 export const TARGET_DIR = "desired-state";
 export const CONFIG_FILE = "deploy.config.ts";
 export const ARTIFACT_FILE = "desired-state.json";
+export const LAST_APPLIED_FILE = ".last-applied.json";
 export const STATUS_FILE = "status.json";
 export const ACCESS_FILE = "access.md";
 export const ENV_FILE = ".env";

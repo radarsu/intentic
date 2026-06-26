@@ -14,8 +14,8 @@ const komodoNotifySchema = z.object({
 type KomodoNotifyInputs = z.infer<typeof komodoNotifySchema>;
 const parse = (inputs: ResolvedInputs): KomodoNotifyInputs => parseInputs(komodoNotifySchema, inputs, "komodo-notify");
 
-// events:["deploy"] maps to the Komodo alert variants that carry deployment success/failure transitions.
-const DEPLOY_ALERT_TYPES: readonly string[] = ["DeploymentStateChange", "StackStateChange", "DeploymentAutoUpdated", "StackAutoUpdated"];
+// events:["deploy"] maps to the Komodo alert variants that fire on deployment lifecycle events.
+const DEPLOY_ALERT_TYPES: readonly string[] = ["ContainerStateChange", "DeploymentAutoUpdated"];
 
 // The Discord alerter scoped to exactly this app's deployments, so it does not fire for sibling apps.
 const desiredConfig = (parsed: KomodoNotifyInputs): AlerterConfig => ({

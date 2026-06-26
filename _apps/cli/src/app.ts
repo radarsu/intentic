@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createStore, plan, prune, reconcile, resolveInputs } from "@intentic/engine";
@@ -16,6 +18,7 @@ import {
     CONFIG_PATH,
     ENV_FILE,
     INTENT_DIR,
+    LAST_APPLIED_FILE,
     loadEnvFile,
     readArtifact,
     STATUS_FILE,
@@ -170,11 +173,17 @@ const apply = buildCommand<ApplyFlags>({
         // Prune AFTER convergence (reconcile throws if it never converges, so a failed apply never deletes):
         // tear down every resource in the last successfully-applied artifact that the new one no longer
         // declares. Deletes need the kept platform nodes' creds, hence the same providers/env as the apply.
-        if (flags.previous !== undefined) {
-            const previous = await readArtifact(flags.previous);
+        // When --previous isn't explicit, auto-read the .last-applied.json snapshot from the last successful run.
+        const previousPath = flags.previous ?? join(dir, LAST_APPLIED_FILE);
+        if (existsSync(previousPath)) {
+            const previous = await readArtifact(previousPath);
             const outcome = await prune(previous, graph, { providers: createProviders(), log, env: process.env });
-            log(`pruned ${outcome.deleted.length} resource(s)${outcome.skipped.length > 0 ? `, ${outcome.skipped.length} left in place` : ""}`);
+            if (outcome.deleted.length > 0 || outcome.skipped.length > 0) {
+                log(`pruned ${outcome.deleted.length} resource(s)${outcome.skipped.length > 0 ? `, ${outcome.skipped.length} left in place` : ""}`);
+            }
         }
+        // Snapshot the current artifact so the next apply can prune against it.
+        await writeFile(join(dir, LAST_APPLIED_FILE), await readFile(artifact, "utf8"));
         const access = collectAccess(graph, result.outcome.outputs, process.env);
         log(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
         if (access.length > 0) {
