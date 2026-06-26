@@ -24,8 +24,8 @@ export const intent = defineIntent((i) => {
 
     // What I have: a Discord bot that intentic uses as the back-communication channel. intentic owns the
     // full server structure (categories, channels, webhooks); the operator supplies only the bot token.
-    // CI/CD notifications + reconcile summaries are posted automatically.
-    i.have.discord("discord", {
+    // CI/CD notifications + reconcile summaries are posted automatically for apps that wire it.
+    const discord = i.have.discord("discord", {
         botToken: env("DISCORD_BOT_TOKEN"),
     });
 
@@ -53,6 +53,7 @@ export const intent = defineIntent((i) => {
     i.want.app("my-app", {
         on: host,
         expose: cf,
+        notify: discord,
         observe: obs,
         teams: [{ team: platform, role: "write" }],
         environments: {

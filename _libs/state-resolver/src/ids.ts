@@ -30,7 +30,6 @@ export const ciId = (appId: string, environment: string): string => `${deploymen
 // CI/CD notification sinks, app-scoped: a Forgejo repo webhook and a Komodo alerter targeting Discord.
 export const forgejoNotifyId = (appId: string): string => `${repoId(appId)}-notify`;
 export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
-export const discordId = (): string => "discord";
 export const gitDomain = (zone: string): string => `git.${zone}`;
 export const deployDomain = (zone: string): string => `deploy.${zone}`;
 // A deterministic host port per deployment so co-located environments don't collide. Resolver-owned so the

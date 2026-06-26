@@ -98,7 +98,7 @@ test("an unsupported option assignment throws", () => {
     expect(() => emit(intent, { byNeed }, "example.com")).toThrow('unsupported option "gitlab"');
 });
 
-test("discord declared derives forgejo-notify (CI) + komodo-notify (CD) for every app, wired to the discord node's webhooks", () => {
+test("app with notify: discord derives forgejo-notify (CI) + komodo-notify (CD), wired to the discord node's webhooks", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
@@ -111,6 +111,7 @@ test("discord declared derives forgejo-notify (CI) + komodo-notify (CD) for ever
                 id: "app",
                 on: "host",
                 expose: "cf",
+                notify: "discord",
                 environments: { prod: { domain: "app.example.com", branch: "main" } },
             },
         ],
@@ -130,6 +131,25 @@ test("discord declared derives forgejo-notify (CI) + komodo-notify (CD) for ever
     expect(komodoNotify?.inputs["webhook"]).toEqual(makeRef("discord", "appWebhook:app"));
 });
 
+test("app without notify derives no notification sinks even when discord is declared", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        discord: { id: "discord", input: { botToken: env("DISCORD_BOT_TOKEN") } },
+        users: [],
+        teams: [],
+        services: [],
+        apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    const types = emit(intent, assign(intent), "example.com").map((node) => node.type);
+    expect(types.filter((type) => type === "forgejo-notify")).toHaveLength(0);
+    expect(types.filter((type) => type === "komodo-notify")).toHaveLength(0);
+    // The discord node IS emitted but its apps list is empty (no app references it).
+    expect(types.filter((type) => type === "discord")).toHaveLength(1);
+    expect(emit(intent, assign(intent), "example.com").find((node) => node.type === "discord")?.inputs["apps"]).toEqual([]);
+});
+
 test("no discord declared derives no notification sinks", () => {
     const intent: IntentSet = {
         hosts: [host],
@@ -146,7 +166,7 @@ test("no discord declared derives no notification sinks", () => {
     expect(types.filter((type) => type === "discord")).toHaveLength(0);
 });
 
-test("discord declared derives notification sinks per app, while the platform stays shared per host", () => {
+test("notification sinks are derived only for apps that wire notify, while the platform stays shared", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
@@ -159,6 +179,7 @@ test("discord declared derives notification sinks per app, while the platform st
                 id: "one",
                 on: "host",
                 expose: "cf",
+                notify: "discord",
                 environments: { prod: { domain: "one.example.com", branch: "main" } },
             },
             {
@@ -171,15 +192,16 @@ test("discord declared derives notification sinks per app, while the platform st
     };
 
     const types = emit(intent, assign(intent), "example.com").map((node) => node.type);
-    expect(types.filter((type) => type === "forgejo-notify")).toHaveLength(2);
-    expect(types.filter((type) => type === "komodo-notify")).toHaveLength(2);
+    // Only "one" wires notify — "two" opts out.
+    expect(types.filter((type) => type === "forgejo-notify")).toHaveLength(1);
+    expect(types.filter((type) => type === "komodo-notify")).toHaveLength(1);
     expect(types.filter((type) => type === "forgejo")).toHaveLength(1);
     expect(types.filter((type) => type === "komodo")).toHaveLength(1);
     expect(types.filter((type) => type === "discord")).toHaveLength(1);
 
-    // The discord node carries the app ids so it knows which channels/webhooks to create.
+    // The discord node carries only the notified app.
     const discordNode = emit(intent, assign(intent), "example.com").find((node) => node.type === "discord");
-    expect(discordNode?.inputs["apps"]).toEqual(["one", "two"]);
+    expect(discordNode?.inputs["apps"]).toEqual(["one"]);
 });
 
 test("a services-only intent emits the service + its route + tunnel, but no app platform", () => {

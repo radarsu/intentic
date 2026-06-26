@@ -115,6 +115,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
             id,
             on: input.on.resourceId,
             expose: input.expose.resourceId,
+            ...(input.notify !== undefined ? { notify: input.notify.resourceId } : {}),
             ...(input.observe !== undefined ? { observe: input.observe.resourceId } : {}),
             ...(input.teams !== undefined ? { teams: input.teams.map((grant) => ({ team: grant.team.resourceId, role: grant.role })) } : {}),
             environments: input.environments,

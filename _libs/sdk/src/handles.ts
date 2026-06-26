@@ -92,6 +92,8 @@ export interface Service extends Ref<"signoz"> {
 export interface WantAppInput {
     on: Host;
     expose: Cloudflare;
+    // The Discord channel this app's CI/CD alerts are posted to; wired like expose/observe.
+    notify?: Discord;
     // A service to send this app's telemetry to; the resolver injects its OTLP endpoint into each deployment.
     observe?: Service;
     // The teams that manage this app, each at a Forgejo role. The first grant's team owns the repo (its org is

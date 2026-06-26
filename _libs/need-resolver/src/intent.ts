@@ -57,6 +57,9 @@ export interface AppIntent {
     readonly id: string;
     readonly on: string;
     readonly expose: string;
+    // The id of a discord resource (i.have.discord) this app's CI/CD alerts are posted to. The resolver
+    // derives a forgejo-notify + komodo-notify wired to the discord provider's per-app webhook.
+    readonly notify?: string;
     // The id of a service (i.want.service) this app sends telemetry to. The resolver injects that service's
     // OTLP endpoint into each deployment's env and depends the deployment on it. Absent = no telemetry.
     readonly observe?: string;

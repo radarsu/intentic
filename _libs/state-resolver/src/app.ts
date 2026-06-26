@@ -7,7 +7,6 @@ import {
     ciId,
     deploymentId,
     deploymentPort,
-    discordId,
     forgejoNotifyId,
     forgejoOrgId,
     gitDomain,
@@ -34,7 +33,6 @@ export const resolveApp = (
     apiToken: SecretRef,
     zone: string,
     controlPlaneHost: string,
-    hasDiscord: boolean,
 ): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
     const repo = repoId(intent.id);
     const forgejoUrl = makeRef<string>(platform.forgejo, "url");
@@ -125,24 +123,23 @@ export const resolveApp = (
         ingress.push(exposure.ingress);
     }
 
-    // CI/CD notifications: when a Discord account is declared (i.have.discord), derive the two native
-    // Discord sinks — a Forgejo repo webhook on build results (CI) and a Komodo alerter scoped to this
-    // app's deployments on deploy results (CD). The webhook URL comes from the discord provider's
-    // per-app output. Pure sinks: no outputs.
-    if (hasDiscord) {
-        const webhook = makeRef<string>(discordId(), `appWebhook:${intent.id}`);
+    // CI/CD notifications: when the app wires a Discord handle (notify: discord), derive the two native
+    // sinks — a Forgejo repo webhook on build results (CI) and a Komodo alerter scoped to this app's
+    // deployments on deploy results (CD). The webhook URL comes from the discord provider's per-app output.
+    if (intent.notify !== undefined) {
+        const webhook = makeRef<string>(intent.notify, `appWebhook:${intent.id}`);
         nodes.push({
             id: forgejoNotifyId(intent.id),
             type: "forgejo-notify",
             inputs: { forgejoUrl, ...forgejoAdmin, owner, repoName: intent.id, webhook, events: ["build"] },
-            explicitDependsOn: [platform.forgejo, platform.gitRoute, repo, discordId(), ...ownerDeps],
+            explicitDependsOn: [platform.forgejo, platform.gitRoute, repo, intent.notify, ...ownerDeps],
         });
         const targets = Object.keys(intent.environments).map((environment) => deploymentId(intent.id, environment));
         nodes.push({
             id: komodoNotifyId(intent.id),
             type: "komodo-notify",
             inputs: { komodoUrl, ...komodoAdmin, targets, webhook, events: ["deploy"] },
-            explicitDependsOn: [platform.deploy, platform.deployRoute, discordId(), ...targets],
+            explicitDependsOn: [platform.deploy, platform.deployRoute, intent.notify, ...targets],
         });
     }
 
