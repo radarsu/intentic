@@ -95,3 +95,53 @@ single-graph form used when a single deterministic graph is wanted directly.
   [_libs/sdk/src/__fixtures__/deploy.graph.ts](_libs/sdk/src/__fixtures__/deploy.graph.ts).
 
 See [CLAUDE.md](CLAUDE.md) for the code-style rules every change must follow.
+
+## Local end-to-end testing
+
+`createProviders()` ([_libs/providers/src/providers.ts](_libs/providers/src/providers.ts)) assembles the
+full `ResourceType → Provider` map — the single seam between a compiled graph and execution. Passing
+fakes drives the whole suite in-memory ([suite.engine.test.ts](_libs/providers/src/suite.engine.test.ts));
+passing nothing uses the real SSH/Cloudflare/Forgejo/Komodo implementations.
+
+[cli.e2e.test.ts](_apps/cli/src/cli.e2e.test.ts) is a **manual, real** run that drives the actual CLI
+exactly as an operator would. It boots a Docker-in-Docker "host"
+([test/host/Dockerfile](test/host/Dockerfile)) via `testcontainers`, scaffolds with `init`, authors a
+`deploy.config.ts` pointed at the host's mapped SSH port (with a per-run generated key), fills
+`desired-state/.env`, then runs `resolve` + `apply`. Phase 1 stands up the platform (Forgejo + runner +
+Komodo) and exposes `git.<zone>`/`deploy.<zone>` through a **real Cloudflare tunnel**; phase 2 pushes a
+tiny Dockerfile and authors an environment so `apply` wires CI/CD — the Forgejo Actions workflow builds +
+pushes the image and Komodo rolls it out live at `app.<zone>`. It asserts the platform containers are up,
+the public URLs respond, and the app serves its body, then purges the Cloudflare DNS + tunnel it created.
+
+It is gated behind `INTENTIC_E2E` and **excluded from `pnpm test` / CI** (it needs a privileged Docker
+daemon and live Cloudflare credentials). Run it from the repo root with `pnpm e2e` — turbo builds the libs
+(`^build`) and the CLI's e2e script sets `INTENTIC_E2E=1`; you supply only a Cloudflare token (and,
+optionally, the zone to deploy under). The host SSH key is generated per run, and the Forgejo/Komodo admin
+passwords are intentic-generated:
+
+```sh
+CLOUDFLARE_API_TOKEN=...        # Account → Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read
+CLOUDFLARE_ZONE=example.com \   # a zone you own — DNS records + a tunnel are created and then deleted
+pnpm e2e
+```
+
+> Networking: providers run nested containers with `--network host`, so the engine reaches services at
+> the host's internal IP and port. This works from a Linux/WSL2 host (routable bridge IPs); on Docker
+> Desktop (macOS/Windows) run the harness as a sibling container on the same network.
+
+## Demo
+
+`pnpm demo:up` / `demo:down` / `demo:clear` ([_apps/cli/src/demo.ts](_apps/cli/src/demo.ts)) drive the
+real CLI (`init`/`resolve`/`apply`) against a Docker-in-Docker "host", standing up Forgejo + Komodo behind
+a Cloudflare tunnel so the result can be browsed. It is a **maintainer tool**, not a zero-setup demo: it
+provisions against a real Cloudflare zone (`CLOUDFLARE_ZONE`, default `intentic.dev`) using
+`CLOUDFLARE_API_TOKEN`, and shares the tunnel name `intentic-host` with the e2e harness (don't run both at
+once).
+
+- **`demo:up`** boots the privileged host (SSH on `DEMO_SSH_PORT`, default 2222), scaffolds with
+  `init --link`, runs resolve + apply, seeds a test app, and leaves everything running — printing the
+  public URLs (`git.<zone>` / `deploy.<zone>` / `app.<zone>`), the local URLs, and the generated admin
+  logins. State is persisted in `.demo/state.json` so teardown can always find what it created.
+- **`demo:down`** stops the host container but leaves the Cloudflare tunnel + DNS in place, so the next
+  `demo:up` reconnects in seconds.
+- **`demo:clear`** also purges the tunnel + DNS records the demo created.
