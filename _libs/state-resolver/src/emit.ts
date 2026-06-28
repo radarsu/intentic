@@ -3,6 +3,7 @@ import type { HostInput, IntentSet } from "@intentic/need-resolver";
 import { controlPlaneHostId } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
+import { resolveBacking } from "./backing.js";
 import { resolveBackup } from "./backup.js";
 import { emitGitHub } from "./emit-github.js";
 import { resolveIdentities } from "./identity.js";
@@ -39,6 +40,9 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
     // no Komodo, no runner. The two paths share host/cloudflare/tunnel/cf-route/service.
     const isGitHub = [...assignment.byNeed.values()].includes("github");
     if (isGitHub) {
+        if (intent.backings.length > 0) {
+            throw new Error("backings (i.want.database/cache/…) are not yet supported on the GitHub stack; use the Forgejo stack");
+        }
         if (zone === undefined && (intent.apps.length > 0 || intent.services.length > 0)) {
             throw new Error(
                 "intent exposes apps/services through Cloudflare but no zone was provided; the CLI discovers it from the API token before resolving",
@@ -53,13 +57,13 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         }
     }
 
-    if (intent.apps.length === 0 && intent.services.length === 0) {
+    if (intent.apps.length === 0 && intent.services.length === 0 && intent.backings.length === 0) {
         return [];
     }
 
     const cloudflare = intent.cloudflare;
     if (cloudflare === undefined) {
-        throw new Error("intent declares apps/services but no Cloudflare; declare it with i.have.cloudflare");
+        throw new Error("intent declares apps/services/backings but no Cloudflare; declare it with i.have.cloudflare");
     }
     if (zone === undefined) {
         throw new Error(
@@ -69,11 +73,22 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
 
     const cpId = controlPlaneHostId(intent);
     if (cpId === undefined) {
-        throw new Error("intent declares apps/services but no host; declare one with i.have.host");
+        throw new Error("intent declares apps/services/backings but no host; declare one with i.have.host");
     }
 
     const apiToken = cloudflare.input.apiToken;
     const hostById = new Map(intent.hosts.map((h) => [h.id, h]));
+    // The backing instances apps may bind, keyed by id, each with the host it runs on. Validates each backing
+    // targets a declared host (apps reference these by id in their `use`). Passed into resolveApp so a binding
+    // node can be emitted onto the instance's host.
+    const backingById = new Map<string, { intent: (typeof intent.backings)[number]; host: HostInput }>();
+    for (const backing of intent.backings) {
+        const host = hostById.get(backing.on);
+        if (host === undefined) {
+            throw new Error(`backing "${backing.id}" targets undeclared host "${backing.on}"; declare it with i.have.host`);
+        }
+        backingById.set(backing.id, { intent: backing, host: host.input });
+    }
     const cpHost = hostById.get(cpId)!;
     const nodes: ResolvedNode[] = [];
 
@@ -135,13 +150,22 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
             if (app.observe !== undefined && !serviceIds.has(app.observe)) {
                 throw new Error(`app "${app.id}" observes unknown service "${app.observe}"; declare it with i.want.service`);
             }
+            // Validate app -> backing references: the target must be a declared backing AND its capability must
+            // match what the app recorded (guards a stale id reused across capabilities).
+            for (const binding of app.use ?? []) {
+                const backing = backingById.get(binding.target);
+                if (backing === undefined) {
+                    throw new Error(`app "${app.id}" uses unknown backing "${binding.target}"; declare it with i.want.${binding.capability}`);
+                }
+                if (backing.intent.capability !== binding.capability) {
+                    throw new Error(`app "${app.id}" uses "${binding.target}" as ${binding.capability} but it is a ${backing.intent.capability}`);
+                }
+            }
         }
 
         // --- Worker hosts: Periphery + Server registration ---
 
-        const workerHostIds = new Set(
-            [...intent.apps.map((a) => a.on), ...intent.services.map((s) => s.on)].filter((id) => id !== cpId),
-        );
+        const workerHostIds = new Set([...intent.apps.map((a) => a.on), ...intent.services.map((s) => s.on)].filter((id) => id !== cpId));
         for (const hostId of workerHostIds) {
             const host = hostById.get(hostId)!;
             const peripheryId = `${hostId}-periphery`;
@@ -180,7 +204,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         // --- Apps: all go through the shared platform ---
 
         for (const app of intent.apps) {
-            const resolved = resolveApp(app, platform.refs, apiToken, zone, cpId);
+            const resolved = resolveApp(app, platform.refs, apiToken, zone, cpId, backingById);
             nodes.push(...resolved.nodes);
             // Route ingress goes to the host the app runs ON (its tunnel), not the CP host.
             const hostIngress = ingressByHost.get(app.on) ?? [];
@@ -202,6 +226,20 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         const hostIngress = ingressByHost.get(service.on) ?? [];
         hostIngress.push(...resolved.ingress);
         ingressByHost.set(service.on, hostIngress);
+    }
+
+    // --- Backing instances: each deployed onto its host over SSH. Internal-only (database/cache) contribute
+    // no ingress; exposed ones (auth, Phase 2) aggregate onto the host's tunnel like services. The per-app
+    // binding nodes are emitted inside resolveApp (they require an app), not here. ---
+    for (const backing of intent.backings) {
+        const host = hostById.get(backing.on)!;
+        const resolved = resolveBacking(backing, host.input);
+        nodes.push(...resolved.nodes);
+        if (resolved.ingress.length > 0) {
+            const hostIngress = ingressByHost.get(backing.on) ?? [];
+            hostIngress.push(...resolved.ingress);
+            ingressByHost.set(backing.on, hostIngress);
+        }
     }
 
     // --- Backup on the control-plane host (where Forgejo+Komodo data lives) ---

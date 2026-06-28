@@ -6,9 +6,9 @@ import { createCloudflareProvider } from "./cloudflare.js";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
 import { createDeploymentProvider } from "./deployment.js";
+import { createDiscordProvider } from "./discord.js";
 import type { DiscordApi } from "./discord-api.js";
 import { discordApi } from "./discord-api.js";
-import { createDiscordProvider } from "./discord.js";
 import { createForgejoProvider } from "./forgejo.js";
 import type { ForgejoApi } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";
@@ -31,11 +31,15 @@ import { createKomodoNotifyProvider } from "./komodo-notify.js";
 import { createKomodoPeripheryProvider } from "./komodo-periphery.js";
 import { createKomodoServerProvider } from "./komodo-server.js";
 import { createKomodoUserProvider } from "./komodo-user.js";
+import { createPostgresProvider } from "./postgres.js";
+import { createPostgresDatabaseProvider } from "./postgres-database.js";
 import { createRepoProvider } from "./repo.js";
 import { createSignozProvider } from "./signoz.js";
 import type { SshExecutor } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 import { createTunnelProvider } from "./tunnel.js";
+import { createValkeyProvider } from "./valkey.js";
+import { createValkeyNamespaceProvider } from "./valkey-namespace.js";
 
 // The four side-effecting dependencies every provider is built over: SSH transport to the host and the
 // three external HTTP surfaces. Each defaults to its real implementation; pass a fake to drive the whole
@@ -82,6 +86,10 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "komodo-notify": createKomodoNotifyProvider(komodo),
         signoz: createSignozProvider(ssh),
         backup: createBackupProvider(ssh),
+        postgres: createPostgresProvider(ssh),
+        "postgres-database": createPostgresDatabaseProvider(ssh),
+        valkey: createValkeyProvider(ssh),
+        "valkey-namespace": createValkeyNamespaceProvider(ssh),
         github: createGitHubProvider(github),
         "gh-repo": createGhRepoProvider(github),
         "gh-ci": createGhCiProvider(github),

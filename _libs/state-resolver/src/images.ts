@@ -45,4 +45,13 @@ export const IMAGES = Object.freeze({
     // the backup provider bind-mounts the host's docker binary (the forgejo-runner pattern) for the
     // app-consistent `docker exec` dumps. renovate: datasource=docker depName=restic/restic
     backup: "restic/restic:0.19.0@sha256:7f44e0057b82348597568ea209360762d0b38f8e1dbc8ad859661ac1055e45f2",
+    // The Postgres backing instance (i.want.database). Plain upstream postgres; the binding provider creates
+    // per-app databases + roles in it via `docker exec … psql`. The @sha256 below is a PLACEHOLDER digest —
+    // Renovate pins the real one on its first PR (pinDigests), and the e2e harness must run only against a
+    // pinned digest. renovate: datasource=docker depName=postgres
+    postgres: "postgres:17.6-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    // The Valkey backing instance (i.want.cache). The binding provider mints a per-app ACL user in it via
+    // `docker exec … valkey-cli`. PLACEHOLDER digest, pinned by Renovate (see postgres above).
+    // renovate: datasource=docker depName=valkey/valkey
+    valkey: "valkey/valkey:8.1.1-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
 } as const);

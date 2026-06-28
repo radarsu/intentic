@@ -28,11 +28,14 @@ test("public handles' output refs match OUTPUTS exactly", () => {
         handles["cloudflare"] = cf;
         handles["repo"] = app.repo;
         handles["deployment"] = app.environments["prod"];
+        handles["postgres"] = i.want.database("db", { on: host });
+        handles["valkey"] = i.want.cache("cache", { on: host });
     }, "example.com");
 
     // The App handle is the author's composite (repo + environments), not a resource type, so it is not walked
-    // here. host/cloudflare are author-facing handles (i.have.*); repo/deployment are nested on the app handle.
-    for (const type of ["host", "cloudflare", "deployment", "repo"] as const) {
+    // here. host/cloudflare are author-facing handles (i.have.*); repo/deployment are nested on the app handle;
+    // postgres/valkey are the backing-instance handles (i.want.database / cache).
+    for (const type of ["host", "cloudflare", "deployment", "repo", "postgres", "valkey"] as const) {
         const handle = handles[type];
         expect(handle, `no handle captured for type "${type}"`).toBeDefined();
         expect(outputPropsOf(handle as object)).toEqual([...OUTPUTS[type]].sort());

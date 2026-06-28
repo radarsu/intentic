@@ -35,6 +35,20 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     signoz: ["url", "internalUrl", "otlpEndpoint"],
     // A scheduled backup job — a pure sink (nothing refs an output off it), like ci/forgejo-runner.
     backup: [],
+    // Backing instances: the host-internal coordinates a consuming app's binding node connects with. The
+    // per-app credentials live on the binding node below, not here (apps never ref the instance directly).
+    postgres: ["internalHost", "port"],
+    valkey: ["internalHost", "port"],
+    // Per-app binding nodes: the connection URL injected into the consuming app's deployments. Carries the
+    // app-scoped credential (provider-generated, embedded in the URL), so it is a credentialed output sink.
+    "postgres-database": ["url"],
+    "valkey-namespace": ["url"],
+    // Phase 2 backing vocabulary (Authentik auth + Garage object-storage). Declared here so the resolver/emit
+    // and the OUTPUTS authority stay exhaustive; the providers + emit routing land in Phase 2.
+    authentik: ["url", "issuerUrl", "internalUrl"],
+    "authentik-client": ["issuer", "clientId", "clientSecret"],
+    garage: ["internalEndpoint", "endpoint"],
+    "garage-bucket": ["endpoint", "accessKey", "secretKey", "bucket"],
     // GitHub inventory node — resolves the PAT's owner (user or org).
     github: ["owner"],
     // GitHub repo — same output shape as the Forgejo "repo" type.

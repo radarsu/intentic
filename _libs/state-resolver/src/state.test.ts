@@ -12,6 +12,7 @@ const intent: IntentSet = {
     teams: [],
     apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     services: [],
+    backings: [],
 };
 
 test("the default catalog resolves intent to one desired-state graph built from the fixed stack", () => {
@@ -23,7 +24,7 @@ test("the default catalog resolves intent to one desired-state graph built from 
 });
 
 test("no apps resolve to an empty desired state", () => {
-    expect(resolveState({ hosts: [], users: [], teams: [], apps: [], services: [] })).toEqual({ version: 1, resources: {} });
+    expect(resolveState({ hosts: [], users: [], teams: [], apps: [], services: [], backings: [] })).toEqual({ version: 1, resources: {} });
 });
 
 test("a need with no option throws", () => {

@@ -19,7 +19,10 @@ export const defineStack = (declare: (stack: Stack) => void, zone?: string): Des
 export type {
     App,
     AppTeamGrant,
+    Backing,
+    Cache,
     Cloudflare,
+    Database,
     Deployment,
     GitHub,
     Have,

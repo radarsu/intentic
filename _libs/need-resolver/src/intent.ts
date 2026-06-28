@@ -53,6 +53,30 @@ export interface TeamIntent {
     readonly input: TeamInput;
 }
 
+// A backing capability an app consumes — the abstract name, mapped to its concrete provider by the catalog
+// in @intentic/state-resolver (database -> Postgres, cache -> Valkey, auth -> Authentik, object-storage ->
+// Garage). Declared with i.want.database / i.want.cache / i.want.auth / i.want.objectStorage.
+export type BackingCapability = "database" | "cache" | "auth" | "object-storage";
+
+// A backing instance the author wants: one shared service deployed onto a host (`on`) from a pinned image
+// over SSH. Internal-only capabilities (database/cache) have no `expose`/`domain`; auth always routes and
+// object-storage routes when a domain is given. Like AppIntent, `on`/`expose` are resource-id strings.
+export interface BackingIntent {
+    readonly id: string;
+    readonly capability: BackingCapability;
+    readonly on: string;
+    readonly expose?: string;
+    readonly domain?: string;
+}
+
+// One app -> backing binding. The resolver mints a per-app sub-resource (database+role / OIDC client /
+// bucket+key / Valkey ACL user) on the target instance and injects its credential env vars into every
+// deployment. `target` is a backing instance id; `capability` is recorded so emit can validate the kind.
+export interface AppBindingInput {
+    readonly capability: BackingCapability;
+    readonly target: string;
+}
+
 export interface AppIntent {
     readonly id: string;
     readonly on: string;
@@ -63,6 +87,9 @@ export interface AppIntent {
     // The id of a service (i.want.service) this app sends telemetry to. The resolver injects that service's
     // OTLP endpoint into each deployment's env and depends the deployment on it. Absent = no telemetry.
     readonly observe?: string;
+    // The backing capabilities this app uses (i.want.database / cache / auth / objectStorage). The resolver
+    // emits a per-app binding node per entry and injects its connection env vars into every deployment.
+    readonly use?: readonly AppBindingInput[];
     // The teams that manage this app, each at a Forgejo role. The first grant's team owns the repo; absent or
     // empty = admin-owned (the default single-admin behaviour). Resolver validates each team is declared.
     readonly teams?: readonly AppTeamGrantInput[];
@@ -90,4 +117,5 @@ export interface IntentSet {
     readonly teams: readonly TeamIntent[];
     readonly apps: readonly AppIntent[];
     readonly services: readonly ServiceIntent[];
+    readonly backings: readonly BackingIntent[];
 }

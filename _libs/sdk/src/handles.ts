@@ -87,6 +87,27 @@ export interface Service extends Ref<"signoz"> {
     readonly otlpEndpoint: Ref<string>;
 }
 
+// --- Backing capabilities (i.want.database / cache / auth / objectStorage). Each is a shared instance an
+// app consumes via WantAppInput.use; the resolver mints per-app credentials and injects the connection env
+// vars. The output refs here are the INSTANCE coordinates (what the per-app binding node connects with), not
+// the app's credentials — those live on the binding node the resolver emits. ---
+
+// A database capability, provided by Postgres. Internal-only. Apps that `use` it get a DATABASE_URL injected.
+export interface Database extends Ref<"postgres"> {
+    readonly internalHost: Ref<string>;
+    readonly port: Ref<string>;
+}
+
+// A cache capability, provided by Valkey. Internal-only. Apps that `use` it get VALKEY_URL + REDIS_URL.
+export interface Cache extends Ref<"valkey"> {
+    readonly internalHost: Ref<string>;
+    readonly port: Ref<string>;
+}
+
+// A backing capability handle an app can consume. The discriminating Ref tag (postgres/valkey) lets the
+// builder map a `use` entry back to its BackingCapability. Extended with Auth | ObjectStorage in Phase 2.
+export type Backing = Database | Cache;
+
 // --- Intent input. "Wants require haves" is enforced structurally: on: Host, expose: Cloudflare. ---
 
 export interface WantAppInput {
@@ -96,6 +117,10 @@ export interface WantAppInput {
     notify?: Discord;
     // A service to send this app's telemetry to; the resolver injects its OTLP endpoint into each deployment.
     observe?: Service;
+    // The backing capabilities this app consumes. For each, the resolver mints a per-app sub-resource on the
+    // instance and injects its connection env vars (DATABASE_URL, VALKEY_URL/REDIS_URL, …) into every
+    // deployment, spread BEFORE the author's own env so an explicit override still wins.
+    use?: readonly Backing[];
     // The teams that manage this app, each at a Forgejo role. The first grant's team owns the repo (its org is
     // the repo + registry namespace); omitted/empty falls back to the single admin owner.
     teams?: readonly AppTeamGrant[];
@@ -119,6 +144,10 @@ export interface Want {
     // `const` so environment names come from the object keys, e.g. App<"staging" | "production">.
     app<const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string>;
     service(id: string, input: WantServiceInput): Service;
+    // Backing capabilities. database/cache are internal-only, so they need only the host they run on; the
+    // catalog maps each to its concrete provider (Postgres / Valkey).
+    database(id: string, input: { on: Host }): Database;
+    cache(id: string, input: { on: Host }): Cache;
     user(id: string, input: UserInput): User;
     team(id: string, input: WantTeamInput): Team;
 }

@@ -16,7 +16,10 @@ export type {
     UserInput,
 } from "./inputs.js";
 export type {
+    AppBindingInput,
     AppIntent,
+    BackingCapability,
+    BackingIntent,
     BackupIntent,
     CloudflareIntent,
     DiscordIntent,

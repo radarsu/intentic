@@ -1,6 +1,8 @@
 import { makeRef } from "@intentic/graph";
 import type {
     AppIntent,
+    BackingCapability,
+    BackingIntent,
     BackupInput,
     BackupIntent,
     CloudflareInput,
@@ -22,7 +24,9 @@ import { deploymentId, repoId } from "@intentic/state-resolver";
 import type {
     App,
     Backup,
+    Cache,
     Cloudflare,
+    Database,
     Deployment,
     Discord,
     GitHub,
@@ -54,7 +58,11 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const teams: TeamIntent[] = [];
     const apps: AppIntent[] = [];
     const services: ServiceIntent[] = [];
+    const backings: BackingIntent[] = [];
     const hosts: HostIntent[] = [];
+    // The capability of each declared backing, keyed by its id — so app() can map a `use` handle (an inert
+    // ref carrying no runtime capability) back to its BackingCapability for the recorded AppBindingInput.
+    const backingCapabilities = new Map<string, BackingCapability>();
     const intent: {
         hosts: HostIntent[];
         cloudflare?: CloudflareIntent;
@@ -65,7 +73,8 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         teams: TeamIntent[];
         apps: AppIntent[];
         services: ServiceIntent[];
-    } = { hosts, users, teams, apps, services };
+        backings: BackingIntent[];
+    } = { hosts, users, teams, apps, services, backings };
 
     const host = (id: string, input: HostInput): Host => {
         claim(id);
@@ -117,6 +126,9 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
             expose: input.expose.resourceId,
             ...(input.notify !== undefined ? { notify: input.notify.resourceId } : {}),
             ...(input.observe !== undefined ? { observe: input.observe.resourceId } : {}),
+            ...(input.use !== undefined
+                ? { use: input.use.map((handle) => ({ capability: capabilityOf(handle.resourceId), target: handle.resourceId })) }
+                : {}),
             ...(input.teams !== undefined ? { teams: input.teams.map((grant) => ({ team: grant.team.resourceId, role: grant.role })) } : {}),
             environments: input.environments,
         });
@@ -147,6 +159,30 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         }) as Service;
     };
 
+    // The capability a `use` handle refers to, by its recorded backing id. Throws if the handle is not a
+    // declared backing (a programming error — the type system already guarantees it is a Backing handle).
+    const capabilityOf = (backingId: string): BackingCapability => {
+        const capability = backingCapabilities.get(backingId);
+        if (capability === undefined) {
+            throw new Error(`app uses backing "${backingId}" that was not declared with i.want.database/cache/auth/objectStorage`);
+        }
+        return capability;
+    };
+
+    const database = (id: string, input: { on: Host }): Database => {
+        claim(id);
+        backings.push({ id, capability: "database", on: input.on.resourceId });
+        backingCapabilities.set(id, "database");
+        return Object.freeze({ ...makeRef(id), internalHost: makeRef<string>(id, "internalHost"), port: makeRef<string>(id, "port") }) as Database;
+    };
+
+    const cache = (id: string, input: { on: Host }): Cache => {
+        claim(id);
+        backings.push({ id, capability: "cache", on: input.on.resourceId });
+        backingCapabilities.set(id, "cache");
+        return Object.freeze({ ...makeRef(id), internalHost: makeRef<string>(id, "internalHost"), port: makeRef<string>(id, "port") }) as Cache;
+    };
+
     const user = (id: string, input: UserInput): User => {
         claim(id);
         users.push({ id, input });
@@ -159,6 +195,6 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze(makeRef(id)) as Team;
     };
 
-    const stack: Stack = { have: { host, cloudflare, github, backup, discord }, want: { app, service, user, team } };
+    const stack: Stack = { have: { host, cloudflare, github, backup, discord }, want: { app, service, database, cache, user, team } };
     return { stack, intent };
 };

@@ -46,6 +46,26 @@ export const adminUsername = "intentic";
 // deploy orchestrator instances pull from the same URL. The port-less authority uses the default HTTPS port (443).
 export const registryAuthority = (zone: string): string => gitDomain(zone);
 
+// The per-app binding node id for an app consuming a backing instance: app-scoped + instance-scoped so an
+// app binding two instances (or two apps binding one) never collide. The provider mints the app's isolated
+// sub-resource (db+role / ACL user / OIDC client / bucket) on that instance under this id.
+export const bindingId = (appId: string, instanceId: string): string => `${appId}-uses-${instanceId}`;
+
+// The Postgres database + owning role an app gets on a database instance, and the Valkey ACL user it gets on
+// a cache instance. The app id is the natural name; sanitized to a SQL-safe identifier (Postgres unquoted
+// identifiers and Valkey ACL usernames disallow hyphens/dots). Stable per app so re-applies are idempotent.
+export const dbName = (appId: string): string => appId.replace(/[^A-Za-z0-9]+/g, "_").toLowerCase();
+export const cacheUser = (appId: string): string => appId.replace(/[^A-Za-z0-9]+/g, "_").toLowerCase();
+
+// A deterministic host port a backing instance publishes on (so co-located instances don't collide), in a
+// band disjoint from deploymentPort's 20000-29999. Resolver-owned like deploymentPort, so a binding node can
+// build the connection URL (host:port) without depending on the instance's runtime.
+export const backingPort = (instanceId: string): number => 40000 + [...instanceId].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 10000, 7);
+
+// The env var key for an intentic-generated secret derived from a resource id — uppercased + non-alnum
+// collapsed to "_", matching userPasswordKey. Used for backing admin + per-app credential secret keys.
+export const secretKey = (prefix: string, id: string): string => `${prefix}_${id.replace(/[^A-Za-z0-9]/g, "_").toUpperCase()}`;
+
 // GitHub-path IDs. gh-repo reuses repoId (same shape, different provider). gh-ci parallels ciId. The
 // deployment id is shared (deploymentId) so the tunnel ingress port derivation matches; the resource type
 // distinguishes the provider (gh-deployment vs deployment).

@@ -32,6 +32,7 @@ test("emit derives the full support stack for a two-environment app", () => {
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [
             {
                 id: "app",
@@ -71,6 +72,7 @@ test("apps share one derived platform", () => {
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [
             { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
             { id: "two", on: "host", expose: "cf", environments: { prod: { domain: "two.example.com", branch: "main" } } },
@@ -91,6 +93,7 @@ test("an unsupported option assignment throws", () => {
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
     const byNeed = new Map(assign(intent).byNeed);
@@ -106,6 +109,7 @@ test("app with notify: discord derives forgejo-notify (CI) + komodo-notify (CD),
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [
             {
                 id: "app",
@@ -139,6 +143,7 @@ test("app without notify derives no notification sinks even when discord is decl
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -157,6 +162,7 @@ test("no discord declared derives no notification sinks", () => {
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -174,6 +180,7 @@ test("notification sinks are derived only for apps that wire notify, while the p
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [
             {
                 id: "one",
@@ -211,6 +218,7 @@ test("a services-only intent emits the service + its route + tunnel, but no app 
         users: [],
         teams: [],
         services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        backings: [],
         apps: [],
     };
 
@@ -233,6 +241,7 @@ test("an app's observe injects the service's OTLP endpoint into each deployment 
         users: [],
         teams: [],
         services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        backings: [],
         apps: [
             {
                 id: "app",
@@ -261,6 +270,7 @@ test("an app without observe carries no OTLP env and no service dependency", () 
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -276,6 +286,7 @@ test("observing an undeclared service throws", () => {
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", observe: "ghost", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -289,6 +300,7 @@ test("users and teams derive Forgejo accounts + org/team and Komodo users, and t
         users: [{ id: "alice", input: { username: "alice", email: "alice@example.com" } }],
         teams: [{ id: "squad", input: { members: ["alice"], komodo: "execute" } }],
         services: [],
+        backings: [],
         apps: [
             {
                 id: "app",
@@ -333,6 +345,7 @@ test("a team-less app stays admin-owned (identical to the single-admin default)"
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -348,6 +361,7 @@ test("a team referencing an undeclared user throws", () => {
         users: [],
         teams: [{ id: "squad", input: { members: ["ghost"], komodo: "read" } }],
         services: [],
+        backings: [],
         apps: [
             {
                 id: "app",
@@ -368,6 +382,7 @@ test("an app granting an undeclared team throws", () => {
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [
             {
                 id: "app",
@@ -388,6 +403,7 @@ test("the cloudflare node carries only token + discovered zone, and the tunnel r
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
 
@@ -413,6 +429,7 @@ test("a guarded host with a backup threads guardRepo + resticImage onto forgejo 
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [oneApp],
     };
     const nodes = emit(intent, assign(intent), "example.com");
@@ -432,6 +449,7 @@ test("a pinned host (default) leaves the guard inputs off even when a backup is 
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [oneApp],
     };
     const nodes = emit(intent, assign(intent), "example.com");
@@ -445,6 +463,7 @@ test("a guarded host WITHOUT a declared backup leaves the guard inputs off (nowh
         users: [],
         teams: [],
         services: [],
+        backings: [],
         apps: [oneApp],
     };
     const nodes = emit(intent, assign(intent), "example.com");

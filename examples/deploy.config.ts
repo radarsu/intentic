@@ -38,6 +38,13 @@ export const intent = defineIntent((i) => {
         domain: "signoz.example.com",
     });
 
+    // What I want (backing capabilities): a database (Postgres) and a cache (Valkey), both internal-only —
+    // intentic deploys each onto the host and an app consumes them via `use` below. There is no domain: apps
+    // reach them over the host's internal network, never a public route. The catalog maps the abstract
+    // capability to its concrete provider, so the intent never names Postgres/Valkey.
+    const db = i.want.database("db", { on: host });
+    const cache = i.want.cache("cache", { on: host });
+
     // Who works on the app: people get a Forgejo git account + a Komodo UI user (each with an intentic-generated
     // password, surfaced in the secrets file). A team becomes a Forgejo organization + team and a Komodo
     // permission scope: its members can act on the deployments of the apps it manages at the `komodo` level.
@@ -50,15 +57,18 @@ export const intent = defineIntent((i) => {
     // I declared, exposed through the Cloudflare I declared — and exports the app's telemetry to `obs`. The
     // `platform` team owns the app: its org owns the repo (the repo + image namespace) and its members get
     // write on the repo + Komodo execute on the deployments.
+    // `use` wires the backing capabilities: intentic mints a per-app database + role and a per-app Valkey ACL
+    // user, then injects DATABASE_URL and VALKEY_URL/REDIS_URL into every deployment (no manual env wiring).
     i.want.app("my-app", {
         on: host,
         expose: cf,
         notify: discord,
         observe: obs,
+        use: [db, cache],
         teams: [{ team: platform, role: "write" }],
         environments: {
-            staging: { domain: "staging.example.com", branch: "develop", env: { DATABASE_URL: env("STAGING_DATABASE_URL") } },
-            production: { domain: "app.example.com", branch: "main", env: { DATABASE_URL: env("PRODUCTION_DATABASE_URL") } },
+            staging: { domain: "staging.example.com", branch: "develop" },
+            production: { domain: "app.example.com", branch: "main" },
         },
     });
 });

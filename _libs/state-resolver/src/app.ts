@@ -1,7 +1,8 @@
-import type { SecretRef } from "@intentic/graph";
+import type { Ref, SecretRef } from "@intentic/graph";
 import { generated, makeRef } from "@intentic/graph";
-import type { AppIntent } from "@intentic/need-resolver";
+import type { AppIntent, BackingIntent, HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
+import { bindingEnv, resolveBinding } from "./backing.js";
 import {
     adminUsername,
     ciId,
@@ -33,6 +34,9 @@ export const resolveApp = (
     apiToken: SecretRef,
     zone: string,
     controlPlaneHost: string,
+    // The backing instances this app may consume, keyed by instance id, each with the host it runs on (the
+    // binding nodes deploy onto that host over SSH). emit builds this from intent.backings + the host map.
+    backings: ReadonlyMap<string, { readonly intent: BackingIntent; readonly host: HostInput }>,
 ): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
     const repo = repoId(intent.id);
     const forgejoUrl = makeRef<string>(platform.forgejo, "url");
@@ -57,7 +61,25 @@ export const resolveApp = (
             ? { OTEL_EXPORTER_OTLP_ENDPOINT: makeRef<string>(intent.observe, "otlpEndpoint"), OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf" }
             : undefined;
 
+    // Backing wiring: for each capability the app uses, emit a per-app binding node that mints the app's
+    // isolated credentials on the instance, inject its connection env vars (DATABASE_URL, VALKEY_URL, …) into
+    // every deployment, and gate each deployment on the binding so the credentials exist before it registers.
+    const bindingNodes: ResolvedNode[] = [];
+    const bound: Record<string, Ref<string>> = {};
+    const bindingDeps: string[] = [];
+    for (const binding of intent.use ?? []) {
+        const backing = backings.get(binding.target);
+        if (backing === undefined) {
+            throw new Error(`app "${intent.id}" uses unknown backing "${binding.target}"; declare it with i.want.${binding.capability}`);
+        }
+        const node = resolveBinding(intent.id, backing.intent, backing.host);
+        bindingNodes.push(node);
+        Object.assign(bound, bindingEnv(intent.id, backing.intent));
+        bindingDeps.push(node.id);
+    }
+
     const nodes: ResolvedNode[] = [
+        ...bindingNodes,
         {
             id: repo,
             type: "repo",
@@ -72,7 +94,9 @@ export const resolveApp = (
     for (const [name, environment] of Object.entries(intent.environments)) {
         const id = deploymentId(intent.id, name);
         const port = deploymentPort(id);
-        const env = otel !== undefined || environment.env !== undefined ? { ...otel, ...environment.env } : undefined;
+        // OTLP + backing connection vars first, the author's own env last so an explicit value still wins.
+        const merged = { ...otel, ...bound, ...environment.env };
+        const env = Object.keys(merged).length > 0 ? merged : undefined;
         const ci = ciId(intent.id, name);
         // CI/CD wiring: commits the Forgejo Actions workflow (build -> push registry image -> notify Komodo) +
         // the registry-push and Komodo-login repo secrets, and seeds a starter Dockerfile if the repo has none.
@@ -115,10 +139,11 @@ export const resolveApp = (
                 ...komodoAdmin,
                 ...(env !== undefined ? { env } : {}),
             },
-            // Depends on ci so the workflow + secrets exist first; the route gates Komodo reachability. No
-            // default readyWhen: apply only registers the deployment (it does not go live until CI pushes an
-            // image), so an httpOk gate would hang forever — honour only an author-supplied one.
-            explicitDependsOn: [ci, platform.deployRoute, ...(intent.observe !== undefined ? [intent.observe] : [])],
+            // Depends on ci so the workflow + secrets exist first; the route gates Komodo reachability; and on
+            // each backing binding so the app's credentials exist before it registers. No default readyWhen:
+            // apply only registers the deployment (it does not go live until CI pushes an image), so an httpOk
+            // gate would hang forever — honour only an author-supplied one.
+            explicitDependsOn: [ci, platform.deployRoute, ...(intent.observe !== undefined ? [intent.observe] : []), ...bindingDeps],
             ...(environment.readyWhen !== undefined ? { readyWhen: environment.readyWhen } : {}),
         });
         const exposure = exposeRoute(intent.expose, intent.on, environment.domain, port, apiToken);
