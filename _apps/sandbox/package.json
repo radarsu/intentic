@@ -1,0 +1,28 @@
+{
+    "name": "@intentic/sandbox",
+    "version": "0.0.0",
+    "description": "Remote AI-agent dev workspace daemon — runs inside a per-project sandbox container on the customer's host",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/radarsu/intentic.git",
+        "directory": "_apps/sandbox"
+    },
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --build --watch",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "tslib": "catalog:"
+    },
+    "devDependencies": {
+        "@intentic/tsconfig": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    }
+}
