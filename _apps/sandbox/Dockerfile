@@ -1,5 +1,6 @@
-# The per-project AI-agent sandbox image. Build from the REPO ROOT so the monorepo workspace resolves:
-#   docker build -f _apps/sandbox/Dockerfile -t intentic-sandbox .
+# The per-project AI-agent sandbox image (published as ghcr.io/radarsu/intentic/sandbox). Build from the REPO
+# ROOT so the monorepo workspace resolves:
+#   docker build -f _apps/sandbox/Dockerfile -t ghcr.io/radarsu/intentic/sandbox .
 # At run time the runner injects agent credentials (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN) and mounts
 # the workspace (the three cloned repos) at /work — neither is baked into the image.
 
@@ -17,6 +18,8 @@ RUN pnpm --filter @intentic/sandbox deploy --prod /out/sandbox
 RUN pnpm --filter @intentic/cli deploy --prod /out/cli
 
 FROM node:24-bookworm-slim AS runtime
+# Links the GHCR package to the repo (inherits its visibility/permissions, shows under its Packages).
+LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*

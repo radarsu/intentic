@@ -83,6 +83,16 @@ graph ──► resources ──► engine ──► providers
 | [`@intentic/engine`](_libs/engine) | lib | Stateless reconcile engine: `plan`/`apply`, the Provider SPI, and the `reconcile` loop. |
 | [`@intentic/providers`](_libs/providers) | lib | Real Provider SPI impls over SSH/Docker, Cloudflare, Forgejo, Komodo. |
 | [`@intentic/cli`](_apps/cli) | **app** | The runnable product: `init` local repos, `resolve` intent → artifact, `apply` it. CLI `bin: intentic`. |
+| [`@intentic/sandbox`](_apps/sandbox) | **app** (image) | The per-project AI-agent dev workspace daemon: the Claude agent on the repos + watch-mode previews. |
+| [`@intentic/runner`](_apps/runner) | **app** (image) | The tenant-side runner that manages the project's sandbox over the host Docker socket and fronts `*.preview.<zone>`. |
+
+The libs + the CLI publish to npm; **`sandbox` and `runner` ship as Docker images** to the repo's GHCR
+(`ghcr.io/radarsu/intentic/{sandbox,runner}`, linked to the repo via the images' `org.opencontainers.image.source`
+label) — published by [scripts/publish-images.sh](scripts/publish-images.sh) continuously on push to main
+(`latest` + commit SHA) and version-tagged on release, and pinned (tag + sha256 digest) in
+[`images.ts`](_libs/state-resolver/src/images.ts) like every other deployed image. The two GHCR packages are
+public so tenant hosts pull them unauthenticated; the `workspace` provider runs the runner image, which in turn
+runs the sandbox image.
 
 ## The intent contract
 
