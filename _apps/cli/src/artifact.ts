@@ -14,6 +14,9 @@ export const STATUS_FILE = "status.json";
 export const ACCESS_FILE = "access.md";
 export const ENV_FILE = ".env";
 export const SECRETS_FILE = ".secrets.json";
+// The host-key lockfile: each host's pinned public key. Committed (a public key is not secret) so a key
+// change is a reviewable diff and the Forgejo CI apply verifies against the reviewed pin.
+export const KNOWN_HOSTS_FILE = ".known-hosts.json";
 
 // The defaults every command resolves against cwd: the config in the intent repo, the artifact in the
 // desired-state repo. `init` scaffolds both repos at these same paths.

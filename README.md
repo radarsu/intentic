@@ -173,11 +173,10 @@ intentic discovers your zone and account from the token alone, so the only Cloud
 - **Zone → DNS → Edit**
 - **Zone → Zone → Read**
 
-**Security posture:** each host gets one Cloudflare Tunnel that connects *outbound* — no inbound ports are opened. SSH is used only for intentic's own control operations.
+**Security posture:** each host gets one Cloudflare Tunnel that connects *outbound* — no inbound ports are opened. SSH is used only for intentic's own control operations, and host identity is verified on every connect: intentic trusts a host's key on first use, pins it in a committed `.known-hosts.json` lockfile, and refuses to connect if a host later presents a different key (so a key change is a reviewable diff, and the Forgejo CI apply verifies against the reviewed pin). The host-key store is injectable, so an embedded control plane can back it with its own per-tenant store.
 
 ## Known limitations
 
-- **Host-key trust** — the SSH adapter currently accepts any host key (no `hostVerifier`).
 - **No orphan detection for Cloudflare resources yet** — records are stamped (`intentic.id=<id>`) for a future orphan pass, but the tunnel/route providers cannot yet enumerate stamped resources.
 - **`plan` reads live infra** — the read-only preview queries the Cloudflare API and SSHes to the host to observe current state.
 

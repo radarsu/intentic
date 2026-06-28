@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createStore, plan, prune, reconcile, resolveInputs } from "@intentic/engine";
-import { createProviders, createSshProbe, forgejoApi, hostTarget, type RestoreScope, restoreBackup } from "@intentic/providers";
+import { createProviders, createSshExecutor, createSshProbe, forgejoApi, hostTarget, type RestoreScope, restoreBackup } from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
@@ -36,6 +36,7 @@ import {
 import { forgejoIdentity, syncControlPlaneSecrets } from "./control-plane-sync.js";
 import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
+import { createKnownHostsStore } from "./known-hosts.js";
 import { discoverZone, loadIntent } from "./resolve.js";
 import { collectSecrets, writeEnvExample } from "./secrets.js";
 
@@ -132,7 +133,8 @@ const planCommand = buildCommand<{ artifact?: string }>({
         loadEnvFile(dir);
         const graph = await readArtifact(artifact);
         await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
-        const outcome = await plan(graph, { providers: createProviders(), log });
+        const ssh = createSshExecutor(createKnownHostsStore(dir));
+        const outcome = await plan(graph, { providers: createProviders({ ssh }), log });
         for (const step of outcome.steps) {
             log(`${step.action}\t${step.type}\t${step.id}${step.reason !== undefined ? `\t(${step.reason})` : ""}`);
         }
@@ -171,13 +173,14 @@ const apply = buildCommand<ApplyFlags>({
         loadEnvFile(dir);
         const graph = await readArtifact(artifact);
         await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
+        const ssh = createSshExecutor(createKnownHostsStore(dir));
         // Readiness gates target host-internal urls (http://<internalIp>:<port>) reachable only from the host
         // itself, never from this CLI process. Build SSH probes from every host node in the graph so apply
         // gates on each host's own view; resolveInputs substitutes SSH_KEY secrets from the env loaded above.
         // The composite probe tries each host until one can reach the URL (the wrong host simply fails wget).
         const hostNodes = Object.values(graph.resources).filter((node) => node.type === "host");
         const probes = hostNodes.map((node) =>
-            createSshProbe(hostTarget(resolveInputs(node.inputs, createStore(), process.env, { lenient: false }))),
+            createSshProbe(hostTarget(resolveInputs(node.inputs, createStore(), process.env, { lenient: false })), ssh),
         );
         const probe =
             probes.length === 0
@@ -192,7 +195,7 @@ const apply = buildCommand<ApplyFlags>({
                   };
         const result = await reconcile(
             graph,
-            { providers: createProviders(), log, ...(probe !== undefined ? { probe } : {}) },
+            { providers: createProviders({ ssh }), log, ...(probe !== undefined ? { probe } : {}) },
             { maxIterations: flags.maxIterations ?? DEFAULT_MAX_ITERATIONS },
         );
         await writeStatus(join(dir, STATUS_FILE), {
@@ -207,7 +210,7 @@ const apply = buildCommand<ApplyFlags>({
         const previousPath = flags.previous ?? join(dir, LAST_APPLIED_FILE);
         if (existsSync(previousPath)) {
             const previous = await readArtifact(previousPath);
-            const outcome = await prune(previous, graph, { providers: createProviders(), log, env: process.env });
+            const outcome = await prune(previous, graph, { providers: createProviders({ ssh }), log, env: process.env });
             if (outcome.deleted.length > 0 || outcome.skipped.length > 0) {
                 log(`pruned ${outcome.deleted.length} resource(s)${outcome.skipped.length > 0 ? `, ${outcome.skipped.length} left in place` : ""}`);
             }
@@ -380,6 +383,7 @@ const restore = buildCommand<RestoreFlags>({
             snapshot: flags.snapshot ?? "latest",
             scope: scope as RestoreScope,
             log,
+            executor: createSshExecutor(createKnownHostsStore(dir)),
         });
     },
 });

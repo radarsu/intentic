@@ -25,6 +25,41 @@ export interface SshExecutor {
     readonly connect: (target: SshTarget) => Promise<SshSession>;
 }
 
+// Persists the public key each host presented, keyed by address:port — the trust store behind host-key
+// verification. The CLI backs this with a committed `.known-hosts.json`; an embedded control plane injects
+// its own per-tenant (DB/vault) implementation. Keys are the host's public key as base64.
+export interface HostKeyStore {
+    readonly get: (host: string, port: number) => Promise<string | undefined>;
+    readonly set: (host: string, port: number, key: string) => Promise<void>;
+}
+
+// A process-lifetime store: trusts the first key seen per host and verifies later connects against it, but
+// nothing survives the process. The default for `sshExecutor`, and the safe baseline for tests/e2e (fresh
+// hosts re-pin per run).
+export const inMemoryHostKeyStore = (): HostKeyStore => {
+    const keys = new Map<string, string>();
+    const id = (host: string, port: number): string => `${host}:${port}`;
+    return {
+        get: (host, port) => Promise.resolve(keys.get(id(host, port))),
+        set: (host, port, key) => {
+            keys.set(id(host, port), key);
+            return Promise.resolve();
+        },
+    };
+};
+
+// Trust-on-first-use + pinning. An unseen host's key is recorded and trusted; a seen host must present the
+// exact same key, or it is a mismatch (a possible MITM, or the host was rebuilt). Pure but for the store —
+// unit-testable without a live SSH server.
+export const verifyHostKey = async (store: HostKeyStore, host: string, port: number, presented: string): Promise<"ok" | "mismatch"> => {
+    const known = await store.get(host, port);
+    if (known === undefined) {
+        await store.set(host, port, presented);
+        return "ok";
+    }
+    return known === presented ? "ok" : "mismatch";
+};
+
 // Drain a readable stream into a boxed string sink (a box avoids reassigning a captured binding).
 const collect = (stream: Readable, sink: { value: string }): void => {
     stream.on("data", (chunk: Buffer) => {
@@ -33,7 +68,8 @@ const collect = (stream: Readable, sink: { value: string }): void => {
 };
 
 // ssh2 is CommonJS with named exports (no default), so `import { Client }` is the correct interop form.
-export const sshExecutor: SshExecutor = {
+// Every connection verifies the host key against `store` (trust-on-first-use + pinning) before proceeding.
+export const createSshExecutor = (store: HostKeyStore = inMemoryHostKeyStore()): SshExecutor => ({
     connect: (target) =>
         new Promise<SshSession>((resolve, reject) => {
             const client = new Client();
@@ -72,7 +108,30 @@ export const sshExecutor: SshExecutor = {
                         }),
                 });
             });
-            // No hostVerifier: accepts any host key (acceptable for owned infra on a trusted network in v1).
-            client.connect({ host: target.address, port: target.port, username: target.user, privateKey: target.privateKey });
+            client.connect({
+                host: target.address,
+                port: target.port,
+                username: target.user,
+                privateKey: target.privateKey,
+                // ssh2 hands us the host's public key (Buffer, since no hostHash is set) and waits for the
+                // callback. A mismatch rejects the connect with a clear error before any command runs; a store
+                // read failure also fails closed.
+                hostVerifier: (key: Buffer, callback: (valid: boolean) => void) => {
+                    verifyHostKey(store, target.address, target.port, key.toString("base64"))
+                        .then((outcome) => {
+                            if (outcome === "mismatch") {
+                                reject(
+                                    new Error(
+                                        `host key mismatch for ${target.address}:${target.port} — refusing to connect (possible MITM, or the host was rebuilt; remove its entry from .known-hosts.json to re-trust)`,
+                                    ),
+                                );
+                            }
+                            callback(outcome === "ok");
+                        })
+                        .catch(reject);
+                },
+            });
         }),
-};
+});
+
+export const sshExecutor: SshExecutor = createSshExecutor();
