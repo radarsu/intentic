@@ -104,6 +104,15 @@ export interface ServiceIntent extends ServiceInput {
     readonly expose: string;
 }
 
+// The per-host AI-agent workspace runner the author wants: a container that manages the project's dev
+// sandbox and fronts live previews. Its public route is the wildcard `*.preview.<zone>` derived from the
+// discovered zone, so no domain is authored. Like AppIntent, `on`/`expose` are resource-id strings.
+export interface WorkspaceIntent {
+    readonly id: string;
+    readonly on: string;
+    readonly expose: string;
+}
+
 // hosts/cloudflare may be empty so an app-less intent stays valid; the SDK's `on`/`expose` types guarantee
 // at least one host and cloudflare are declared whenever an app or service is, and the resolver asserts the
 // same before deriving.
@@ -117,5 +126,6 @@ export interface IntentSet {
     readonly teams: readonly TeamIntent[];
     readonly apps: readonly AppIntent[];
     readonly services: readonly ServiceIntent[];
+    readonly workspaces: readonly WorkspaceIntent[];
     readonly backings: readonly BackingIntent[];
 }

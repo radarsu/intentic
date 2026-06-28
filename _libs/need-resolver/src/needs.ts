@@ -39,18 +39,23 @@ export const controlPlaneHostId = (intent: IntentSet): string | undefined =>
 // capabilities, each host with apps/services needs a deployment target, and the Cloudflare account
 // needs a domain. Validates that every app/service references a declared host.
 export const resolveNeeds = (intent: IntentSet): Need[] => {
-    if (intent.apps.length === 0 && intent.services.length === 0 && intent.backings.length === 0) {
+    if (intent.apps.length === 0 && intent.services.length === 0 && intent.workspaces.length === 0 && intent.backings.length === 0) {
         return [];
     }
     const cloudflare = intent.cloudflare;
     if (cloudflare === undefined) {
-        throw new Error("intent declares apps/services/backings but no Cloudflare; declare it with i.have.cloudflare");
+        throw new Error("intent declares apps/services/workspaces/backings but no Cloudflare; declare it with i.have.cloudflare");
     }
     const declaredHosts = new Set(intent.hosts.map((h) => h.id));
-    const activeHostIds = new Set([...intent.apps.map((a) => a.on), ...intent.services.map((s) => s.on), ...intent.backings.map((b) => b.on)]);
+    const activeHostIds = new Set([
+        ...intent.apps.map((a) => a.on),
+        ...intent.services.map((s) => s.on),
+        ...intent.workspaces.map((w) => w.on),
+        ...intent.backings.map((b) => b.on),
+    ]);
     for (const hostId of activeHostIds) {
         if (!declaredHosts.has(hostId)) {
-            throw new Error(`app/service/backing targets undeclared host "${hostId}"; declare it with i.have.host`);
+            throw new Error(`app/service/workspace/backing targets undeclared host "${hostId}"; declare it with i.have.host`);
         }
     }
     const cpHost = controlPlaneHostId(intent);

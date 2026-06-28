@@ -32,6 +32,10 @@ export const forgejoNotifyId = (appId: string): string => `${repoId(appId)}-noti
 export const komodoNotifyId = (appId: string): string => `${appId}-notify`;
 export const gitDomain = (zone: string): string => `git.${zone}`;
 export const deployDomain = (zone: string): string => `deploy.${zone}`;
+// The workspace runner's wildcard preview route and the base every per-project preview hostname sits under
+// (`<project>.preview.<zone>`). The wildcard flows unchanged through cf-route + the tunnel ingress.
+export const previewDomain = (zone: string): string => `*.preview.${zone}`;
+export const previewBase = (zone: string): string => `preview.${zone}`;
 // A deterministic host port per deployment so co-located environments don't collide. Resolver-owned so the
 // tunnel's ingress (hostname -> http://<internalIp>:<port>) can be computed without depending on the
 // deployment node — which is what lets the tunnel come up before the control plane uses it.

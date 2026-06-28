@@ -82,6 +82,20 @@ test("want.service derives a signoz node + route, and want.app's observe wires t
     expect(graph.resources["app.prod"]?.dependsOn).toContain("obs");
 });
 
+test("want.workspace derives the runner node + its wildcard *.preview.<zone> route", () => {
+    const graph = defineStack((i) => {
+        const { host, cf } = inventory(i);
+        i.want.workspace("workspace", { on: host, expose: cf });
+    }, "example.com");
+
+    expect(graph.resources["workspace"]?.type).toBe("workspace");
+    expect(graph.resources["workspace"]?.inputs["domain"]).toBe("*.preview.example.com");
+    expect(graph.resources["workspace"]?.inputs["server"]).toEqual({ $ref: "host" });
+    // The wildcard hostname becomes the cf-route (id slugged) routing through the host tunnel.
+    expect(graph.resources["cf-preview-example-com"]?.type).toBe("cf-route");
+    expect(graph.resources["cf-preview-example-com"]?.inputs["hostname"]).toBe("*.preview.example.com");
+});
+
 test("apps share one derived platform", () => {
     const graph = defineStack((i) => {
         const { host, cf } = inventory(i);

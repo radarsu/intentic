@@ -19,6 +19,7 @@ import type {
     TeamIntent,
     UserInput,
     UserIntent,
+    WorkspaceIntent,
 } from "@intentic/need-resolver";
 import { deploymentId, repoId } from "@intentic/state-resolver";
 import type {
@@ -41,6 +42,8 @@ import type {
     WantAppInput,
     WantServiceInput,
     WantTeamInput,
+    WantWorkspaceInput,
+    Workspace,
 } from "./handles.js";
 
 // The builder is a pure intent recorder: i.have.* / i.want.app record what was declared and hand back typed
@@ -60,6 +63,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const teams: TeamIntent[] = [];
     const apps: AppIntent[] = [];
     const services: ServiceIntent[] = [];
+    const workspaces: WorkspaceIntent[] = [];
     const backings: BackingIntent[] = [];
     const hosts: HostIntent[] = [];
     // The capability of each declared backing, keyed by its id — so app() can map a `use` handle (an inert
@@ -75,8 +79,9 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         teams: TeamIntent[];
         apps: AppIntent[];
         services: ServiceIntent[];
+        workspaces: WorkspaceIntent[];
         backings: BackingIntent[];
-    } = { hosts, users, teams, apps, services, backings };
+    } = { hosts, users, teams, apps, services, workspaces, backings };
 
     const host = (id: string, input: HostInput): Host => {
         claim(id);
@@ -161,6 +166,17 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         }) as Service;
     };
 
+    const workspace = (id: string, input: WantWorkspaceInput): Workspace => {
+        claim(id);
+        workspaces.push({ id, on: input.on.resourceId, expose: input.expose.resourceId });
+        return Object.freeze({
+            ...makeRef(id),
+            internalUrl: makeRef<string>(id, "internalUrl"),
+            healthUrl: makeRef<string>(id, "healthUrl"),
+            previewBase: makeRef<string>(id, "previewBase"),
+        }) as Workspace;
+    };
+
     // The capability a `use` handle refers to, by its recorded backing id. Throws if the handle is not a
     // declared backing (a programming error — the type system already guarantees it is a Backing handle).
     const capabilityOf = (backingId: string): BackingCapability => {
@@ -228,7 +244,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
 
     const stack: Stack = {
         have: { host, cloudflare, github, backup, discord },
-        want: { app, service, database, cache, auth, objectStorage, user, team },
+        want: { app, service, workspace, database, cache, auth, objectStorage, user, team },
     };
     return { stack, intent };
 };

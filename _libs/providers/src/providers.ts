@@ -46,6 +46,7 @@ import { sshExecutor } from "./ssh.js";
 import { createTunnelProvider } from "./tunnel.js";
 import { createValkeyProvider } from "./valkey.js";
 import { createValkeyNamespaceProvider } from "./valkey-namespace.js";
+import { createWorkspaceRunnerProvider } from "./workspace.js";
 
 // The four side-effecting dependencies every provider is built over: SSH transport to the host and the
 // three external HTTP surfaces. Each defaults to its real implementation; pass a fake to drive the whole
@@ -106,5 +107,6 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "gh-ci": createGhCiProvider(github),
         "gh-deployment": createGhDeploymentProvider(ssh),
         discord: createDiscordProvider(discord),
+        workspace: createWorkspaceRunnerProvider(ssh),
     };
 };

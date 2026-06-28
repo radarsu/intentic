@@ -14,6 +14,7 @@ test("an app derives the four host capabilities plus a domain", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -34,6 +35,7 @@ test("multiple apps collapse to one set of needs on the shared host and cloud", 
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
@@ -45,5 +47,5 @@ test("multiple apps collapse to one set of needs on the shared host and cloud", 
 });
 
 test("no apps derive no needs", () => {
-    expect(resolveNeeds({ hosts: [], users: [], teams: [], apps: [], services: [], backings: [] })).toEqual([]);
+    expect(resolveNeeds({ hosts: [], users: [], teams: [], apps: [], services: [], workspaces: [], backings: [] })).toEqual([]);
 });

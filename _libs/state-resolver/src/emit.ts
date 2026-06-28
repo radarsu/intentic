@@ -12,6 +12,7 @@ import { IMAGES } from "./images.js";
 import { resolvePlatform } from "./platform.js";
 import type { IngressPair } from "./route.js";
 import { resolveService } from "./service.js";
+import { resolveWorkspace } from "./workspace.js";
 
 // One concrete choice of option per need: `${capability}:${scope}` -> option id. The state resolver
 // builds this from the catalog; emit turns it into the support stack it describes.
@@ -57,13 +58,13 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         }
     }
 
-    if (intent.apps.length === 0 && intent.services.length === 0 && intent.backings.length === 0) {
+    if (intent.apps.length === 0 && intent.services.length === 0 && intent.workspaces.length === 0 && intent.backings.length === 0) {
         return [];
     }
 
     const cloudflare = intent.cloudflare;
     if (cloudflare === undefined) {
-        throw new Error("intent declares apps/services/backings but no Cloudflare; declare it with i.have.cloudflare");
+        throw new Error("intent declares apps/services/workspaces/backings but no Cloudflare; declare it with i.have.cloudflare");
     }
     if (zone === undefined) {
         throw new Error(
@@ -226,6 +227,17 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         const hostIngress = ingressByHost.get(service.on) ?? [];
         hostIngress.push(...resolved.ingress);
         ingressByHost.set(service.on, hostIngress);
+    }
+
+    // --- Workspaces: the per-host AI-agent runner, exposed via a wildcard *.preview.<zone> route ---
+
+    for (const workspace of intent.workspaces) {
+        const host = hostById.get(workspace.on)!;
+        const resolved = resolveWorkspace(workspace, host.input, zone, apiToken);
+        nodes.push(...resolved.nodes);
+        const hostIngress = ingressByHost.get(workspace.on) ?? [];
+        hostIngress.push(...resolved.ingress);
+        ingressByHost.set(workspace.on, hostIngress);
     }
 
     // --- Backing instances: each deployed onto its host over SSH. Internal-only (database/cache) contribute

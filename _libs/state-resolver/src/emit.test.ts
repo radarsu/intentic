@@ -32,6 +32,7 @@ test("emit derives the full support stack for a two-environment app", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -72,6 +73,7 @@ test("apps share one derived platform", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             { id: "one", on: "host", expose: "cf", environments: { prod: { domain: "one.example.com", branch: "main" } } },
@@ -93,6 +95,7 @@ test("an unsupported option assignment throws", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -109,6 +112,7 @@ test("app with notify: discord derives forgejo-notify (CI) + komodo-notify (CD),
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -143,6 +147,7 @@ test("app without notify derives no notification sinks even when discord is decl
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -162,6 +167,7 @@ test("no discord declared derives no notification sinks", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -180,6 +186,7 @@ test("notification sinks are derived only for apps that wire notify, while the p
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -218,6 +225,7 @@ test("a services-only intent emits the service + its route + tunnel, but no app 
         users: [],
         teams: [],
         services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        workspaces: [],
         backings: [],
         apps: [],
     };
@@ -241,6 +249,7 @@ test("an app's observe injects the service's OTLP endpoint into each deployment 
         users: [],
         teams: [],
         services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -270,6 +279,7 @@ test("an app without observe carries no OTLP env and no service dependency", () 
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -286,6 +296,7 @@ test("observing an undeclared service throws", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", observe: "ghost", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -300,6 +311,7 @@ test("users and teams derive Forgejo accounts + org/team and Komodo users, and t
         users: [{ id: "alice", input: { username: "alice", email: "alice@example.com" } }],
         teams: [{ id: "squad", input: { members: ["alice"], komodo: "execute" } }],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -345,6 +357,7 @@ test("a team-less app stays admin-owned (identical to the single-admin default)"
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -361,6 +374,7 @@ test("a team referencing an undeclared user throws", () => {
         users: [],
         teams: [{ id: "squad", input: { members: ["ghost"], komodo: "read" } }],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -382,6 +396,7 @@ test("an app granting an undeclared team throws", () => {
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [
             {
@@ -403,6 +418,7 @@ test("the cloudflare node carries only token + discovered zone, and the tunnel r
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [{ id: "app", on: "host", expose: "cf", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
     };
@@ -429,6 +445,7 @@ test("a guarded host with a backup threads guardRepo + resticImage onto forgejo 
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [oneApp],
     };
@@ -449,6 +466,7 @@ test("a pinned host (default) leaves the guard inputs off even when a backup is 
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [oneApp],
     };
@@ -463,9 +481,35 @@ test("a guarded host WITHOUT a declared backup leaves the guard inputs off (nowh
         users: [],
         teams: [],
         services: [],
+        workspaces: [],
         backings: [],
         apps: [oneApp],
     };
     const nodes = emit(intent, assign(intent), "example.com");
     expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBeUndefined();
+});
+
+test("a workspace-only intent emits the runner node + its wildcard preview route + tunnel, no app platform", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        workspaces: [{ id: "workspace", on: "host", expose: "cf" }],
+        backings: [],
+        apps: [],
+    };
+
+    const nodes = emit(intent, assign(intent), "example.com");
+    const runner = nodes.find((node) => node.id === "workspace");
+    expect(runner?.type).toBe("workspace");
+    expect(runner?.inputs["domain"]).toBe("*.preview.example.com");
+    expect(runner?.inputs["network"]).toBe("intentic-workspace");
+    // No app platform for a workspace-only intent.
+    expect(nodes.some((node) => node.type === "forgejo")).toBe(false);
+    expect(nodes.some((node) => node.type === "komodo")).toBe(false);
+    // The wildcard hostname flows unchanged into the cf-route (id slugged) and the host tunnel's ingress.
+    expect(nodes.find((node) => node.type === "cf-route")?.inputs["hostname"]).toBe("*.preview.example.com");
+    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["ingress"]).toEqual([{ hostname: "*.preview.example.com", port: 8088 }]);
 });

@@ -1,0 +1,106 @@
+import type { Provider, ResolvedInputs } from "@intentic/engine";
+import { z } from "zod";
+import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
+import type { SshExecutor, SshSession } from "./ssh.js";
+import { sshExecutor } from "./ssh.js";
+
+const workspaceSchema = sshSchema.extend({
+    internalIp: z.string(),
+    domain: z.string(),
+    zone: z.string(),
+    previewPort: z.coerce.number(),
+    network: z.string(),
+    image: z.string(),
+    sandboxImage: z.string(),
+});
+type WorkspaceInputs = z.infer<typeof workspaceSchema>;
+const parse = (inputs: ResolvedInputs): WorkspaceInputs => parseInputs(workspaceSchema, inputs, "workspace");
+
+const CONTAINER = "intentic-runner";
+
+const internalUrl = (parsed: WorkspaceInputs): string => `http://${parsed.internalIp}:${parsed.previewPort}`;
+const outputsFor = (parsed: WorkspaceInputs): Record<string, unknown> => ({
+    internalUrl: internalUrl(parsed),
+    healthUrl: `${internalUrl(parsed)}/healthz`,
+    previewBase: `preview.${parsed.zone}`,
+});
+
+const running = async (session: SshSession): Promise<boolean> => {
+    const result = await session.exec(`docker ps --filter "name=^${CONTAINER}$" --format '{{.Names}}'`);
+    return result.stdout.trim() === CONTAINER;
+};
+
+const runningImage = async (session: SshSession): Promise<string> => {
+    const result = await session.exec(`docker inspect --format '{{.Config.Image}}' ${CONTAINER} 2>/dev/null || true`);
+    return result.stdout.trim();
+};
+
+// The per-host AI-agent workspace runner: one long-lived container that manages this host's project sandboxes
+// (it holds the docker socket) and fronts previews on `previewPort` (the wildcard tunnel route points here).
+// read returns the resource only when the container runs the desired image; apply is idempotent — it ensures
+// the shared sandbox network exists, then (re)creates the runner with the socket mount + published port.
+export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecutor): Provider => ({
+    read: async (inputs, ctx) => {
+        const parsed = parse(inputs);
+        let session: SshSession;
+        try {
+            session = await executor.connect(sshTarget(parsed));
+        } catch (error) {
+            ctx.log(`workspace "${ctx.id}": host not reachable over SSH, treating as not-yet-created: ${String(error)}`);
+            return undefined;
+        }
+        try {
+            if (!(await running(session))) {
+                return undefined;
+            }
+            return { outputs: outputsFor(parsed), detail: { image: await runningImage(session) } };
+        } finally {
+            await session.dispose();
+        }
+    },
+    // Recreate on a runner-image bump (the container is stateless — it reconstructs sandboxes on demand).
+    diff: (inputs, observed) => {
+        const parsed = parse(inputs);
+        if (observed.detail?.["image"] !== parsed.image) {
+            return {
+                action: "update",
+                reason: `workspace runner image differs (running ${String(observed.detail?.["image"])}, want ${parsed.image})`,
+            };
+        }
+        return { action: "noop" };
+    },
+    apply: async (inputs, _observed, ctx) => {
+        const parsed = parse(inputs);
+        const session = await executor.connect(sshTarget(parsed));
+        try {
+            // The runner reaches each sandbox by container name on this shared network; create it before the run.
+            await session.exec(`docker network inspect ${parsed.network} >/dev/null 2>&1 || docker network create ${parsed.network}`);
+            await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+            const run = await session.exec(
+                // --user root: the runner manages sandboxes through the mounted docker socket (its default
+                // non-root user gets "permission denied" on /var/run/docker.sock). The preview port is published
+                // so cloudflared (--network host) reaches it at the host-internal ip; the runner is also on the
+                // shared network to resolve sandbox container names.
+                `docker run -d --restart unless-stopped --user root --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
+                    `-p ${parsed.previewPort}:${parsed.previewPort} --network ${parsed.network} ` +
+                    `-v /var/run/docker.sock:/var/run/docker.sock ` +
+                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage} ${parsed.image}`,
+            );
+            if (run.code !== 0) {
+                throw new Error(`failed to start workspace runner on host: exited ${run.code}: ${run.stderr.trim()}`);
+            }
+            return outputsFor(parsed);
+        } finally {
+            await session.dispose();
+        }
+    },
+    delete: async (inputs) => {
+        const parsed = parse(inputs);
+        const session = await executor.connect(sshTarget(parsed));
+        try {
+            await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+        } finally {
+            await session.dispose();
+        }
+    },
+});

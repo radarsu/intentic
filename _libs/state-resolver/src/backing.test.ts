@@ -24,6 +24,7 @@ const intentWithBindings: IntentSet = {
     users: [],
     teams: [],
     services: [],
+    workspaces: [],
     backings: [
         { id: "db", capability: "database", on: "host" },
         { id: "cache", capability: "cache", on: "host" },
@@ -94,6 +95,7 @@ test("an author env var overrides an injected binding var (binding spread before
 test("using an undeclared backing is a descriptive error", () => {
     const intent: IntentSet = {
         ...intentWithBindings,
+        workspaces: [],
         backings: [],
         apps: [{ ...intentWithBindings.apps[0]!, use: [{ capability: "database", target: "ghost" }] }],
     };
@@ -121,6 +123,7 @@ const intentWithAuthAndStorage: IntentSet = {
     users: [],
     teams: [],
     services: [],
+    workspaces: [],
     backings: [
         { id: "auth", capability: "auth", on: "host", expose: "cf", domain: "auth.example.com" },
         { id: "store", capability: "object-storage", on: "host", expose: "cf", domain: "s3.example.com" },
@@ -152,6 +155,7 @@ test("an object-storage instance routes only when given a domain", () => {
     // Without a domain it is internal-only — no route.
     const internal: IntentSet = {
         ...intentWithAuthAndStorage,
+        workspaces: [],
         backings: [{ id: "store", capability: "object-storage", on: "host" }],
         apps: [{ ...intentWithAuthAndStorage.apps[0]!, use: [{ capability: "object-storage", target: "store" }] }],
     };

@@ -65,4 +65,9 @@ export const IMAGES = Object.freeze({
     // The Garage S3-compatible object store (i.want.objectStorage). Single container; the binding provider
     // mints a per-app bucket + access key via `docker exec … garage`. renovate: datasource=docker depName=dxflrs/garage
     garage: "dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690",
+    // First-party intentic images built from _apps/runner and _apps/sandbox (the AI-agent workspace). Unlike
+    // the third-party images above these have no upstream/renovate source; they are tag-only placeholders
+    // until the images are published to a registry and digest-pinned.
+    runner: "ghcr.io/radarsu/intentic-runner:0.1.0",
+    sandbox: "ghcr.io/radarsu/intentic-sandbox:0.1.0",
 } as const);

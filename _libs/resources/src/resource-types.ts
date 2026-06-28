@@ -26,6 +26,7 @@ export type ResourceType =
     | "forgejo-notify"
     | "komodo-notify"
     | "signoz"
+    | "workspace"
     | "backup"
     | "postgres"
     | "postgres-database"

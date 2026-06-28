@@ -87,6 +87,17 @@ export interface Service extends Ref<"signoz"> {
     readonly otlpEndpoint: Ref<string>;
 }
 
+// --- The per-host AI-agent workspace runner (i.want.workspace); its output refs are inert. Unlike a service
+// it takes no domain — its route is the wildcard `*.preview.<zone>` derived from the discovered zone. ---
+
+export interface Workspace extends Ref<"workspace"> {
+    // The runner's host-internal preview-proxy url, its /healthz url, and the `preview.<zone>` base every
+    // per-project preview hostname sits under.
+    readonly internalUrl: Ref<string>;
+    readonly healthUrl: Ref<string>;
+    readonly previewBase: Ref<string>;
+}
+
 // --- Backing capabilities (i.want.database / cache / auth / objectStorage). Each is a shared instance an
 // app consumes via WantAppInput.use; the resolver mints per-app credentials and injects the connection env
 // vars. The output refs here are the INSTANCE coordinates (what the per-app binding node connects with), not
@@ -147,6 +158,12 @@ export interface WantServiceInput extends ServiceInput {
     expose: Cloudflare;
 }
 
+// The workspace runner takes only its host + Cloudflare account; its `*.preview.<zone>` route is derived.
+export interface WantWorkspaceInput {
+    on: Host;
+    expose: Cloudflare;
+}
+
 export interface Have {
     host(id: string, input: HostInput): Host;
     cloudflare(id: string, input: CloudflareInput): Cloudflare;
@@ -159,6 +176,9 @@ export interface Want {
     // `const` so environment names come from the object keys, e.g. App<"staging" | "production">.
     app<const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string>;
     service(id: string, input: WantServiceInput): Service;
+    // The per-host AI-agent workspace runner: manages the project's dev sandbox + serves previews at
+    // `*.preview.<zone>`. Takes only on/expose — the wildcard route is derived from the zone.
+    workspace(id: string, input: WantWorkspaceInput): Workspace;
     // Backing capabilities. database/cache are internal-only, so they need only the host they run on; the
     // catalog maps each to its concrete provider (Postgres / Valkey). auth always routes (the OIDC issuer is
     // public), so it requires expose + domain; objectStorage routes only when a domain is given.
