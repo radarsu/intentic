@@ -15,6 +15,7 @@ import type { Action, ApplyOutcome, EngineConfig, Step } from "./types.js";
 export const apply = async (graph: DesiredStateGraph, config: EngineConfig): Promise<ApplyOutcome> => {
     const env = config.env ?? process.env;
     const log = config.log ?? console.log;
+    const emit = config.onEvent ?? (() => {});
     const probe = config.probe ?? httpProbe;
     const store = createStore();
     const steps: Step[] = [];
@@ -26,6 +27,7 @@ export const apply = async (graph: DesiredStateGraph, config: EngineConfig): Pro
             continue;
         }
         const type = node.type as ResourceType;
+        emit({ kind: "node", phase: "apply", state: "start", id, type });
         const provider = requireProvider(config.providers, type, id);
         const ctx = makeContext(id, store, env, log);
         const inputs = resolveInputs(node.inputs, store, env, { lenient: false });
@@ -56,6 +58,7 @@ export const apply = async (graph: DesiredStateGraph, config: EngineConfig): Pro
         }
         outputs[id] = produced;
         steps.push(reason !== undefined ? { id, type, action, reason } : { id, type, action });
+        emit({ kind: "node", phase: "apply", state: "done", id, type, action, ...(reason !== undefined ? { reason } : {}) });
 
         // Gate on readiness only for resources this apply actually touched. A noop resource was converged
         // (and ready) in a prior apply; re-waiting on its live health would be runtime supervision, which
@@ -67,10 +70,12 @@ export const apply = async (graph: DesiredStateGraph, config: EngineConfig): Pro
                 ...(node.readyWhen.status !== undefined ? { status: node.readyWhen.status } : {}),
                 ...(node.readyWhen.timeout !== undefined ? { timeout: node.readyWhen.timeout } : {}),
             };
+            emit({ kind: "readiness", state: "waiting", id, url });
             await waitReady(url, options, probe);
+            emit({ kind: "readiness", state: "ready", id, url });
         }
     }
 
-    const orphans = await collectOrphans(graph, config.providers, makeContext("", store, env, log));
+    const orphans = await collectOrphans(graph, config.providers, makeContext("", store, env, log), emit);
     return { steps, outputs, orphans };
 };

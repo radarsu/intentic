@@ -11,4 +11,4 @@ export { reconcile } from "./reconcile-loop.js";
 export { resolveInputs } from "./resolve-inputs.js";
 export type { OutputStore } from "./store.js";
 export { createStore } from "./store.js";
-export type { Action, ApplyOutcome, EngineConfig, Orphan, PlanOutcome, PrunedResource, PruneOutcome, ResolvedInputs, Step } from "./types.js";
+export type { Action, ApplyOutcome, EngineConfig, EngineEvent, Orphan, PlanOutcome, PrunedResource, PruneOutcome, ResolvedInputs, Step } from "./types.js";

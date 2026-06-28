@@ -30,6 +30,18 @@ Intent ──► NeedResolver ──► Needs ──► StateResolver ──► 
 A `DesiredStateGraph` is the central data structure: a serializable, dependency-ordered set of resource
 nodes with refs, secrets, and readiness gates. ([_libs/graph/src/types.ts](_libs/graph/src/types.ts))
 
+## Output contract (driving the CLI as a service)
+
+The engine separates two seams on `EngineConfig`: `log` carries providers' free-form strings, and
+`onEvent` emits structured `EngineEvent`s for lifecycle progress — `node` (apply/plan, start/done with
+the action), `readiness`, `iteration`, `prune`, and `orphan`
+([types.ts](_libs/engine/src/types.ts)). The CLI selects a renderer from `INTENTIC_OUTPUT`
+(`text` | `json` | `ndjson`) in [output.ts](_apps/cli/src/output.ts): `text` is the human default
+(unchanged), `json` serializes the command's returned outcome once, and `ndjson` streams each event as
+a line then a terminal `result`. The final result is built from the engine's return values
+(`PlanOutcome`/`ConvergeResult`/`PruneOutcome` and `collectAccess`), never from events — so a control
+plane gets both live progress and a parseable summary, and embedders consume `EngineEvent` directly.
+
 ## Control plane vs application plane
 
 Every need carries a `plane` — its role, independent of where it runs ([needs.ts](_libs/need-resolver/src/needs.ts)):

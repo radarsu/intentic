@@ -153,6 +153,12 @@ Your `i.have.host` / `i.have.cloudflare` + `i.want.app` expand into the abstract
 
 - **Pluggable stack** — the default is the self-hosted Forgejo + Komodo stack. Declare `i.have.github` instead and apps source from GitHub with GitHub Actions + GHCR and deploy over SSH — no Forgejo, no Komodo.
 
+- **Machine-readable output** — every command honors `INTENTIC_OUTPUT` so a backend can drive the CLI and parse it instead of scraping prose. `text` (default) is the human output unchanged; `json` prints one result document at the end (`plan` → steps + orphans; `apply` → converged/iterations/steps/outputs/orphans/pruned/access); `ndjson` streams one JSON event per line as it runs (`node` start/done, `readiness`, `iteration`, `prune`, `orphan`, provider `log`) and closes with a `result` line. The `EngineEvent` type is exported from `@intentic/engine` for embedders.
+  ```sh
+  INTENTIC_OUTPUT=ndjson intentic apply   # live event stream, then a final {"kind":"result",…}
+  INTENTIC_OUTPUT=json   intentic plan     # one JSON document: { steps, orphans }
+  ```
+
 ## Getting started
 
 ```sh

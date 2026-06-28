@@ -15,6 +15,7 @@ import type { EngineConfig, PlanOutcome, Step } from "./types.js";
 export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Promise<PlanOutcome> => {
     const env = config.env ?? process.env;
     const log = config.log ?? console.log;
+    const emit = config.onEvent ?? (() => {});
     const store = createStore();
     const steps: Step[] = [];
 
@@ -35,6 +36,7 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
         store.set(id, id);
         if (observed === undefined) {
             steps.push({ id, type, action: "create" });
+            emit({ kind: "node", phase: "plan", state: "done", id, type, action: "create" });
             for (const name of OUTPUTS[type]) {
                 if (name.endsWith(":")) {
                     // Prefix pattern: seed PENDING for every actual $ref in the graph that matches.
@@ -56,6 +58,11 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
 
         const result = provider.diff(inputs, observed);
         steps.push(result.action === "update" ? { id, type, action: "update", reason: result.reason } : { id, type, action: "noop" });
+        emit(
+            result.action === "update"
+                ? { kind: "node", phase: "plan", state: "done", id, type, action: "update", reason: result.reason }
+                : { kind: "node", phase: "plan", state: "done", id, type, action: "noop" },
+        );
         for (const [name, value] of Object.entries(observed.outputs)) {
             const allowed = OUTPUTS[type].some((pattern) => (pattern.endsWith(":") ? name.startsWith(pattern) : name === pattern));
             if (allowed) {
@@ -64,6 +71,6 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
         }
     }
 
-    const orphans = await collectOrphans(graph, config.providers, makeContext("", store, env, log));
+    const orphans = await collectOrphans(graph, config.providers, makeContext("", store, env, log), emit);
     return { steps, orphans };
 };

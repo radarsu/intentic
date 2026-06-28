@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { createStore, plan, prune, reconcile, resolveInputs } from "@intentic/engine";
+import { createStore, type PruneOutcome, plan, prune, reconcile, resolveInputs } from "@intentic/engine";
 import { createProviders, createSshExecutor, createSshProbe, forgejoApi, hostTarget, type RestoreScope, restoreBackup } from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
@@ -37,6 +37,7 @@ import { forgejoIdentity, syncControlPlaneSecrets } from "./control-plane-sync.j
 import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
 import { createKnownHostsStore } from "./known-hosts.js";
+import { createOutput, outputMode } from "./output.js";
 import { discoverZone, loadIntent } from "./resolve.js";
 import { collectSecrets, writeEnvExample } from "./secrets.js";
 
@@ -53,8 +54,10 @@ const init = buildCommand<{ dir?: string; link: boolean }>({
         },
     },
     async func(this: CommandContext, flags: { dir?: string; link: boolean }) {
+        const out = createOutput(this.process.stdout, outputMode(process.env));
         const { intentDir, targetDir } = await scaffold(flags.dir ?? ".", version, flags.link);
-        this.process.stdout.write(`initialized ${intentDir} (with ${CONFIG_FILE}) and ${targetDir}\n`);
+        out.text(`initialized ${intentDir} (with ${CONFIG_FILE}) and ${targetDir}`);
+        out.result({ intentDir, targetDir });
     },
 });
 
@@ -77,18 +80,19 @@ const resolveCommand = buildCommand<ResolveFlags>({
         },
     },
     async func(this: CommandContext, flags: ResolveFlags) {
+        const out = createOutput(this.process.stdout, outputMode(process.env));
         const intent = await loadIntent(flags.config ?? CONFIG_PATH);
-        const out = flags.out ?? ARTIFACT_PATH;
-        const dir = dirname(out);
+        const artifactOut = flags.out ?? ARTIFACT_PATH;
+        const dir = dirname(artifactOut);
         // Capture the artifact being replaced BEFORE overwriting it — the control-plane sync diffs against it.
-        const previousGraph = flags.syncControlPlane && existsSync(out) ? await readArtifact(out) : undefined;
+        const previousGraph = flags.syncControlPlane && existsSync(artifactOut) ? await readArtifact(artifactOut) : undefined;
         const zone = await discoverZone(intent, dir);
         const graph = resolveState(intent, zone);
-        await writeArtifact(out, graph);
+        await writeArtifact(artifactOut, graph);
         const count = Object.keys(graph.resources).length;
-        this.process.stdout.write(`resolved desired state (${count} resources) → ${out}\n`);
+        out.text(`resolved desired state (${count} resources) → ${artifactOut}`);
         if (zone !== undefined) {
-            this.process.stdout.write(`discovered Cloudflare zone "${zone}" from the API token\n`);
+            out.text(`discovered Cloudflare zone "${zone}" from the API token`);
         }
         // The resolver classifies each secret: `env` ones the user must supply (only knowable from the graph,
         // since the resolver injects platform secrets the authored config never names) → .env.example; the
@@ -97,27 +101,35 @@ const resolveCommand = buildCommand<ResolveFlags>({
         const { env: envKeys, generated } = collectSecrets(graph);
         if (envKeys.length > 0) {
             await writeEnvExample(join(dir, `${ENV_FILE}.example`), envKeys);
-            this.process.stdout.write(`set these in ${ENV_FILE} before apply (see ${ENV_FILE}.example): ${envKeys.join(", ")}\n`);
+            out.text(`set these in ${ENV_FILE} before apply (see ${ENV_FILE}.example): ${envKeys.join(", ")}`);
         }
         if (generated.length > 0) {
             await ensureGeneratedSecrets(dir, generated, process.env);
-            this.process.stdout.write(`generated these (stored in .secrets.json): ${generated.join(", ")}\n`);
+            out.text(`generated these (stored in .secrets.json): ${generated.join(", ")}`);
         }
+        let synced: { readonly pushed: readonly string[]; readonly newEnv: readonly string[] } | undefined;
         if (flags.syncControlPlane) {
             const password = process.env[GIT_TOKEN_ENV];
             if (password === undefined || password === "") {
                 throw new Error(`set ${GIT_TOKEN_ENV} (the Forgejo admin password) to use --sync-control-plane`);
             }
-            await syncControlPlaneSecrets({
+            synced = await syncControlPlaneSecrets({
                 previousGraph,
                 newGraph: graph,
                 env: process.env,
                 dir,
                 password,
                 cliVersion: version,
-                log: (message) => this.process.stdout.write(`${message}\n`),
+                log: out.log,
             });
         }
+        out.result({
+            resources: count,
+            ...(zone !== undefined ? { zone } : {}),
+            envSecrets: envKeys,
+            generatedSecrets: generated,
+            ...(synced !== undefined ? { synced } : {}),
+        });
     },
 });
 
@@ -127,17 +139,18 @@ const planCommand = buildCommand<{ artifact?: string }>({
         flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_PATH})` } },
     },
     async func(this: CommandContext, flags: { artifact?: string }) {
-        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const out = createOutput(this.process.stdout, outputMode(process.env));
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const dir = dirname(artifact);
         loadEnvFile(dir);
         const graph = await readArtifact(artifact);
         await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
         const ssh = createSshExecutor(createKnownHostsStore(dir));
-        const outcome = await plan(graph, { providers: createProviders({ ssh }), log });
+        const outcome = await plan(graph, { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent });
         for (const step of outcome.steps) {
-            log(`${step.action}\t${step.type}\t${step.id}${step.reason !== undefined ? `\t(${step.reason})` : ""}`);
+            out.text(`${step.action}\t${step.type}\t${step.id}${step.reason !== undefined ? `\t(${step.reason})` : ""}`);
         }
+        out.result({ steps: outcome.steps, orphans: outcome.orphans });
     },
 });
 
@@ -167,7 +180,7 @@ const apply = buildCommand<ApplyFlags>({
         },
     },
     async func(this: CommandContext, flags: ApplyFlags) {
-        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const out = createOutput(this.process.stdout, outputMode(process.env));
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const dir = dirname(artifact);
         loadEnvFile(dir);
@@ -195,7 +208,7 @@ const apply = buildCommand<ApplyFlags>({
                   };
         const result = await reconcile(
             graph,
-            { providers: createProviders({ ssh }), log, ...(probe !== undefined ? { probe } : {}) },
+            { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent, ...(probe !== undefined ? { probe } : {}) },
             { maxIterations: flags.maxIterations ?? DEFAULT_MAX_ITERATIONS },
         );
         await writeStatus(join(dir, STATUS_FILE), {
@@ -208,21 +221,31 @@ const apply = buildCommand<ApplyFlags>({
         // declares. Deletes need the kept platform nodes' creds, hence the same providers/env as the apply.
         // When --previous isn't explicit, auto-read the .last-applied.json snapshot from the last successful run.
         const previousPath = flags.previous ?? join(dir, LAST_APPLIED_FILE);
+        let pruned: PruneOutcome = { deleted: [], skipped: [] };
         if (existsSync(previousPath)) {
             const previous = await readArtifact(previousPath);
-            const outcome = await prune(previous, graph, { providers: createProviders({ ssh }), log, env: process.env });
-            if (outcome.deleted.length > 0 || outcome.skipped.length > 0) {
-                log(`pruned ${outcome.deleted.length} resource(s)${outcome.skipped.length > 0 ? `, ${outcome.skipped.length} left in place` : ""}`);
+            pruned = await prune(previous, graph, { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent, env: process.env });
+            if (pruned.deleted.length > 0 || pruned.skipped.length > 0) {
+                out.text(`pruned ${pruned.deleted.length} resource(s)${pruned.skipped.length > 0 ? `, ${pruned.skipped.length} left in place` : ""}`);
             }
         }
         // Snapshot the current artifact so the next apply can prune against it.
         await writeFile(join(dir, LAST_APPLIED_FILE), await readFile(artifact, "utf8"));
         const access = collectAccess(graph, result.outcome.outputs, process.env);
-        log(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
+        out.text(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
         if (access.length > 0) {
             await writeAccessFile(join(dir, ACCESS_FILE), access);
-            log(formatAccessSummary(access));
+            out.text(formatAccessSummary(access));
         }
+        out.result({
+            converged: result.converged,
+            iterations: result.iterations,
+            steps: result.outcome.steps,
+            outputs: result.outcome.outputs,
+            orphans: result.outcome.orphans,
+            pruned,
+            access,
+        });
         // Post a reconcile summary to the Discord #reconcile channel if the graph has a discord resource.
         const reconcileWebhook = result.outcome.outputs["discord"]?.["reconcileWebhook"];
         if (typeof reconcileWebhook === "string" && reconcileWebhook !== "") {
@@ -241,7 +264,7 @@ const apply = buildCommand<ApplyFlags>({
                     body: JSON.stringify({ content: summary }),
                 });
             } catch {
-                log("discord: failed to post reconcile summary (non-fatal)");
+                out.log("discord: failed to post reconcile summary (non-fatal)");
             }
         }
     },
@@ -253,7 +276,7 @@ const adopt = buildCommand<{ artifact?: string }>({
         flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_PATH})` } },
     },
     async func(this: CommandContext, flags: { artifact?: string }) {
-        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const out = createOutput(this.process.stdout, outputMode(process.env));
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const targetDir = dirname(artifact);
         // The scaffold layout: the intent repo is a sibling of the desired-state repo (`init` makes both).
@@ -301,7 +324,7 @@ const adopt = buildCommand<{ artifact?: string }>({
         await writeControlPlaneWorkflows(intentDir, targetDir, inputs);
 
         const baseUrl = `https://${domain}`;
-        await adoptRepos({
+        const repos = await adoptRepos({
             baseUrl,
             user,
             password,
@@ -309,7 +332,7 @@ const adopt = buildCommand<{ artifact?: string }>({
                 { dir: intentDir, name: INTENT_DIR },
                 { dir: targetDir, name: TARGET_DIR },
             ],
-            log,
+            log: out.log,
         });
 
         // The apply pipeline needs every secret; the resolve pipeline needs the Cloudflare token (for zone
@@ -320,9 +343,14 @@ const adopt = buildCommand<{ artifact?: string }>({
         }
         await setRepoSecrets({ api: forgejoApi, baseUrl, user, password, owner: user, name: INTENT_DIR, secrets: intentSecrets });
         await setRepoSecrets({ api: forgejoApi, baseUrl, user, password, owner: user, name: TARGET_DIR, secrets: desiredStateSecrets });
-        log(
+        out.text(
             `set ${Object.keys(intentSecrets).length} secret(s) on ${user}/${INTENT_DIR}, ${Object.keys(desiredStateSecrets).length} on ${user}/${TARGET_DIR}`,
         );
+        out.result({
+            repos,
+            intentSecrets: Object.keys(intentSecrets).sort(),
+            desiredStateSecrets: Object.keys(desiredStateSecrets).sort(),
+        });
     },
 });
 
@@ -342,7 +370,7 @@ const restore = buildCommand<RestoreFlags>({
         },
     },
     async func(this: CommandContext, flags: RestoreFlags) {
-        const log = (message: string): void => this.process.stdout.write(`${message}\n`);
+        const out = createOutput(this.process.stdout, outputMode(process.env));
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const dir = dirname(artifact);
         loadEnvFile(dir);
@@ -382,9 +410,10 @@ const restore = buildCommand<RestoreFlags>({
             credentials,
             snapshot: flags.snapshot ?? "latest",
             scope: scope as RestoreScope,
-            log,
+            log: out.log,
             executor: createSshExecutor(createKnownHostsStore(dir)),
         });
+        out.result({ snapshot: flags.snapshot ?? "latest", scope });
     },
 });
 

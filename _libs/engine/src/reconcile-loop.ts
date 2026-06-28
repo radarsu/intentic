@@ -20,10 +20,13 @@ export const reconcile = async (graph: DesiredStateGraph, config: EngineConfig, 
     if (options.maxIterations < 1) {
         throw new Error("reconcile requires maxIterations >= 1");
     }
+    const emit = config.onEvent ?? (() => {});
     for (let iteration = 1; iteration <= options.maxIterations; iteration++) {
         const outcome = await apply(graph, config);
         const check = await plan(graph, config);
-        if (check.steps.every((step) => step.action === "noop")) {
+        const converged = check.steps.every((step) => step.action === "noop");
+        emit({ kind: "iteration", n: iteration, converged });
+        if (converged) {
             return { converged: true, iterations: iteration, outcome };
         }
     }

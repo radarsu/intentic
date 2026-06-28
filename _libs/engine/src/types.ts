@@ -43,9 +43,28 @@ export interface PruneOutcome {
     readonly skipped: readonly PrunedResource[];
 }
 
+// Structured lifecycle events the engine emits as it runs — the machine-readable counterpart to `log`
+// (which carries providers' free-form strings). A driver (the CLI, a control plane) renders these into a
+// live progress stream; the final result is built from the returned outcomes, not from events.
+export type EngineEvent =
+    | {
+          readonly kind: "node";
+          readonly phase: "apply" | "plan";
+          readonly state: "start" | "done";
+          readonly id: string;
+          readonly type: ResourceType;
+          readonly action?: Action;
+          readonly reason?: string;
+      }
+    | { readonly kind: "readiness"; readonly state: "waiting" | "ready"; readonly id: string; readonly url: string }
+    | { readonly kind: "iteration"; readonly n: number; readonly converged: boolean }
+    | { readonly kind: "prune"; readonly state: "deleted" | "skipped"; readonly id: string; readonly type: ResourceType }
+    | { readonly kind: "orphan"; readonly id: string; readonly type: ResourceType };
+
 export interface EngineConfig {
     readonly providers: Providers;
     readonly env?: Readonly<Record<string, string | undefined>>; // default: process.env
     readonly probe?: ReadinessProbe; // default: httpProbe
-    readonly log?: (message: string) => void; // default: console.log
+    readonly log?: (message: string) => void; // default: console.log — providers' free-form messages
+    readonly onEvent?: (event: EngineEvent) => void; // default: no-op — structured lifecycle events
 }

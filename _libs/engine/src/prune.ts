@@ -47,6 +47,7 @@ const seedCurrentOutputs = async (graph: DesiredStateGraph, config: EngineConfig
 export const prune = async (previous: DesiredStateGraph, current: DesiredStateGraph, config: EngineConfig): Promise<PruneOutcome> => {
     const env = config.env ?? process.env;
     const log = config.log ?? console.log;
+    const emit = config.onEvent ?? (() => {});
     const kept = new Set(Object.keys(current.resources));
     const removed = new Set(Object.keys(previous.resources).filter((id) => !kept.has(id)));
     if (removed.size === 0) {
@@ -69,14 +70,14 @@ export const prune = async (previous: DesiredStateGraph, current: DesiredStateGr
         const type = node.type as ResourceType;
         const provider = requireProvider(config.providers, type, id);
         if (provider.delete === undefined) {
-            log(`prune: "${id}" (type "${type}") removed from desired state but its provider has no delete — left in place`);
+            emit({ kind: "prune", state: "skipped", id, type });
             skipped.push({ id, type });
             continue;
         }
         const ctx = makeContext(id, store, env, log);
         const inputs = resolveInputs(node.inputs, store, env, { lenient: true });
         await provider.delete(inputs, ctx);
-        log(`prune: deleted "${id}" (type "${type}")`);
+        emit({ kind: "prune", state: "deleted", id, type });
         deleted.push({ id, type });
     }
     return { deleted, skipped };
