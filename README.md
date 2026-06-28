@@ -186,6 +186,32 @@ intentic discovers your zone and account from the token alone, so the only Cloud
 - **No orphan detection for Cloudflare resources yet** — records are stamped (`intentic.id=<id>`) for a future orphan pass, but the tunnel/route providers cannot yet enumerate stamped resources.
 - **`plan` reads live infra** — the read-only preview queries the Cloudflare API and SSHes to the host to observe current state.
 
+## Packages
+
+A pnpm + Turbo monorepo (`_*/*` workspaces). The libraries form the intent → needs → desired-state → reconcile pipeline; the apps are the runnable products.
+
+| Package | Path | What it does |
+|---------|------|--------------|
+| `@intentic/graph` | [_libs/graph](_libs/graph) | Product-agnostic desired-state IR + `compile`; refs, secrets, readiness. The base everything builds on. |
+| `@intentic/resources` | [_libs/resources](_libs/resources) | The closed `ResourceType` vocabulary + each kind's `OUTPUTS`. |
+| `@intentic/need-resolver` | [_libs/need-resolver](_libs/need-resolver) | Authored intent shapes → abstract `Capability`/`Need` on a `Plane`. |
+| `@intentic/state-resolver` | [_libs/state-resolver](_libs/state-resolver) | Needs → a `DesiredStateGraph`, choosing catalog options and emitting nodes. |
+| `@intentic/sdk` | [_libs/sdk](_libs/sdk) | The authoring surface: `defineIntent`/`defineStack`, `i.have`/`i.want`. |
+| `@intentic/engine` | [_libs/engine](_libs/engine) | Stateless `plan`/`apply`/`reconcile` over the Provider SPI. |
+| `@intentic/providers` | [_libs/providers](_libs/providers) | Real SPI impls: SSH/Docker, Cloudflare, Forgejo, Komodo, Authentik. |
+| `@intentic/cli` | [_apps/cli](_apps/cli) | The `intentic` CLI — `init`/`resolve`/`plan`/`apply`/`adopt`/`restore`. |
+| `@intentic/runner` | [_apps/runner](_apps/runner) | Host-side runner image: preview proxy + outbound WSS channel to the platform. |
+| `@intentic/sandbox` | [_apps/sandbox](_apps/sandbox) | Per-project AI-agent dev daemon image (Claude Agent SDK). |
+| `@intentic/tsconfig` | [_tools/tsconfig](_tools/tsconfig) | Shared TypeScript base configs. |
+
+## Working in this repo (for agents)
+
+- **Read [CLAUDE.md](CLAUDE.md) first** — it holds the hard editing rules (no legacy/compat shims, no re-exports or aliases, let errors propagate, prefer `undefined`, early returns).
+- **Edit `src/` directly.** Workspace packages expose an `@intentic/src` export condition, so cross-package imports resolve to source — no build step is needed between editing a lib and running a dependent test.
+- **Layering is acyclic:** `graph` → (`resources`, `need-resolver`) → (`state-resolver`, `engine`) → (`sdk`, `providers`) → `cli`. Import from the true source package, never re-export through another.
+- **Tests are co-located:** `*.test.ts` (unit), `*.engine.test.ts` (engine integration), and gated `*.e2e.test.ts` (real infra, opt-in). Run `pnpm test` (Turbo) or per-package `vitest`.
+- Each package has its own README with its responsibilities, key files, and gotchas — start there when working inside one.
+
 ## Architecture & contributing
 
 [ARCHITECTURE.md](ARCHITECTURE.md) covers the package layout, the intent-driven flow, the control plane vs application plane split, and the maintainer workflows — local end-to-end testing and the `demo:up` stand-up.

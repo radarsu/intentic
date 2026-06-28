@@ -60,5 +60,21 @@ cd .. && intentic apply                                  # generates the platfor
 > as ordinary nodes in the artifact — a future "PR-managed" phase (a remote Forgejo watching the intent
 > repo) would layer on top of this same flow.
 
+## Key files
+
+- [src/cli.ts](src/cli.ts) / [src/app.ts](src/app.ts) — the stricli app and command wiring.
+- [src/init.ts](src/init.ts) / [src/resolve.ts](src/resolve.ts) / [src/apply.ts](src/apply.ts) — the `init`/`resolve`/`apply` commands (plan lives alongside resolve/apply).
+- [src/artifact.ts](src/artifact.ts) — `readArtifact`/`writeArtifact`/`writeStatus` (the desired-state files).
+- [src/secrets.ts](src/secrets.ts) / [src/generated-secrets.ts](src/generated-secrets.ts) — the user-supplied vs intentic-generated secret split.
+- [src/output.ts](src/output.ts) — honors `INTENTIC_OUTPUT` (`text`/`json`/`ndjson`); maps `EngineEvent`s to the chosen format.
+- [src/adopt.ts](src/adopt.ts) / [src/adopt-pipelines.ts](src/adopt-pipelines.ts) — push the intent/desired-state repos into Forgejo + wire Actions.
+- [src/access.ts](src/access.ts) — the post-apply Access summary + `access.md`; [src/known-hosts.ts](src/known-hosts.ts) — TOFU host-key pinning.
+
+## Conventions
+
+- Runs the engine as the **only** place providers are constructed (via `createProviders`); it owns reading `.env` and generating `.secrets.json`.
+- Subprocess-friendly: a backend can drive it and parse `INTENTIC_OUTPUT=ndjson`/`json` instead of scraping prose (the platform's `provision.ts` does exactly this).
+- Co-located unit tests + a gated [src/cli.e2e.test.ts](src/cli.e2e.test.ts) (real infra, opt-in).
+
 **Key exports:** `loadIntent`; `readArtifact` / `writeArtifact` / `writeStatus`; `scaffold`; the
 `CONFIG_FILE` / `ARTIFACT_FILE` / `STATUS_FILE` constants. See [ARCHITECTURE.md](../../ARCHITECTURE.md).
