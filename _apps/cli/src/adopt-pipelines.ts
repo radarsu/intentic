@@ -7,6 +7,11 @@ import type { ForgejoApi } from "@intentic/providers";
 export const GIT_USER_SECRET = "INTENTIC_GIT_USER";
 export const GIT_TOKEN_SECRET = "INTENTIC_GIT_TOKEN";
 
+// The job env-var names the resolve pipeline binds those secrets to (and that the CLI reads): the resolve sync
+// authenticates its Forgejo secret PUTs with GIT_TOKEN (the admin password).
+export const GIT_USER_ENV = "GIT_USER";
+export const GIT_TOKEN_ENV = "GIT_TOKEN";
+
 // The package the pipelines install the CLI from. The intent/desired-state repos do not depend on the CLI
 // (only on @intentic/{sdk,graph}); the runner pulls it on demand via `pnpm dlx`, pinned to the adopting CLI's
 // own version so the pipeline runs the same intentic the operator bootstrapped with.
@@ -65,8 +70,8 @@ export const intentWorkflowYaml = (inputs: PipelineInputs): string =>
         "    runs-on: docker",
         "    env:",
         `      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}`,
-        `      GIT_USER: \${{ secrets.${GIT_USER_SECRET} }}`,
-        `      GIT_TOKEN: \${{ secrets.${GIT_TOKEN_SECRET} }}`,
+        `      ${GIT_USER_ENV}: \${{ secrets.${GIT_USER_SECRET} }}`,
+        `      ${GIT_TOKEN_ENV}: \${{ secrets.${GIT_TOKEN_SECRET} }}`,
         "    steps:",
         "      - uses: https://github.com/actions/checkout@v4",
         "      - name: resolve and push desired-state",
@@ -75,7 +80,7 @@ export const intentWorkflowYaml = (inputs: PipelineInputs): string =>
         "          pnpm install --ignore-workspace",
         '          AUTH="$(printf \'%s:%s\' "$GIT_USER" "$GIT_TOKEN" | base64 -w0)"',
         `          git -c http.extraHeader="Authorization: basic $AUTH" clone ${cloneUrl(inputs, inputs.desiredStateRepo)} /tmp/ds`,
-        `          pnpm dlx ${CLI_PACKAGE}@${inputs.cliVersion} resolve --config ${inputs.configFile} --out /tmp/ds/${inputs.artifactFile}`,
+        `          pnpm dlx ${CLI_PACKAGE}@${inputs.cliVersion} resolve --config ${inputs.configFile} --out /tmp/ds/${inputs.artifactFile} --sync-control-plane`,
         "          cd /tmp/ds",
         "          git add -A",
         "          if git diff --cached --quiet; then echo 'desired-state unchanged'; exit 0; fi",
@@ -122,7 +127,7 @@ export const applyWorkflowYaml = (inputs: PipelineInputs): string => {
 
 // Write a workflow file into a local repo dir (creating .forgejo/workflows/), so `adopt`'s normal add/commit/
 // push carries it — no API commit, no extra trigger.
-const writeWorkflow = async (repoDir: string, workflowPath: string, content: string): Promise<void> => {
+export const writeWorkflow = async (repoDir: string, workflowPath: string, content: string): Promise<void> => {
     const full = join(repoDir, workflowPath);
     await mkdir(dirname(full), { recursive: true });
     await writeFile(full, content);

@@ -9,7 +9,14 @@ import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
 import { collectAccess, formatAccessSummary, writeAccessFile } from "./access.js";
 import { adoptRepos } from "./adopt.js";
-import { GIT_TOKEN_SECRET, GIT_USER_SECRET, type PipelineInputs, setRepoSecrets, writeControlPlaneWorkflows } from "./adopt-pipelines.js";
+import {
+    GIT_TOKEN_ENV,
+    GIT_TOKEN_SECRET,
+    GIT_USER_SECRET,
+    type PipelineInputs,
+    setRepoSecrets,
+    writeControlPlaneWorkflows,
+} from "./adopt-pipelines.js";
 import {
     ACCESS_FILE,
     ARTIFACT_FILE,
@@ -26,10 +33,11 @@ import {
     writeArtifact,
     writeStatus,
 } from "./artifact.js";
+import { forgejoIdentity, syncControlPlaneSecrets } from "./control-plane-sync.js";
 import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
 import { discoverZone, loadIntent } from "./resolve.js";
-import { collectSecrets, secretRef, writeEnvExample } from "./secrets.js";
+import { collectSecrets, writeEnvExample } from "./secrets.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -52,6 +60,7 @@ const init = buildCommand<{ dir?: string; link: boolean }>({
 interface ResolveFlags {
     readonly config?: string;
     readonly out?: string;
+    readonly syncControlPlane: boolean;
 }
 
 const resolveCommand = buildCommand<ResolveFlags>({
@@ -60,12 +69,18 @@ const resolveCommand = buildCommand<ResolveFlags>({
         flags: {
             config: { kind: "parsed", parse: String, optional: true, brief: `Path to the intent config (default: ${CONFIG_PATH})` },
             out: { kind: "parsed", parse: String, optional: true, brief: `Path to write the artifact (default: ${ARTIFACT_PATH})` },
+            syncControlPlane: {
+                kind: "boolean",
+                brief: "Push newly-required generated secrets into Forgejo and regenerate apply.yaml (run by the resolve pipeline post-adopt; needs GIT_TOKEN)",
+            },
         },
     },
     async func(this: CommandContext, flags: ResolveFlags) {
         const intent = await loadIntent(flags.config ?? CONFIG_PATH);
         const out = flags.out ?? ARTIFACT_PATH;
         const dir = dirname(out);
+        // Capture the artifact being replaced BEFORE overwriting it — the control-plane sync diffs against it.
+        const previousGraph = flags.syncControlPlane && existsSync(out) ? await readArtifact(out) : undefined;
         const zone = await discoverZone(intent, dir);
         const graph = resolveState(intent, zone);
         await writeArtifact(out, graph);
@@ -86,6 +101,21 @@ const resolveCommand = buildCommand<ResolveFlags>({
         if (generated.length > 0) {
             await ensureGeneratedSecrets(dir, generated, process.env);
             this.process.stdout.write(`generated these (stored in .secrets.json): ${generated.join(", ")}\n`);
+        }
+        if (flags.syncControlPlane) {
+            const password = process.env[GIT_TOKEN_ENV];
+            if (password === undefined || password === "") {
+                throw new Error(`set ${GIT_TOKEN_ENV} (the Forgejo admin password) to use --sync-control-plane`);
+            }
+            await syncControlPlaneSecrets({
+                previousGraph,
+                newGraph: graph,
+                env: process.env,
+                dir,
+                password,
+                cliVersion: version,
+                log: (message) => this.process.stdout.write(`${message}\n`),
+            });
         }
     },
 });
@@ -228,19 +258,7 @@ const adopt = buildCommand<{ artifact?: string }>({
         loadEnvFile(targetDir);
         const graph = await readArtifact(artifact);
         // Forgejo is what hosts the repos; its node carries the public domain + admin identity we push with.
-        const forgejo = Object.values(graph.resources).find((node) => node.type === "forgejo");
-        if (forgejo === undefined) {
-            throw new Error("no forgejo resource in the artifact — run `intentic apply` first");
-        }
-        const domain = forgejo.inputs["domain"];
-        const user = forgejo.inputs["adminUser"];
-        if (typeof domain !== "string" || typeof user !== "string") {
-            throw new Error("forgejo resource is missing its domain/adminUser inputs");
-        }
-        const ref = secretRef(forgejo.inputs["adminPassword"]);
-        if (ref === undefined) {
-            throw new Error("forgejo resource is missing its adminPassword secret");
-        }
+        const { domain, user, adminPasswordRef: ref } = forgejoIdentity(graph);
         const generatedValues = await readGeneratedSecrets(targetDir);
         const password = ref.source === "generated" ? generatedValues[ref.key] : process.env[ref.key];
         if (password === undefined || password === "") {
