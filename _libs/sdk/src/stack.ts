@@ -168,7 +168,12 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
 
     const workspace = (id: string, input: WantWorkspaceInput): Workspace => {
         claim(id);
-        workspaces.push({ id, on: input.on.resourceId, expose: input.expose.resourceId });
+        workspaces.push({
+            id,
+            on: input.on.resourceId,
+            expose: input.expose.resourceId,
+            ...(input.platformUrl !== undefined ? { platformUrl: input.platformUrl } : {}),
+        });
         return Object.freeze({
             ...makeRef(id),
             internalUrl: makeRef<string>(id, "internalUrl"),

@@ -1,5 +1,5 @@
 import type { SecretRef } from "@intentic/graph";
-import { httpOk, makeRef } from "@intentic/graph";
+import { env, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput, WorkspaceIntent } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { previewDomain } from "./ids.js";
@@ -46,6 +46,9 @@ export const resolveWorkspace = (
                 network: NETWORK,
                 image: IMAGES.runner,
                 sandboxImage: IMAGES.sandbox,
+                // Opt into the control plane: the runner dials platformUrl with the platform-supplied
+                // RUNNER_TOKEN. Both are omitted (preview-only) unless the author set platformUrl.
+                ...(intent.platformUrl !== undefined ? { platformUrl: intent.platformUrl, runnerToken: env("RUNNER_TOKEN") } : {}),
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(intent.id, "healthUrl"), { timeout: "120s" }),

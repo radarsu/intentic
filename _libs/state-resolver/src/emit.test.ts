@@ -512,4 +512,25 @@ test("a workspace-only intent emits the runner node + its wildcard preview route
     // The wildcard hostname flows unchanged into the cf-route (id slugged) and the host tunnel's ingress.
     expect(nodes.find((node) => node.type === "cf-route")?.inputs["hostname"]).toBe("*.preview.example.com");
     expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["ingress"]).toEqual([{ hostname: "*.preview.example.com", port: 8088 }]);
+    // Without platformUrl the runner is preview-only — no control-plane inputs.
+    expect(runner?.inputs["platformUrl"]).toBeUndefined();
+    expect(runner?.inputs["runnerToken"]).toBeUndefined();
+});
+
+test("a workspace with platformUrl emits the control-plane inputs (the runner dials back with RUNNER_TOKEN)", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        workspaces: [{ id: "workspace", on: "host", expose: "cf", platformUrl: "wss://platform.example/runner/gateway" }],
+        backings: [],
+        apps: [],
+    };
+
+    const runner = emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace");
+    expect(runner?.inputs["platformUrl"]).toBe("wss://platform.example/runner/gateway");
+    // emit returns raw nodes — env() is a SecretRef here (the $secret form is the compiled shape).
+    expect(runner?.inputs["runnerToken"]).toEqual({ kind: "secret", source: "env", key: "RUNNER_TOKEN" });
 });

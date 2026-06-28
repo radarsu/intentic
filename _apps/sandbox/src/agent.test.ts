@@ -1,4 +1,4 @@
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { Options, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { expect, test } from "vitest";
 import { type AgentEvent, type QueryFn, runAgent } from "./agent.js";
 
@@ -43,6 +43,21 @@ test("a turn surfaces session, text deltas, tool actions, and a terminal done", 
         { kind: "tool", name: "Bash", target: "pnpm test" },
         { kind: "done" },
     ]);
+});
+
+test("the per-turn oauth token is injected into the SDK options env, and stays absent when not given", async () => {
+    let captured: Options | undefined;
+    const capture: QueryFn = async function* (args) {
+        captured = args.options;
+        yield { type: "result", subtype: "success" } as SDKMessage;
+    };
+
+    await collect({ ...request, oauthToken: "tok-xyz" }, capture);
+    expect(captured?.env?.["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("tok-xyz");
+
+    captured = undefined;
+    await collect(request, capture);
+    expect(captured?.env).toBeUndefined();
 });
 
 test("a non-success result becomes an error followed by done", async () => {

@@ -110,3 +110,24 @@ test("apply throws when the docker run fails", async () => {
         "failed to start workspace runner",
     );
 });
+
+test("apply passes the control-plane env only when platformUrl + runnerToken are set", async () => {
+    const without = fakeSsh();
+    await createWorkspaceRunnerProvider(without.executor).apply(inputs, undefined, ctx());
+    expect(without.commands.some((c) => c.includes("PLATFORM_URL"))).toBe(false);
+
+    const withChannel = fakeSsh();
+    await createWorkspaceRunnerProvider(withChannel.executor).apply(
+        { ...inputs, platformUrl: "wss://platform.example/runner/gateway", runnerToken: "tok-123" },
+        undefined,
+        ctx(),
+    );
+    expect(
+        withChannel.commands.some(
+            (c) =>
+                c.includes("docker run") &&
+                c.includes("-e PLATFORM_URL=wss://platform.example/runner/gateway") &&
+                c.includes("-e RUNNER_TOKEN=tok-123"),
+        ),
+    ).toBe(true);
+});

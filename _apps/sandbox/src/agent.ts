@@ -19,6 +19,9 @@ export interface AgentRequest {
     readonly signal: AbortSignal;
     // Defaults to the account/subscription default; override with INTENTIC_AGENT_MODEL.
     readonly model?: string;
+    // The user's Claude subscription token, injected into the SDK for this turn. Supplied per-turn by the
+    // platform relay so no credentials are ever stored on the host or in the container env.
+    readonly oauthToken?: string;
     // Defaults to the autonomous sandbox posture; the container's isolation is what makes this safe.
     readonly permissionMode?: PermissionMode;
 }
@@ -58,6 +61,7 @@ export async function* runAgent(request: AgentRequest, queryFn: QueryFn = defaul
         permissionMode,
         allowDangerouslySkipPermissions: permissionMode === "bypassPermissions",
         abortController,
+        ...(request.oauthToken !== undefined ? { env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: request.oauthToken } } : {}),
         ...(request.model !== undefined ? { model: request.model } : {}),
         ...(request.sessionId !== undefined ? { resume: request.sessionId } : {}),
     };

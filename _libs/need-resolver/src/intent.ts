@@ -111,6 +111,9 @@ export interface WorkspaceIntent {
     readonly id: string;
     readonly on: string;
     readonly expose: string;
+    // When set, the runner dials this platform WSS gateway (authenticating with the RUNNER_TOKEN env secret)
+    // so the control plane can drive its sandboxes. Absent ⇒ the runner only serves previews.
+    readonly platformUrl?: string;
 }
 
 // hosts/cloudflare may be empty so an app-less intent stays valid; the SDK's `on`/`expose` types guarantee

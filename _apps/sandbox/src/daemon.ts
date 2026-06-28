@@ -22,7 +22,13 @@ export interface DaemonDeps {
 
 const COMMIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const;
 
-const agentBody = z.object({ prompt: z.string().min(1), sessionId: z.string().optional() });
+const agentBody = z.object({
+    prompt: z.string().min(1),
+    sessionId: z.string().optional(),
+    // The platform relays the user's subscription token + chosen model per turn; neither is stored here.
+    oauthToken: z.string().optional(),
+    model: z.string().optional(),
+});
 const intenticBody = z.object({ args: z.array(z.string()) });
 const commitBody = z.object({ message: z.string().min(1) });
 const pushBody = z.object({ branch: z.string().min(1) });
@@ -58,6 +64,8 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
                 cwd: workspace.root,
                 signal: c.req.raw.signal,
                 ...(parsed.data.sessionId !== undefined ? { sessionId: parsed.data.sessionId } : {}),
+                ...(parsed.data.oauthToken !== undefined ? { oauthToken: parsed.data.oauthToken } : {}),
+                ...(parsed.data.model !== undefined ? { model: parsed.data.model } : {}),
             };
             for await (const event of agent(request)) {
                 await stream.writeSSE({ data: JSON.stringify(event) });

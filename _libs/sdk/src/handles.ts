@@ -158,10 +158,13 @@ export interface WantServiceInput extends ServiceInput {
     expose: Cloudflare;
 }
 
-// The workspace runner takes only its host + Cloudflare account; its `*.preview.<zone>` route is derived.
+// The workspace runner takes its host + Cloudflare account; its `*.preview.<zone>` route is derived. An
+// optional `platformUrl` opts it into the control plane: the runner dials that WSS gateway and authenticates
+// with the platform-supplied RUNNER_TOKEN env secret, so the platform can drive sandboxes over one connection.
 export interface WantWorkspaceInput {
     on: Host;
     expose: Cloudflare;
+    platformUrl?: string;
 }
 
 export interface Have {

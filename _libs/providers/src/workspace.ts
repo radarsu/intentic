@@ -12,6 +12,9 @@ const workspaceSchema = sshSchema.extend({
     network: z.string(),
     image: z.string(),
     sandboxImage: z.string(),
+    // Set together (control-plane opt-in): the runner dials platformUrl with runnerToken. Absent ⇒ preview-only.
+    platformUrl: z.string().optional(),
+    runnerToken: z.string().optional(),
 });
 type WorkspaceInputs = z.infer<typeof workspaceSchema>;
 const parse = (inputs: ResolvedInputs): WorkspaceInputs => parseInputs(workspaceSchema, inputs, "workspace");
@@ -76,6 +79,12 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
             // The runner reaches each sandbox by container name on this shared network; create it before the run.
             await session.exec(`docker network inspect ${parsed.network} >/dev/null 2>&1 || docker network create ${parsed.network}`);
             await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
+            // Control-plane env: present only when the workspace opted in (platformUrl set). The token is a
+            // secret, so it rides the env list (the whole command runs over the SSH channel).
+            const channelEnv =
+                parsed.platformUrl !== undefined && parsed.runnerToken !== undefined
+                    ? ` -e PLATFORM_URL=${parsed.platformUrl} -e RUNNER_TOKEN=${parsed.runnerToken}`
+                    : ``;
             const run = await session.exec(
                 // --user root: the runner manages sandboxes through the mounted docker socket (its default
                 // non-root user gets "permission denied" on /var/run/docker.sock). The preview port is published
@@ -84,7 +93,7 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
                 `docker run -d --restart unless-stopped --user root --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
                     `-p ${parsed.previewPort}:${parsed.previewPort} --network ${parsed.network} ` +
                     `-v /var/run/docker.sock:/var/run/docker.sock ` +
-                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage} ${parsed.image}`,
+                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage}${channelEnv} ${parsed.image}`,
             );
             if (run.code !== 0) {
                 throw new Error(`failed to start workspace runner on host: exited ${run.code}: ${run.stderr.trim()}`);

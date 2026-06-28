@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { AgentEvent } from "./agent.js";
+import type { AgentEvent, AgentRequest } from "./agent.js";
 import { createDaemon, type DaemonDeps } from "./daemon.js";
 import type { DevServer } from "./dev-server.js";
 import { workspacePaths } from "./workspace.js";
@@ -45,6 +45,26 @@ test("POST /agent streams the agent events as SSE frames", async () => {
     for (const event of events) {
         expect(body).toContain(`data: ${JSON.stringify(event)}`);
     }
+});
+
+test("POST /agent forwards the per-turn oauth token and model into the agent request", async () => {
+    let seen: AgentRequest | undefined;
+    const app = createDaemon(
+        deps({
+            agent: async function* (request) {
+                seen = request;
+                yield { kind: "done" } as AgentEvent;
+            },
+        }),
+    );
+    await app.request("/agent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: "do it", sessionId: "s1", oauthToken: "tok-xyz", model: "opus" }),
+    });
+    expect(seen?.oauthToken).toBe("tok-xyz");
+    expect(seen?.model).toBe("opus");
+    expect(seen?.sessionId).toBe("s1");
 });
 
 test("POST /agent rejects an empty prompt", async () => {
