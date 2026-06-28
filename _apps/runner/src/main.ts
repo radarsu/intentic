@@ -18,6 +18,9 @@ process.stdout.write(`intentic runner: preview proxy on 0.0.0.0:${previewPort} f
 
 const platformUrl = process.env["PLATFORM_URL"];
 const runnerToken = process.env["RUNNER_TOKEN"];
+// A custom Anthropic-compatible endpoint (e.g. a local model gateway), exported into each sandbox so the
+// agent uses it. Agent CREDENTIALS are still never held here — the platform injects them per turn.
+const agentBaseUrl = process.env["ANTHROPIC_BASE_URL"];
 if (platformUrl !== undefined && platformUrl !== "" && runnerToken !== undefined && runnerToken !== "") {
     // One sandbox per runner/host; agent credentials are NOT held here — the platform injects them per turn in
     // the relay command (so the host never stores Claude creds).
@@ -29,7 +32,7 @@ if (platformUrl !== undefined && platformUrl !== "" && runnerToken !== undefined
             devCommand: process.env["DEV_COMMAND"] ?? "pnpm dev",
             devPort,
             daemonPort,
-            agentEnv: {},
+            agentEnv: agentBaseUrl !== undefined && agentBaseUrl !== "" ? { ANTHROPIC_BASE_URL: agentBaseUrl } : {},
         },
     });
     connectChannel({

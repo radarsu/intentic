@@ -49,6 +49,8 @@ export const resolveWorkspace = (
                 // Opt into the control plane: the runner dials platformUrl with the platform-supplied
                 // RUNNER_TOKEN. Both are omitted (preview-only) unless the author set platformUrl.
                 ...(intent.platformUrl !== undefined ? { platformUrl: intent.platformUrl, runnerToken: env("RUNNER_TOKEN") } : {}),
+                // The runner exports this as ANTHROPIC_BASE_URL into each sandbox; omitted ⇒ Anthropic's cloud.
+                ...(intent.agentBaseUrl !== undefined ? { agentBaseUrl: intent.agentBaseUrl } : {}),
             },
             explicitDependsOn: [],
             readyWhen: httpOk(makeRef<string>(intent.id, "healthUrl"), { timeout: "120s" }),

@@ -165,6 +165,10 @@ export interface WantWorkspaceInput {
     on: Host;
     expose: Cloudflare;
     platformUrl?: string;
+    // Optional Anthropic-compatible base URL for the in-sandbox agent (set as ANTHROPIC_BASE_URL on the
+    // sandbox container). Point it at a local gateway (e.g. LiteLLM/Ollama) to run the agent against a local
+    // model; absent ⇒ the agent talks to Anthropic's cloud.
+    agentBaseUrl?: string;
 }
 
 export interface Have {

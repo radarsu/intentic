@@ -171,6 +171,16 @@ pnpm intentic init       # scaffold the intent + desired-state repos
 
 > Requires **Node 24** and **pnpm 11**. From this repo the CLI runs as `pnpm intentic <command>` (the first call builds `dist`, then runs incrementally). The full authoring reference is [examples/deploy.config.ts](examples/deploy.config.ts).
 
+## Run on your own PC (no server)
+
+No VPS? Because each host's Cloudflare Tunnel connects *outbound* (the host opens no inbound ports), the "host" can be your own laptop or desktop behind NAT. One command bootstraps a Docker-in-Docker host on your machine, points intentic at it over SSH like any server, and stands up the whole stack — apps reachable through your Cloudflare account, zero inbound ports on your PC:
+
+```sh
+CLOUDFLARE_API_TOKEN=… INTENTIC_ZONE=example.com ./scripts/intentic-local.sh up
+```
+
+See [LOCAL.md](LOCAL.md) for prerequisites and details.
+
 ## Cloudflare API token
 
 intentic discovers your zone and account from the token alone, so the only Cloudflare setup is a token with:

@@ -15,6 +15,8 @@ const workspaceSchema = sshSchema.extend({
     // Set together (control-plane opt-in): the runner dials platformUrl with runnerToken. Absent ⇒ preview-only.
     platformUrl: z.string().optional(),
     runnerToken: z.string().optional(),
+    // Anthropic-compatible base URL the runner exports as ANTHROPIC_BASE_URL into each sandbox; absent ⇒ cloud.
+    agentBaseUrl: z.string().optional(),
 });
 type WorkspaceInputs = z.infer<typeof workspaceSchema>;
 const parse = (inputs: ResolvedInputs): WorkspaceInputs => parseInputs(workspaceSchema, inputs, "workspace");
@@ -85,6 +87,8 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
                 parsed.platformUrl !== undefined && parsed.runnerToken !== undefined
                     ? ` -e PLATFORM_URL=${parsed.platformUrl} -e RUNNER_TOKEN=${parsed.runnerToken}`
                     : ``;
+            // Forwarded into each sandbox the runner spawns, so the agent talks to a custom Anthropic endpoint.
+            const agentEnv = parsed.agentBaseUrl !== undefined ? ` -e ANTHROPIC_BASE_URL=${parsed.agentBaseUrl}` : ``;
             const run = await session.exec(
                 // --user root: the runner manages sandboxes through the mounted docker socket (its default
                 // non-root user gets "permission denied" on /var/run/docker.sock). The preview port is published
@@ -93,7 +97,7 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
                 `docker run -d --restart unless-stopped --user root --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
                     `-p ${parsed.previewPort}:${parsed.previewPort} --network ${parsed.network} ` +
                     `-v /var/run/docker.sock:/var/run/docker.sock ` +
-                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage}${channelEnv} ${parsed.image}`,
+                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage}${channelEnv}${agentEnv} ${parsed.image}`,
             );
             if (run.code !== 0) {
                 throw new Error(`failed to start workspace runner on host: exited ${run.code}: ${run.stderr.trim()}`);

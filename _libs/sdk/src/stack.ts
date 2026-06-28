@@ -173,6 +173,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
             on: input.on.resourceId,
             expose: input.expose.resourceId,
             ...(input.platformUrl !== undefined ? { platformUrl: input.platformUrl } : {}),
+            ...(input.agentBaseUrl !== undefined ? { agentBaseUrl: input.agentBaseUrl } : {}),
         });
         return Object.freeze({
             ...makeRef(id),
