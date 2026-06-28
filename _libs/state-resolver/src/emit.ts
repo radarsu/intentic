@@ -233,7 +233,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
     // binding nodes are emitted inside resolveApp (they require an app), not here. ---
     for (const backing of intent.backings) {
         const host = hostById.get(backing.on)!;
-        const resolved = resolveBacking(backing, host.input);
+        const resolved = resolveBacking(backing, host.input, apiToken);
         nodes.push(...resolved.nodes);
         if (resolved.ingress.length > 0) {
             const hostIngress = ingressByHost.get(backing.on) ?? [];

@@ -15,10 +15,7 @@ const parse = (inputs: ResolvedInputs): PeripheryInputs => parseInputs(periphery
 const containerName = (serverName: string): string => `intentic-periphery-${serverName}`;
 
 // Check if the Periphery container is running on the worker host and on which image.
-const checkPeriphery = async (
-    session: SshSession,
-    serverName: string,
-): Promise<{ running: boolean; image: string | undefined }> => {
+const checkPeriphery = async (session: SshSession, serverName: string): Promise<{ running: boolean; image: string | undefined }> => {
     const name = containerName(serverName);
     const result = await session.exec(`docker ps --filter "name=^${name}$" --format '{{.Names}}'`);
     if (result.stdout.trim() !== name) {

@@ -32,4 +32,3 @@ export type {
 } from "./intent.js";
 export type { Capability, Need, Plane } from "./needs.js";
 export { controlPlaneHostId, needKey, resolveNeeds } from "./needs.js";
-

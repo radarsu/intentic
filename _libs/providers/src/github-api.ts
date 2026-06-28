@@ -36,7 +36,13 @@ export interface GitHubApi {
     findRepo(params: { token: string; owner: string; name: string }): Promise<{ cloneUrl: string; sshUrl: string } | undefined>;
     createRepo(params: { token: string; owner: string; name: string; private: boolean; ownerIsOrg: boolean }): Promise<void>;
     deleteRepo(params: { token: string; owner: string; name: string }): Promise<void>;
-    readFile(params: { token: string; owner: string; repo: string; path: string; branch: string }): Promise<{ content: string; sha: string } | undefined>;
+    readFile(params: {
+        token: string;
+        owner: string;
+        repo: string;
+        path: string;
+        branch: string;
+    }): Promise<{ content: string; sha: string } | undefined>;
     commitFile(params: {
         token: string;
         owner: string;

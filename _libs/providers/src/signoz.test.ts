@@ -4,13 +4,14 @@ import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 
-const CLICKHOUSE_IMAGE = "clickhouse/clickhouse-server:24.1.2-alpine@sha256:aaaa";
-const SIGNOZ_IMAGE = "signoz/signoz:v0.111.0@sha256:bbbb";
-const OTEL_IMAGE = "signoz/signoz-otel-collector:0.111.5@sha256:cccc";
-const SCHEMA_MIGRATOR_IMAGE = "signoz/signoz-schema-migrator:0.111.5@sha256:dddd";
+const CLICKHOUSE_IMAGE = "clickhouse/clickhouse-server:25.5.6@sha256:aaaa";
+const SIGNOZ_IMAGE = "signoz/signoz:v0.129.0@sha256:bbbb";
+const OTEL_IMAGE = "signoz/signoz-otel-collector:v0.144.5@sha256:cccc";
+const ZOOKEEPER_IMAGE = "signoz/zookeeper:3.7.1@sha256:dddd";
 // The service=image lines `docker inspect` reports for the running compose project (the one-shot
-// schema-migrator-sync has exited, so it is absent — its version tracks the collector's).
-const DEFAULT_IMAGES = { clickhouse: CLICKHOUSE_IMAGE, signoz: SIGNOZ_IMAGE, "otel-collector": OTEL_IMAGE };
+// init-clickhouse + telemetrystore-migrator have exited, so they are absent; the migrator's image tracks the
+// otel collector's).
+const DEFAULT_IMAGES = { zookeeper: ZOOKEEPER_IMAGE, clickhouse: CLICKHOUSE_IMAGE, signoz: SIGNOZ_IMAGE, "otel-collector": OTEL_IMAGE };
 const composeImages = (images: Record<string, string>): string =>
     Object.entries(images)
         .map(([service, image]) => `${service}=${image}`)
@@ -75,7 +76,7 @@ const inputs = {
     clickhouseImage: CLICKHOUSE_IMAGE,
     signozImage: SIGNOZ_IMAGE,
     otelImage: OTEL_IMAGE,
-    schemaMigratorImage: SCHEMA_MIGRATOR_IMAGE,
+    zookeeperImage: ZOOKEEPER_IMAGE,
 };
 
 const outputs = { url: "https://signoz.example.com", internalUrl: "http://10.0.0.5:8080", otlpEndpoint: "http://10.0.0.5:4318" };
@@ -101,21 +102,31 @@ test("diff is noop when every long-running service runs on its desired image", (
     expect(createSignozProvider(fakeSsh().executor).diff(inputs, { outputs: {}, detail: { images: DEFAULT_IMAGES } })).toEqual({ action: "noop" });
 });
 
-test("diff is update when a service image differs from the desired pin", () => {
-    const observed = { outputs: {}, detail: { images: { ...DEFAULT_IMAGES, signoz: "signoz/signoz:v0.110.0@sha256:eeee" } } };
+test("diff is update when a service image differs from the desired pin (incl. zookeeper)", () => {
+    const observed = { outputs: {}, detail: { images: { ...DEFAULT_IMAGES, zookeeper: "signoz/zookeeper:3.7.0@sha256:eeee" } } };
     expect(createSignozProvider(fakeSsh().executor).diff(inputs, observed).action).toBe("update");
 });
 
-test("apply writes the compose (with pinned images) + config files, brings the stack up, waits for health, seeds the admin, and returns outputs", async () => {
+test("apply writes the compose (pinned images incl. zookeeper) + the clickhouse/otel config files + a once-guarded JWT env, brings the stack up, seeds the admin, and returns outputs", async () => {
     const ssh = fakeSsh({ healthy: true });
     const result = await createSignozProvider(ssh.executor).apply(inputs, undefined, ctx());
     expect(result).toEqual(outputs);
-    // The pinned image refs are inlined into the compose YAML (no .env interpolation), so a bump lands here.
+    // The pinned image refs are inlined into the compose YAML, so a bump lands here.
     expect(
-        ssh.commands.some((c) => c.includes("cat > /opt/intentic/signoz/compose.yaml") && c.includes(SIGNOZ_IMAGE) && c.includes(CLICKHOUSE_IMAGE)),
+        ssh.commands.some(
+            (c) =>
+                c.includes("cat > /opt/intentic/signoz/compose.yaml") &&
+                c.includes(SIGNOZ_IMAGE) &&
+                c.includes(CLICKHOUSE_IMAGE) &&
+                c.includes(ZOOKEEPER_IMAGE),
+        ),
     ).toBe(true);
     expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/signoz/otel-collector-config.yaml"))).toBe(true);
-    expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/signoz/clickhouse-cluster.xml"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/signoz/cluster.xml"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/signoz/custom-function.xml"))).toBe(true);
+    expect(ssh.commands.some((c) => c.includes("cat > /opt/intentic/signoz/init-clickhouse.sh") && c.includes("histogramQuantile"))).toBe(true);
+    // The JWT signing secret is written write-once (test -f guard), generated host-side.
+    expect(ssh.commands.some((c) => c.includes("test -f /opt/intentic/signoz/.env") && c.includes("SIGNOZ_TOKENIZER_JWT_SECRET"))).toBe(true);
     expect(ssh.commands.some((c) => c.includes("docker compose -p signoz") && c.includes("up -d"))).toBe(true);
     // The admin is seeded against the register API with the resolved email + password.
     expect(ssh.commands.some((c) => c.includes("/api/v1/register") && c.includes("intentic@example.com") && c.includes('"password":"pw"'))).toBe(

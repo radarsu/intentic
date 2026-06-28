@@ -34,7 +34,12 @@ export interface DiscordWebhook {
 // Zod schemas for validating Discord API responses.
 const guildSchema = z.object({ id: z.string(), name: z.string(), owner: z.boolean().default(false) });
 const channelSchema = z.object({ id: z.string(), name: z.string(), type: z.number(), parent_id: z.string().nullable().default(null) });
-const webhookSchema = z.object({ id: z.string(), name: z.string().nullable().default(""), channel_id: z.string(), token: z.string().nullable().default("") });
+const webhookSchema = z.object({
+    id: z.string(),
+    name: z.string().nullable().default(""),
+    channel_id: z.string(),
+    token: z.string().nullable().default(""),
+});
 
 const headers = (botToken: string): Record<string, string> => ({
     Authorization: `Bot ${botToken}`,
@@ -80,7 +85,7 @@ export interface DiscordApi {
     readonly executeWebhook: (webhookId: string, webhookToken: string, content: string) => Promise<void>;
 }
 
-export { CHANNEL_TYPE_TEXT, CHANNEL_TYPE_CATEGORY };
+export { CHANNEL_TYPE_CATEGORY, CHANNEL_TYPE_TEXT };
 
 export const discordApi: DiscordApi = {
     listGuilds: async (botToken) => {
@@ -89,46 +94,70 @@ export const discordApi: DiscordApi = {
         return items.map((item): DiscordGuild => ({ id: item.id, name: item.name, owner: item.owner }));
     },
     createGuild: async (botToken, name) => {
-        const response = await discordFetch(`${API_BASE}/guilds`, {
-            method: "POST",
-            headers: headers(botToken),
-            body: JSON.stringify({ name }),
-        }, "POST /guilds");
+        const response = await discordFetch(
+            `${API_BASE}/guilds`,
+            {
+                method: "POST",
+                headers: headers(botToken),
+                body: JSON.stringify({ name }),
+            },
+            "POST /guilds",
+        );
         return parseResponse(guildSchema, await response.json(), "POST /guilds");
     },
     getGuildChannels: async (botToken, guildId) => {
-        const response = await discordFetch(`${API_BASE}/guilds/${guildId}/channels`, { headers: headers(botToken) }, `GET /guilds/${guildId}/channels`);
+        const response = await discordFetch(
+            `${API_BASE}/guilds/${guildId}/channels`,
+            { headers: headers(botToken) },
+            `GET /guilds/${guildId}/channels`,
+        );
         const items = z.array(channelSchema).parse(await response.json());
         return items.map((item): DiscordChannel => ({ id: item.id, name: item.name, type: item.type, parent_id: item.parent_id ?? undefined }));
     },
     createChannel: async (botToken, guildId, name, type, parentId) => {
-        const response = await discordFetch(`${API_BASE}/guilds/${guildId}/channels`, {
-            method: "POST",
-            headers: headers(botToken),
-            body: JSON.stringify({ name, type, ...(parentId !== undefined ? { parent_id: parentId } : {}) }),
-        }, `POST /guilds/${guildId}/channels`);
+        const response = await discordFetch(
+            `${API_BASE}/guilds/${guildId}/channels`,
+            {
+                method: "POST",
+                headers: headers(botToken),
+                body: JSON.stringify({ name, type, ...(parentId !== undefined ? { parent_id: parentId } : {}) }),
+            },
+            `POST /guilds/${guildId}/channels`,
+        );
         const item = parseResponse(channelSchema, await response.json(), `POST /guilds/${guildId}/channels`);
         return { id: item.id, name: item.name, type: item.type, parent_id: item.parent_id ?? undefined };
     },
     getChannelWebhooks: async (botToken, channelId) => {
-        const response = await discordFetch(`${API_BASE}/channels/${channelId}/webhooks`, { headers: headers(botToken) }, `GET /channels/${channelId}/webhooks`);
+        const response = await discordFetch(
+            `${API_BASE}/channels/${channelId}/webhooks`,
+            { headers: headers(botToken) },
+            `GET /channels/${channelId}/webhooks`,
+        );
         const items = z.array(webhookSchema).parse(await response.json());
         return items.map((item): DiscordWebhook => ({ id: item.id, name: item.name ?? "", channel_id: item.channel_id, token: item.token ?? "" }));
     },
     createWebhook: async (botToken, channelId, name) => {
-        const response = await discordFetch(`${API_BASE}/channels/${channelId}/webhooks`, {
-            method: "POST",
-            headers: headers(botToken),
-            body: JSON.stringify({ name }),
-        }, `POST /channels/${channelId}/webhooks`);
+        const response = await discordFetch(
+            `${API_BASE}/channels/${channelId}/webhooks`,
+            {
+                method: "POST",
+                headers: headers(botToken),
+                body: JSON.stringify({ name }),
+            },
+            `POST /channels/${channelId}/webhooks`,
+        );
         const item = parseResponse(webhookSchema, await response.json(), `POST /channels/${channelId}/webhooks`);
         return { id: item.id, name: item.name ?? "", channel_id: item.channel_id, token: item.token ?? "" };
     },
     executeWebhook: async (webhookId, webhookToken, content) => {
-        await discordFetch(`${API_BASE}/webhooks/${webhookId}/${webhookToken}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content }),
-        }, `POST /webhooks/${webhookId}/${webhookToken}`);
+        await discordFetch(
+            `${API_BASE}/webhooks/${webhookId}/${webhookToken}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content }),
+            },
+            `POST /webhooks/${webhookId}/${webhookToken}`,
+        );
     },
 };

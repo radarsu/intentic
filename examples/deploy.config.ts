@@ -45,6 +45,14 @@ export const intent = defineIntent((i) => {
     const db = i.want.database("db", { on: host });
     const cache = i.want.cache("cache", { on: host });
 
+    // What I want (more backing capabilities): single sign-on (Authentik) and object storage (Garage). auth
+    // always routes — the OIDC issuer must be a public HTTPS URL — so it takes a domain; objectStorage is
+    // internal-only unless given one. An app that `use`s auth gets a per-app OIDC client (OIDC_ISSUER /
+    // OIDC_CLIENT_ID / OIDC_CLIENT_SECRET injected); one that uses objectStorage gets a per-app bucket + key
+    // (S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET).
+    const auth = i.want.auth("auth", { on: host, expose: cf, domain: "auth.example.com" });
+    const store = i.want.objectStorage("store", { on: host, expose: cf, domain: "s3.example.com" });
+
     // Who works on the app: people get a Forgejo git account + a Komodo UI user (each with an intentic-generated
     // password, surfaced in the secrets file). A team becomes a Forgejo organization + team and a Komodo
     // permission scope: its members can act on the deployments of the apps it manages at the `komodo` level.
@@ -64,7 +72,7 @@ export const intent = defineIntent((i) => {
         expose: cf,
         notify: discord,
         observe: obs,
-        use: [db, cache],
+        use: [db, cache, auth, store],
         teams: [{ team: platform, role: "write" }],
         environments: {
             staging: { domain: "staging.example.com", branch: "develop" },

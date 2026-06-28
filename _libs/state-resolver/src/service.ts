@@ -27,7 +27,7 @@ const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
             clickhouseImage: IMAGES.clickhouse,
             signozImage: IMAGES.signoz,
             otelImage: IMAGES.signozOtelCollector,
-            schemaMigratorImage: IMAGES.signozSchemaMigrator,
+            zookeeperImage: IMAGES.signozZookeeper,
         },
     },
 };

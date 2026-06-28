@@ -104,9 +104,24 @@ export interface Cache extends Ref<"valkey"> {
     readonly port: Ref<string>;
 }
 
-// A backing capability handle an app can consume. The discriminating Ref tag (postgres/valkey) lets the
-// builder map a `use` entry back to its BackingCapability. Extended with Auth | ObjectStorage in Phase 2.
-export type Backing = Database | Cache;
+// An auth capability, provided by Authentik (an OIDC identity provider). Always routed (the issuer is a public
+// HTTPS URL). Apps that `use` it get a per-app OIDC client: OIDC_ISSUER + OIDC_CLIENT_ID + OIDC_CLIENT_SECRET.
+export interface Auth extends Ref<"authentik"> {
+    readonly url: Ref<string>;
+    readonly issuerUrl: Ref<string>;
+    readonly internalUrl: Ref<string>;
+}
+
+// An object-storage capability, provided by Garage (S3-compatible). Internal by default; routed when given a
+// domain. Apps that `use` it get a per-app bucket + key: S3_ENDPOINT + S3_ACCESS_KEY + S3_SECRET_KEY + S3_BUCKET.
+export interface ObjectStorage extends Ref<"garage"> {
+    readonly endpoint: Ref<string>;
+    readonly internalEndpoint: Ref<string>;
+}
+
+// A backing capability handle an app can consume. The discriminating Ref tag (postgres/valkey/authentik/
+// garage) lets the builder map a `use` entry back to its BackingCapability.
+export type Backing = Database | Cache | Auth | ObjectStorage;
 
 // --- Intent input. "Wants require haves" is enforced structurally: on: Host, expose: Cloudflare. ---
 
@@ -145,9 +160,12 @@ export interface Want {
     app<const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string>;
     service(id: string, input: WantServiceInput): Service;
     // Backing capabilities. database/cache are internal-only, so they need only the host they run on; the
-    // catalog maps each to its concrete provider (Postgres / Valkey).
+    // catalog maps each to its concrete provider (Postgres / Valkey). auth always routes (the OIDC issuer is
+    // public), so it requires expose + domain; objectStorage routes only when a domain is given.
     database(id: string, input: { on: Host }): Database;
     cache(id: string, input: { on: Host }): Cache;
+    auth(id: string, input: { on: Host; expose: Cloudflare; domain: string }): Auth;
+    objectStorage(id: string, input: { on: Host; expose?: Cloudflare; domain?: string }): ObjectStorage;
     user(id: string, input: UserInput): User;
     team(id: string, input: WantTeamInput): Team;
 }

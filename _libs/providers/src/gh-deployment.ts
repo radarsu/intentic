@@ -4,15 +4,17 @@ import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshExecutor } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 
-const ghDeploymentSchema = z.object({
-    owner: z.string(),
-    repoName: z.string(),
-    tag: z.string(),
-    domain: z.string(),
-    internalIp: z.string(),
-    port: z.coerce.number(),
-    env: z.record(z.string(), z.unknown()).default({}),
-}).merge(sshSchema);
+const ghDeploymentSchema = z
+    .object({
+        owner: z.string(),
+        repoName: z.string(),
+        tag: z.string(),
+        domain: z.string(),
+        internalIp: z.string(),
+        port: z.coerce.number(),
+        env: z.record(z.string(), z.unknown()).default({}),
+    })
+    .merge(sshSchema);
 type GhDeploymentInputs = z.infer<typeof ghDeploymentSchema>;
 const parse = (inputs: ResolvedInputs): GhDeploymentInputs => parseInputs(ghDeploymentSchema, inputs, "gh-deployment");
 

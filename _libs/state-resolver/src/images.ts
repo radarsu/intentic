@@ -8,19 +8,20 @@
 // Renovate is pointed at this file (see renovate.json5) with pinDigests on, so it bumps both the tag and the
 // `@sha256:` digest on each entry from the `renovate:` hint comment above it.
 //
-// SigNoz caveat: the SigNoz stack (signoz/clickhouse/otel/schema-migrator) is an interdependent quartet whose
-// collector + clickhouse-cluster configs in signoz.ts target a specific SigNoz line. These are pinned to the
-// 0.111.x-era contemporaries the existing configs were written against (the previously-referenced
-// signoz:0.64.0 tag no longer exists upstream). Treat a SigNoz major bump as a dedicated migration that also
-// revisits those configs, grouped by Renovate — not an incidental pin bump.
+// SigNoz caveat: the SigNoz stack (signoz/clickhouse/otel/zookeeper) is an interdependent set whose compose +
+// collector + clickhouse configs in signoz.ts mirror SigNoz's reference deploy/docker. They are pinned to the
+// v0.129.0 reference — the NEWEST SigNoz release that still ships a reference compose (v0.130+ dropped compose
+// self-hosting in favour of "Foundry"). A SigNoz bump is therefore a dedicated migration that re-ports those
+// configs from the matching tag, grouped by Renovate — not an incidental pin bump — and upstream has
+// deprecated this deployment mode, so treat the whole stack as e2e-validated and pinned deliberately.
 export const IMAGES = Object.freeze({
     // renovate: datasource=docker depName=codeberg.org/forgejo/forgejo
     forgejo: "codeberg.org/forgejo/forgejo:15.0.3@sha256:55bb42bec9abef5223744804f164e37d37b20df7e8b8b4807ba213ad4f071d6d",
     // renovate: datasource=docker depName=data.forgejo.org/forgejo/runner
-    forgejoRunner: "data.forgejo.org/forgejo/runner:6.4.0@sha256:e8dd2880f2fc81984d2308b93f1bc064dfb41187942300676536c09a3b30043d",
+    forgejoRunner: "data.forgejo.org/forgejo/runner:12.12.0@sha256:268ad0d1d24bd7ecf2386b7c44e8211398dc014ca81d4fd5fbad96fe79af18f5",
     // The image act_runner runs each `runs-on: docker` job in (carries node; the docker CLI + buildx are
     // bind-mounted from the host by the runner provider). renovate: datasource=docker depName=data.forgejo.org/oci/node
-    forgejoRunnerJob: "data.forgejo.org/oci/node:20-bullseye@sha256:c0122351f25f04facee976f9db7214789eabadb489f4e4aea9cd00a0d6af77c4",
+    forgejoRunnerJob: "data.forgejo.org/oci/node:24-bookworm@sha256:fdddfb3e688158251943d52eba361de991548f6814007acba4917ae6b512d6be",
     // renovate: datasource=docker depName=cloudflare/cloudflared
     cloudflared: "cloudflare/cloudflared:2026.6.1@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283",
     // renovate: datasource=docker depName=ghcr.io/moghtech/komodo-core
@@ -33,25 +34,35 @@ export const IMAGES = Object.freeze({
     // renovate: datasource=docker depName=ghcr.io/ferretdb/postgres-documentdb
     postgresDocumentdb:
         "ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0@sha256:2386795ec2aa7ae559304361979f1dc5708d383ee9020ae63dadc2940dfe58f7",
+    // The SigNoz stack, pinned to the v0.129.0 reference deploy/docker set (the newest SigNoz release that
+    // still ships a reference compose; v0.130 dropped compose self-hosting). ClickHouse is the non-alpine tag
+    // SigNoz tests against, paired with a separate ZooKeeper; the migrator runs from the otel-collector image.
     // renovate: datasource=docker depName=clickhouse/clickhouse-server
-    clickhouse: "clickhouse/clickhouse-server:24.1.2-alpine@sha256:1db999ade4b8c16397c42a3818881eba7e8a35369ce53e6374bf9cf498d87d28",
+    clickhouse: "clickhouse/clickhouse-server:25.5.6@sha256:4536143e22dc9bddb217c7e610f6b7ed5e6efd8fefdbc61acdeadb5d8022213a",
     // renovate: datasource=docker depName=signoz/signoz
-    signoz: "signoz/signoz:v0.111.0@sha256:22d0cf6321dc794e0d902d34e5a8925ec412642be5c9b5084147dbe9bc8f9637",
+    signoz: "signoz/signoz:v0.129.0@sha256:50447bb4461c075f52b8fe331324db389f7475b0b6abd1f0a4c9ce7ab3967ca8",
+    // The OTel collector image; the schema/telemetrystore migrator runs from this same image at v0.129.
     // renovate: datasource=docker depName=signoz/signoz-otel-collector
-    signozOtelCollector: "signoz/signoz-otel-collector:0.111.5@sha256:d5210dc6ad4f5d5e2c5126c059de0b58bb19bc2019753d0d022aef0bdb879e0f",
-    // renovate: datasource=docker depName=signoz/signoz-schema-migrator
-    signozSchemaMigrator: "signoz/signoz-schema-migrator:0.111.5@sha256:7fce30f15229f096b72360ee5adc6f6a491ced60ae57d842bc03163445e1c10c",
+    signozOtelCollector: "signoz/signoz-otel-collector:v0.144.5@sha256:f9bf94d566055d06581f3befbf361cc26d670f31ad00cb31fda2ec380210c5ec",
+    // The ClickHouse coordination ZooKeeper SigNoz's reference uses (a Bitnami-based image). renovate: datasource=docker depName=signoz/zookeeper
+    signozZookeeper: "signoz/zookeeper:3.7.1@sha256:fcc4a3288154ccaa3bdb5ae6dc10180c084d29a8a6a26b62ac8e30a8940dc2e6",
     // The scheduled-backup container: alpine-based, carries restic + busybox crond. It has no docker CLI, so
     // the backup provider bind-mounts the host's docker binary (the forgejo-runner pattern) for the
     // app-consistent `docker exec` dumps. renovate: datasource=docker depName=restic/restic
     backup: "restic/restic:0.19.0@sha256:7f44e0057b82348597568ea209360762d0b38f8e1dbc8ad859661ac1055e45f2",
     // The Postgres backing instance (i.want.database). Plain upstream postgres; the binding provider creates
-    // per-app databases + roles in it via `docker exec … psql`. The @sha256 below is a PLACEHOLDER digest —
-    // Renovate pins the real one on its first PR (pinDigests), and the e2e harness must run only against a
-    // pinned digest. renovate: datasource=docker depName=postgres
-    postgres: "postgres:17.6-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    // per-app databases + roles in it via `docker exec … psql`. Also the DB the Authentik auth instance
+    // bundles. renovate: datasource=docker depName=postgres
+    postgres: "postgres:18.4-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa",
     // The Valkey backing instance (i.want.cache). The binding provider mints a per-app ACL user in it via
-    // `docker exec … valkey-cli`. PLACEHOLDER digest, pinned by Renovate (see postgres above).
+    // `docker exec … valkey-cli`. Also the redis-compatible cache the Authentik auth instance bundles.
     // renovate: datasource=docker depName=valkey/valkey
-    valkey: "valkey/valkey:8.1.1-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    valkey: "valkey/valkey:9.1.0-alpine@sha256:a35428eba9043cc0b79dbe54100f0c92784f2de00ad09b01182bfb1c5c83d1bd",
+    // The Authentik server (i.want.auth). The instance provider runs it as a compose stack (server + worker +
+    // the bundled postgres/valkey above); the binding provider mints a per-app OIDC client via its HTTP API.
+    // renovate: datasource=docker depName=ghcr.io/goauthentik/server
+    authentik: "ghcr.io/goauthentik/server:2026.2.4@sha256:0ed7e84cef9d0051659dba5cf63a860a485f85b3fff698c8d2fff17fa3cbe596",
+    // The Garage S3-compatible object store (i.want.objectStorage). Single container; the binding provider
+    // mints a per-app bucket + access key via `docker exec … garage`. renovate: datasource=docker depName=dxflrs/garage
+    garage: "dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690",
 } as const);

@@ -18,14 +18,14 @@
   ],
   packageRules: [
     {
-      // The SigNoz quartet (server + collector + schema-migrator + clickhouse) is version-interdependent and
-      // its bumps touch the hardcoded collector/cluster configs in signoz.ts — group them into one PR so a
-      // reviewer sees and validates the whole stack move together.
+      // The SigNoz stack (server + collector + zookeeper + clickhouse) is version-interdependent and its bumps
+      // re-port the compose/collector/cluster configs in signoz.ts from SigNoz's reference deploy — group them
+      // into one PR so a reviewer sees and validates the whole stack move together.
       groupName: "signoz stack",
       matchPackageNames: [
         "signoz/signoz",
         "signoz/signoz-otel-collector",
-        "signoz/signoz-schema-migrator",
+        "signoz/zookeeper",
         "clickhouse/clickhouse-server",
       ],
     },

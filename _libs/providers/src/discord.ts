@@ -169,7 +169,15 @@ export const createDiscordProvider = (api: DiscordApi = discordApi): Provider =>
         channels = await api.getGuildChannels(parsed.botToken, guild.id);
 
         // Ensure the #reconcile channel under the "intentic" category.
-        const reconcileChannel = await ensureChannel(api, parsed.botToken, guild.id, channels, CHANNEL_RECONCILE, CHANNEL_TYPE_TEXT, intenticCategory.id);
+        const reconcileChannel = await ensureChannel(
+            api,
+            parsed.botToken,
+            guild.id,
+            channels,
+            CHANNEL_RECONCILE,
+            CHANNEL_TYPE_TEXT,
+            intenticCategory.id,
+        );
         channels = await api.getGuildChannels(parsed.botToken, guild.id);
 
         // Ensure its webhook.

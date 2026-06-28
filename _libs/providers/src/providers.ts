@@ -1,4 +1,8 @@
 import type { Providers } from "@intentic/engine";
+import { createAuthentikProvider } from "./authentik.js";
+import type { AuthentikApi } from "./authentik-api.js";
+import { authentikApi } from "./authentik-api.js";
+import { createAuthentikClientProvider } from "./authentik-client.js";
 import { createBackupProvider } from "./backup.js";
 import { createCfRouteProvider, type DnsPropagationWait } from "./cf-route.js";
 import { createCiProvider } from "./ci.js";
@@ -17,6 +21,8 @@ import { createForgejoOrgProvider } from "./forgejo-org.js";
 import { createForgejoRunnerProvider } from "./forgejo-runner.js";
 import { createForgejoTeamProvider } from "./forgejo-team.js";
 import { createForgejoUserProvider } from "./forgejo-user.js";
+import { createGarageProvider } from "./garage.js";
+import { createGarageBucketProvider } from "./garage-bucket.js";
 import { createGhCiProvider } from "./gh-ci.js";
 import { createGhDeploymentProvider } from "./gh-deployment.js";
 import { createGhRepoProvider } from "./gh-repo.js";
@@ -51,6 +57,7 @@ export interface ProviderDeps {
     readonly komodo?: KomodoApi;
     readonly github?: GitHubApi;
     readonly discord?: DiscordApi;
+    readonly authentik?: AuthentikApi;
     // The cf-route DNS-propagation wait; defaults to the real DoH probe. In-memory tests inject a no-op so
     // they never hit the network.
     readonly dnsPropagation?: DnsPropagationWait;
@@ -90,6 +97,10 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "postgres-database": createPostgresDatabaseProvider(ssh),
         valkey: createValkeyProvider(ssh),
         "valkey-namespace": createValkeyNamespaceProvider(ssh),
+        authentik: createAuthentikProvider(ssh),
+        "authentik-client": createAuthentikClientProvider(deps.authentik ?? authentikApi),
+        garage: createGarageProvider(ssh),
+        "garage-bucket": createGarageBucketProvider(ssh),
         github: createGitHubProvider(github),
         "gh-repo": createGhRepoProvider(github),
         "gh-ci": createGhCiProvider(github),

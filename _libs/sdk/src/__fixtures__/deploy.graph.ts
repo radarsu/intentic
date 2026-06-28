@@ -95,8 +95,8 @@ export const expectedGraph: DesiredStateGraph = {
                 token: {
                     $ref: "host-git.runnerToken",
                 },
-                image: "data.forgejo.org/forgejo/runner:6.4.0@sha256:e8dd2880f2fc81984d2308b93f1bc064dfb41187942300676536c09a3b30043d",
-                jobImage: "data.forgejo.org/oci/node:20-bullseye@sha256:c0122351f25f04facee976f9db7214789eabadb489f4e4aea9cd00a0d6af77c4",
+                image: "data.forgejo.org/forgejo/runner:12.12.0@sha256:268ad0d1d24bd7ecf2386b7c44e8211398dc014ca81d4fd5fbad96fe79af18f5",
+                jobImage: "data.forgejo.org/oci/node:24-bookworm@sha256:fdddfb3e688158251943d52eba361de991548f6814007acba4917ae6b512d6be",
             },
             dependsOn: ["host", "host-git"],
         },

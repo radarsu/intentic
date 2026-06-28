@@ -1,8 +1,8 @@
 import type { Observed, ProviderContext } from "@intentic/engine";
 import { expect, test, vi } from "vitest";
+import { createDiscordProvider } from "./discord.js";
 import type { DiscordApi, DiscordChannel, DiscordGuild, DiscordWebhook } from "./discord-api.js";
 import { CHANNEL_TYPE_CATEGORY, CHANNEL_TYPE_TEXT } from "./discord-api.js";
-import { createDiscordProvider } from "./discord.js";
 
 const BOT_TOKEN = "test-bot-token";
 const ZONE = "example.com";
@@ -62,11 +62,7 @@ test("read returns observed state when guild + channels + webhooks exist", async
     guilds.push({ id: GUILD_ID, name: GUILD_NAME, owner: true });
     const reconcileCh: DiscordChannel = { id: "ch-reconcile", name: "reconcile", type: CHANNEL_TYPE_TEXT, parent_id: undefined };
     const appCh: DiscordChannel = { id: "ch-app", name: "my-app", type: CHANNEL_TYPE_TEXT, parent_id: undefined };
-    channels.push(
-        { id: "cat-intentic", name: "intentic", type: CHANNEL_TYPE_CATEGORY, parent_id: undefined },
-        reconcileCh,
-        appCh,
-    );
+    channels.push({ id: "cat-intentic", name: "intentic", type: CHANNEL_TYPE_CATEGORY, parent_id: undefined }, reconcileCh, appCh);
     webhooks.push(
         { id: "wh-reconcile", name: "intentic", channel_id: "ch-reconcile", token: "tok-r" },
         { id: "wh-app", name: "intentic", channel_id: "ch-app", token: "tok-a" },

@@ -64,6 +64,8 @@ export const resolveApp = (
     // Backing wiring: for each capability the app uses, emit a per-app binding node that mints the app's
     // isolated credentials on the instance, inject its connection env vars (DATABASE_URL, VALKEY_URL, …) into
     // every deployment, and gate each deployment on the binding so the credentials exist before it registers.
+    // The app's public domains across environments — the auth binding whitelists OIDC redirects under them.
+    const appDomains = Object.values(intent.environments).map((environment) => environment.domain);
     const bindingNodes: ResolvedNode[] = [];
     const bound: Record<string, Ref<string>> = {};
     const bindingDeps: string[] = [];
@@ -72,7 +74,7 @@ export const resolveApp = (
         if (backing === undefined) {
             throw new Error(`app "${intent.id}" uses unknown backing "${binding.target}"; declare it with i.want.${binding.capability}`);
         }
-        const node = resolveBinding(intent.id, backing.intent, backing.host);
+        const node = resolveBinding(intent.id, backing.intent, backing.host, appDomains);
         bindingNodes.push(node);
         Object.assign(bound, bindingEnv(intent.id, backing.intent));
         bindingDeps.push(node.id);

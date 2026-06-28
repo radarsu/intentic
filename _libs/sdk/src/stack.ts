@@ -23,6 +23,7 @@ import type {
 import { deploymentId, repoId } from "@intentic/state-resolver";
 import type {
     App,
+    Auth,
     Backup,
     Cache,
     Cloudflare,
@@ -31,6 +32,7 @@ import type {
     Discord,
     GitHub,
     Host,
+    ObjectStorage,
     Repo,
     Service,
     Stack,
@@ -183,6 +185,35 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze({ ...makeRef(id), internalHost: makeRef<string>(id, "internalHost"), port: makeRef<string>(id, "port") }) as Cache;
     };
 
+    const auth = (id: string, input: { on: Host; expose: Cloudflare; domain: string }): Auth => {
+        claim(id);
+        backings.push({ id, capability: "auth", on: input.on.resourceId, expose: input.expose.resourceId, domain: input.domain });
+        backingCapabilities.set(id, "auth");
+        return Object.freeze({
+            ...makeRef(id),
+            url: makeRef<string>(id, "url"),
+            issuerUrl: makeRef<string>(id, "issuerUrl"),
+            internalUrl: makeRef<string>(id, "internalUrl"),
+        }) as Auth;
+    };
+
+    const objectStorage = (id: string, input: { on: Host; expose?: Cloudflare; domain?: string }): ObjectStorage => {
+        claim(id);
+        backings.push({
+            id,
+            capability: "object-storage",
+            on: input.on.resourceId,
+            ...(input.expose !== undefined ? { expose: input.expose.resourceId } : {}),
+            ...(input.domain !== undefined ? { domain: input.domain } : {}),
+        });
+        backingCapabilities.set(id, "object-storage");
+        return Object.freeze({
+            ...makeRef(id),
+            endpoint: makeRef<string>(id, "endpoint"),
+            internalEndpoint: makeRef<string>(id, "internalEndpoint"),
+        }) as ObjectStorage;
+    };
+
     const user = (id: string, input: UserInput): User => {
         claim(id);
         users.push({ id, input });
@@ -195,6 +226,9 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze(makeRef(id)) as Team;
     };
 
-    const stack: Stack = { have: { host, cloudflare, github, backup, discord }, want: { app, service, database, cache, user, team } };
+    const stack: Stack = {
+        have: { host, cloudflare, github, backup, discord },
+        want: { app, service, database, cache, auth, objectStorage, user, team },
+    };
     return { stack, intent };
 };

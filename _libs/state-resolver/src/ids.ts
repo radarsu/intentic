@@ -57,6 +57,16 @@ export const bindingId = (appId: string, instanceId: string): string => `${appId
 export const dbName = (appId: string): string => appId.replace(/[^A-Za-z0-9]+/g, "_").toLowerCase();
 export const cacheUser = (appId: string): string => appId.replace(/[^A-Za-z0-9]+/g, "_").toLowerCase();
 
+// The Authentik OIDC application slug and the Garage bucket name an app gets on an auth / object-storage
+// instance. Both require a DNS/S3-style label (lowercase alnum + hyphens, no leading/trailing hyphen), so the
+// app id is sanitized to that shape — distinct from dbName/cacheUser, which use underscores for SQL/ACL names.
+export const appSlug = (appId: string): string =>
+    appId
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+export const bucketName = (appId: string): string => appSlug(appId);
+
 // A deterministic host port a backing instance publishes on (so co-located instances don't collide), in a
 // band disjoint from deploymentPort's 20000-29999. Resolver-owned like deploymentPort, so a binding node can
 // build the connection URL (host:port) without depending on the instance's runtime.

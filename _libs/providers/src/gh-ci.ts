@@ -140,7 +140,13 @@ export const createGhCiProvider = (api: GitHubApi = githubApi): Provider => ({
         // Seed a starter Dockerfile if the repo has none.
         const dockerfile = await api.readFile({ ...common, path: DOCKERFILE_PATH, branch: parsed.branch });
         if (dockerfile === undefined) {
-            await api.commitFile({ ...common, path: DOCKERFILE_PATH, content: starterDockerfile(), branch: parsed.branch, message: "intentic: starter Dockerfile" });
+            await api.commitFile({
+                ...common,
+                path: DOCKERFILE_PATH,
+                content: starterDockerfile(),
+                branch: parsed.branch,
+                message: "intentic: starter Dockerfile",
+            });
         }
 
         // Commit the workflow LAST so its first run already sees the Dockerfile + secrets.

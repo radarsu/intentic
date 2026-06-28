@@ -112,3 +112,73 @@ test("a backing on an undeclared host is rejected (caught at need resolution)", 
     const intent: IntentSet = { ...intentWithBindings, backings: [{ id: "db", capability: "database", on: "ghost" }], apps: [] };
     expect(() => assign(intent)).toThrow(/targets undeclared host "ghost"/);
 });
+
+// An app using an auth (Authentik) + object-storage (Garage) backing; auth is always routed, storage is given
+// a domain so it routes too.
+const intentWithAuthAndStorage: IntentSet = {
+    hosts: [host],
+    cloudflare,
+    users: [],
+    teams: [],
+    services: [],
+    backings: [
+        { id: "auth", capability: "auth", on: "host", expose: "cf", domain: "auth.example.com" },
+        { id: "store", capability: "object-storage", on: "host", expose: "cf", domain: "s3.example.com" },
+    ],
+    apps: [
+        {
+            id: "app",
+            on: "host",
+            expose: "cf",
+            use: [
+                { capability: "auth", target: "auth" },
+                { capability: "object-storage", target: "store" },
+            ],
+            environments: { prod: { domain: "app.example.com", branch: "main" } },
+        },
+    ],
+};
+
+test("an auth instance is emitted as an authentik node that always routes (the OIDC issuer is public)", () => {
+    const nodes = nodesById(intentWithAuthAndStorage);
+    expect(nodes.get("auth")?.type).toBe("authentik");
+    expect(nodes.has("cf-auth-example-com")).toBe(true);
+});
+
+test("an object-storage instance routes only when given a domain", () => {
+    const nodes = nodesById(intentWithAuthAndStorage);
+    expect(nodes.get("store")?.type).toBe("garage");
+    expect(nodes.has("cf-s3-example-com")).toBe(true);
+    // Without a domain it is internal-only — no route.
+    const internal: IntentSet = {
+        ...intentWithAuthAndStorage,
+        backings: [{ id: "store", capability: "object-storage", on: "host" }],
+        apps: [{ ...intentWithAuthAndStorage.apps[0]!, use: [{ capability: "object-storage", target: "store" }] }],
+    };
+    expect(nodesById(internal).has("cf-s3-example-com")).toBe(false);
+});
+
+test("the auth binding injects OIDC_* env, depends on the instance + its route, and whitelists the app domains", () => {
+    const nodes = nodesById(intentWithAuthAndStorage);
+    const binding = nodes.get("app-uses-auth");
+    expect(binding?.type).toBe("authentik-client");
+    expect(binding?.inputs["redirectDomains"]).toEqual(["app.example.com"]);
+    expect(binding?.explicitDependsOn).toEqual(expect.arrayContaining(["auth", "cf-auth-example-com"]));
+    const env = nodes.get("app.prod")?.inputs["env"] as Record<string, unknown>;
+    expect(env["OIDC_ISSUER"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "issuer" });
+    expect(env["OIDC_CLIENT_ID"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "clientId" });
+    expect(env["OIDC_CLIENT_SECRET"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "clientSecret" });
+});
+
+test("the object-storage binding injects S3_* env and depends on the instance", () => {
+    const nodes = nodesById(intentWithAuthAndStorage);
+    const binding = nodes.get("app-uses-store");
+    expect(binding?.type).toBe("garage-bucket");
+    expect(binding?.inputs["bucket"]).toBe("app");
+    expect(binding?.explicitDependsOn).toContain("store");
+    const env = nodes.get("app.prod")?.inputs["env"] as Record<string, unknown>;
+    expect(env["S3_ENDPOINT"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "endpoint" });
+    expect(env["S3_ACCESS_KEY"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "accessKey" });
+    expect(env["S3_SECRET_KEY"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "secretKey" });
+    expect(env["S3_BUCKET"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "bucket" });
+});
