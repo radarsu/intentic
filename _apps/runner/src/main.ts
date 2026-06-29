@@ -28,9 +28,21 @@ process.stdout.write(`intentic runner: preview proxy on 0.0.0.0:${previewPort} f
 // A custom Anthropic-compatible endpoint (e.g. a local model gateway), exported into each sandbox so the
 // agent uses it. Agent CREDENTIALS are still never held here — the platform injects them per turn.
 const agentBaseUrl = process.env["ANTHROPIC_BASE_URL"];
+// Env forwarded into the sandbox container. Agent CREDENTIALS are never held here (the platform injects the
+// Claude token per turn). The infra secrets ride the connect command's environment straight into the sandbox,
+// so the in-sandbox `intentic apply` resolves them from process.env — they never touch the platform.
+const sandboxEnv: Record<string, string> = {};
+if (agentBaseUrl !== undefined && agentBaseUrl !== "") {
+    sandboxEnv["ANTHROPIC_BASE_URL"] = agentBaseUrl;
+}
+for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN"]) {
+    const value = process.env[key];
+    if (value !== undefined && value !== "") {
+        sandboxEnv[key] = value;
+    }
+}
 if (platformUrl !== undefined && platformUrl !== "" && runnerToken !== undefined && runnerToken !== "") {
-    // One sandbox per runner/host; agent credentials are NOT held here — the platform injects them per turn in
-    // the relay command (so the host never stores Claude creds).
+    // One sandbox per runner/host; Claude creds are NOT held here — the platform injects them per turn.
     const controller = createController({
         spec: {
             project: process.env["PROJECT_ID"] ?? "workspace",
@@ -40,7 +52,7 @@ if (platformUrl !== undefined && platformUrl !== "" && runnerToken !== undefined
             devPort,
             daemonPort,
             ...(zone !== "" ? { zone } : {}),
-            agentEnv: agentBaseUrl !== undefined && agentBaseUrl !== "" ? { ANTHROPIC_BASE_URL: agentBaseUrl } : {},
+            agentEnv: sandboxEnv,
         },
     });
     connectChannel({
