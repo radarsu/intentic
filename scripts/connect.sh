@@ -33,9 +33,10 @@ RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
 RUNNER_IMAGE="${RUNNER_IMAGE:-ghcr.io/radarsu/intentic/runner:0.1.0}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:0.1.0}"
 PREVIEW_PORT="${PREVIEW_PORT:-8088}"
-# Infra secrets the platform's Provision action needs `intentic apply` to read INSIDE the sandbox. Optional —
-# set them in your shell when running this (e.g. HOST_SSH_KEY="$(cat ~/.ssh/key)" CLOUDFLARE_API_TOKEN=… …).
-# They ride straight into the sandbox container's env; they are never sent to the platform.
+# Infra secrets `intentic apply` reads INSIDE the sandbox; they ride straight into the sandbox container's env
+# and are never sent to the platform. CLOUDFLARE_API_TOKEN is REQUIRED — Cloudflare is intentic's reachability
+# fabric (the tunnel that connects your services and exposes them); it is validated below before the runner
+# starts. HOST_SSH_KEY is optional (auto-generated when SELF_HOST wires this machine as a deploy target).
 HOST_SSH_KEY="${HOST_SSH_KEY:-}"
 CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
 # Self-host: wire this machine as a deploy target. Off unless SELF_HOST is set (the platform one-liner sets it).
@@ -129,6 +130,24 @@ if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
 fi
 if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
     echo "error: PLATFORM_URL and RUNNER_TOKEN are required (env or positional args)." >&2
+    exit 1
+fi
+
+# Cloudflare is intentic's reachability fabric (the tunnel that connects services and exposes them), so the
+# token is required and validated up front rather than failing later at `intentic apply`. The token never
+# reaches the platform — it rides into the sandbox below. Verify it against Cloudflare's token-verify endpoint
+# (the same Bearer/api.cloudflare.com auth intentic itself uses). `*: *true` tolerates compact or spaced JSON.
+if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    echo "error: CLOUDFLARE_API_TOKEN is required — Cloudflare is intentic's reachability fabric (the tunnel that" >&2
+    echo "       connects your services and exposes them). Create a token at" >&2
+    echo "       https://dash.cloudflare.com/profile/api-tokens with: Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit." >&2
+    exit 1
+fi
+echo "intentic: validating Cloudflare API token…"
+cf_verify="$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
+if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf_verify" | grep -q '"status": *"active"'; then
+    echo "error: the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its" >&2
+    echo "       scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens." >&2
     exit 1
 fi
 

@@ -82,9 +82,39 @@ sequenceDiagram
 
 **One image, two ways to start.** The runner that `connect.sh` boots on your PC and the runner
 the `i.want.workspace` provider deploys onto a remote host (over SSH) are the *same image* — the
-local one simply omits the Cloudflare preview tunnel. So the first runner is bootstrapped by
-hand, and every further runner is provisioned by the IaC itself, which is how the system fans
-out to "workers on many machines."
+local one simply omits the runner's own `*.preview.<zone>` proxy tunnel (a local PC has no zone).
+The infrastructure it *provisions*, though, still builds Cloudflare tunnels on its target hosts
+(see below). So the first runner is bootstrapped by hand, and every further runner is provisioned
+by the IaC itself, which is how the system fans out to "workers on many machines."
+
+### Cloudflare is the reachability fabric (required)
+
+Cloudflare is not a user-facing convenience — it is the system's **reachability fabric**, and it is
+**required**. The operator never needs to open `git.<zone>` / `deploy.<zone>`; the **sandbox** reads the
+control plane and relays what the Platform UI shows. How each piece is actually reached is asymmetric:
+
+| Reached over | Who / what |
+| --- | --- |
+| **SSH** (internal `:3000`) | Forgejo — the engine runs its git/CI API calls *through the host's SSH session*, so no tunnel is needed for it. |
+| **Cloudflare tunnel** (public `*.<zone>`) | Komodo (`deploy.<zone>`), the container registry (`git.<zone>`), and every worker host's Komodo Periphery dialing Core — all cross-host. |
+
+Why a tunnel, rather than "just use SSH and make Cloudflare optional":
+
+- **Outbound-only, NAT-traversing.** `cloudflared` dials out, so it works behind NAT/firewalls with no
+  inbound ports — the same bet the runner already makes when it dials the platform.
+- **Cross-host coordination needs stable, routable names.** Worker→Core registration and image pulls are
+  host-to-host; SSH from the sandbox only reaches *sandbox→service*, so an SSH-only design would still have
+  to add an overlay network to serve them.
+- **The registry forces a global name anyway.** Image refs (`git.<zone>/owner/app:tag`) must resolve
+  identically from every host that pulls — that alone mandates a stable domain.
+- **One uniform primitive** (`<name>.<zone>`, TLS'd, reachable from anywhere) keeps the model trivially
+  reason-about-able; a second internal/SSH mode would mean two reachability models and a combinatorial matrix.
+
+This is enforced in code, not just convention: the SDK types require `expose: Cloudflare`, and both
+`resolveNeeds` ([needs.ts](_libs/need-resolver/src/needs.ts)) and `emit`
+([emit.ts](_libs/state-resolver/src/emit.ts)) throw when it is missing — there is no alternative ingress.
+The Cloudflare API token is supplied at **connect** time (it rides `connect.sh` into the sandbox, never
+touching the platform) but is consumed at **provision** time by `intentic apply`.
 
 ## The intent-driven flow
 

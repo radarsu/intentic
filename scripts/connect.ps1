@@ -32,8 +32,9 @@ if (-not $RunnerToken) { $RunnerToken = $env:RUNNER_TOKEN }
 $RunnerImage  = if ($env:RUNNER_IMAGE)  { $env:RUNNER_IMAGE }  else { 'ghcr.io/radarsu/intentic/runner:latest' }
 $SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:latest' }
 $PreviewPort  = if ($env:PREVIEW_PORT)  { $env:PREVIEW_PORT }  else { '8088' }
-# Infra secrets the platform's Provision action needs `intentic apply` to read inside the sandbox. Optional —
-# set them in your shell when running this. They ride into the sandbox container's env; never sent to the platform.
+# Infra secrets `intentic apply` reads inside the sandbox; they ride into the sandbox container's env and are
+# never sent to the platform. CLOUDFLARE_API_TOKEN is REQUIRED — Cloudflare is intentic's reachability fabric
+# (the tunnel that connects services and exposes them); it is validated below. HOST_SSH_KEY is optional.
 $HostSshKey = $env:HOST_SSH_KEY
 $CloudflareApiToken = $env:CLOUDFLARE_API_TOKEN
 
@@ -51,6 +52,23 @@ if ($LASTEXITCODE -ne 0) {
 }
 if (-not $PlatformUrl -or -not $RunnerToken) {
     Write-Error 'PLATFORM_URL and RUNNER_TOKEN are required (env vars or -PlatformUrl/-RunnerToken).'
+    exit 1
+}
+# Cloudflare is intentic's reachability fabric (the tunnel that connects services and exposes them), so the
+# token is required and validated up front rather than failing later at `intentic apply`. It never reaches the
+# platform — it rides into the sandbox below. Verify it against Cloudflare's token-verify endpoint.
+if (-not $CloudflareApiToken) {
+    Write-Error 'CLOUDFLARE_API_TOKEN is required — Cloudflare is intentic''s reachability fabric (the tunnel that connects your services and exposes them). Create a token at https://dash.cloudflare.com/profile/api-tokens with Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit.'
+    exit 1
+}
+Write-Host 'intentic: validating Cloudflare API token...'
+try {
+    $cfVerify = Invoke-RestMethod -Uri 'https://api.cloudflare.com/client/v4/user/tokens/verify' -Headers @{ Authorization = "Bearer $CloudflareApiToken" }
+} catch {
+    $cfVerify = $null
+}
+if (-not $cfVerify -or -not $cfVerify.success -or $cfVerify.result.status -ne 'active') {
+    Write-Error 'the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens.'
     exit 1
 }
 
