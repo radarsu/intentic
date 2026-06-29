@@ -3,10 +3,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DesiredStateGraph } from "@intentic/graph";
 
-// A local control plane is two repos: an `intent` repo (holds the deploy.config.ts a user authors) and a
-// `desired-state` repo (holds the artifact `resolve` writes and the status `apply` writes beside it).
+// A local workspace is three repos: an `intent` repo (holds the deploy.config.ts a user authors), a
+// `desired-state` repo (holds the artifact `resolve` writes and the status `apply` writes beside it), and an
+// `app` repo (the application code the agent edits + previews, mounted at /work/app in the sandbox). `init`
+// scaffolds all three.
 export const INTENT_DIR = "intent";
 export const TARGET_DIR = "desired-state";
+export const APP_DIR = "app";
 export const CONFIG_FILE = "deploy.config.ts";
 export const ARTIFACT_FILE = "desired-state.json";
 export const LAST_APPLIED_FILE = ".last-applied.json";

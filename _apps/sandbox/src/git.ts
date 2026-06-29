@@ -47,3 +47,11 @@ export const gitCommitAll = async (
 export const gitPush = async (dir: string, branch: string, git: GitRunner = defaultGit): Promise<void> => {
     await git(dir, ["push", "origin", `HEAD:${branch}`]);
 };
+
+// The repo's tracked files (git ls-files), so the UI can render the source tree without node_modules/build
+// noise. Untracked-but-present files are intentionally excluded — they surface through status instead.
+export const gitListFiles = async (dir: string, git: GitRunner = defaultGit): Promise<string[]> =>
+    (await git(dir, ["ls-files"])).stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== "");

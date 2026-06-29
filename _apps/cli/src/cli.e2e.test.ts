@@ -67,7 +67,7 @@ const appPort = deploymentPort(deploymentId(APP, ENV));
 // A trivial buildable app: busybox httpd serving a known body on $PORT. The Forgejo Action builds this into
 // an image and pushes it to the registry; Komodo deploys it with PORT set to the resolver's deterministic port.
 const APP_BODY = "intentic-e2e-live";
-const DOCKERFILE = `FROM busybox
+const DOCKERFILE = `FROM busybox:1.37.0
 RUN mkdir -p /www && printf '%s' '${APP_BODY}' > /www/index.html
 ENV PORT=8080
 EXPOSE 8080

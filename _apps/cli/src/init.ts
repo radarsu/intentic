@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { CONFIG_FILE, ENV_FILE, INTENT_DIR, LAST_APPLIED_FILE, SECRETS_FILE, TARGET_DIR } from "./artifact.js";
+import { APP_DIR, CONFIG_FILE, ENV_FILE, INTENT_DIR, LAST_APPLIED_FILE, SECRETS_FILE, TARGET_DIR } from "./artifact.js";
 
 const exec = promisify(execFile);
 
@@ -42,6 +42,59 @@ const TARGET_GITIGNORE = `${ENV_FILE}\n${SECRETS_FILE}\n${LAST_APPLIED_FILE}\n`;
 // node_modules/ that must stay out of the repo.
 const INTENT_GITIGNORE = "node_modules/\n";
 
+const APP_GITIGNORE = "node_modules/\n";
+
+// A minimal, runnable starter app: `pnpm dev` serves it on DEV_PORT (the sandbox passes that port through;
+// the runner's preview proxy fronts it), and the Dockerfile is the deploy build CI runs. Zero dependencies,
+// so there is no install step — the agent fills it in. Importing an existing repo (--app) skips all of this.
+const STARTER_APP_PACKAGE = `${JSON.stringify(
+    {
+        name: "app",
+        version: "0.0.0",
+        private: true,
+        type: "module",
+        scripts: { dev: "node server.js", start: "node server.js" },
+    },
+    undefined,
+    4,
+)}\n`;
+
+const STARTER_APP_SERVER = `import { createServer } from "node:http";
+
+// Komodo sets PORT in production; the sandbox passes DEV_PORT for the live preview.
+const port = Number(process.env.PORT ?? process.env.DEV_PORT ?? 5173);
+
+createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end("<!doctype html><title>intentic app</title><h1>It works 🎉</h1><p>Edit <code>server.js</code> — the agent works on this repo.</p>");
+}).listen(port, () => console.log(\`app listening on :\${port}\`));
+`;
+
+const STARTER_APP_DOCKERFILE = `# intentic starter Dockerfile — replace with your app's real build.
+FROM node:24.18.0-alpine3.24
+WORKDIR /app
+COPY . .
+ENV PORT=8080
+EXPOSE 8080
+CMD ["node", "server.js"]
+`;
+
+// The third repo: the application code the agent edits and previews, mounted at /work/app in the sandbox.
+// Either clone an existing repo (--app <url>) to adopt it as-is, or scaffold a minimal runnable starter so
+// the live preview works immediately. Always its own git repo, so `adopt` can later push it to Forgejo/GitHub.
+const scaffoldApp = async (appDir: string, appRepo: string | undefined): Promise<void> => {
+    if (appRepo !== undefined) {
+        await exec("git", ["clone", "-q", appRepo, appDir]);
+        return;
+    }
+    await mkdir(appDir, { recursive: true });
+    await exec("git", ["init", "-q", appDir]);
+    await writeFile(join(appDir, "package.json"), STARTER_APP_PACKAGE);
+    await writeFile(join(appDir, "server.js"), STARTER_APP_SERVER);
+    await writeFile(join(appDir, "Dockerfile"), STARTER_APP_DOCKERFILE);
+    await writeFile(join(appDir, ".gitignore"), APP_GITIGNORE);
+};
+
 // A standalone TS project for the one config file: type-strip-importable by `resolve`, type-checked in an
 // editor against the @intentic/* packages' shipped declarations (no build of the intent repo itself).
 const STARTER_TSCONFIG = `${JSON.stringify(
@@ -72,13 +125,21 @@ const starterPackage = (version: string, link: boolean): string => {
     )}\n`;
 };
 
-// Scaffold the local control plane: an `intent` repo (holds deploy.config.ts and its package) and a
-// `desired-state` repo (holds the artifact `resolve` writes and the status `apply` writes), each its own git
-// repo so the generated target can later become PR-managed. The intent repo is a self-contained TS project
-// against `@intentic/{graph,sdk}` — pinned to the CLI's own version, or linked to local source with `--link`.
-export const scaffold = async (dir: string, version: string, link: boolean): Promise<{ readonly intentDir: string; readonly targetDir: string }> => {
+// Scaffold the local workspace: an `intent` repo (holds deploy.config.ts and its package), a `desired-state`
+// repo (holds the artifact `resolve` writes and the status `apply` writes), and an `app` repo (the
+// application code), each its own git repo so the generated target can later become PR-managed and `adopt`
+// can push it. The intent repo is a self-contained TS project against `@intentic/{graph,sdk}` — pinned to the
+// CLI's own version, or linked to local source with `--link`. `appRepo`, when set, clones an existing repo as
+// the app instead of scaffolding a starter.
+export const scaffold = async (
+    dir: string,
+    version: string,
+    link: boolean,
+    appRepo: string | undefined,
+): Promise<{ readonly intentDir: string; readonly targetDir: string; readonly appDir: string }> => {
     const intentDir = join(dir, INTENT_DIR);
     const targetDir = join(dir, TARGET_DIR);
+    const appDir = join(dir, APP_DIR);
     await mkdir(intentDir, { recursive: true });
     await mkdir(targetDir, { recursive: true });
     await exec("git", ["init", "-q", intentDir]);
@@ -89,5 +150,6 @@ export const scaffold = async (dir: string, version: string, link: boolean): Pro
     await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);
     await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
     await exec("pnpm", ["install", "--ignore-workspace"], { cwd: intentDir });
-    return { intentDir, targetDir };
+    await scaffoldApp(appDir, appRepo);
+    return { intentDir, targetDir, appDir };
 };

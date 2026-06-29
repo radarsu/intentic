@@ -3,7 +3,7 @@
 # the Komodo compose stack, the cloudflared connector) run exactly as they would on a real owned box,
 # without polluting the developer's Docker daemon. sshd is added so the engine reaches it over SSH like
 # real infra. The harness injects the authorized public key via testcontainers before start.
-FROM docker:28-dind
+FROM docker:28.5.2-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 
 # openssh: the SSH transport. openssl/iproute2: required by the host (`ip route`) and komodo (`openssl
 # rand`) providers. docker-cli-compose: the komodo provider runs `docker compose up -d`.

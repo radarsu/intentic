@@ -45,19 +45,20 @@ const { version } = createRequire(import.meta.url)("../package.json") as { versi
 
 const DEFAULT_MAX_ITERATIONS = 5;
 
-const init = buildCommand<{ dir?: string; link: boolean }>({
-    docs: { brief: "Scaffold local intent and desired-state git repos" },
+const init = buildCommand<{ dir?: string; link: boolean; app?: string }>({
+    docs: { brief: "Scaffold local intent, desired-state, and app git repos" },
     parameters: {
         flags: {
             dir: { kind: "parsed", parse: String, optional: true, brief: "Directory to scaffold in (default: .)" },
             link: { kind: "boolean", brief: "Link @intentic/* to this monorepo's _libs for local development against unpublished packages" },
+            app: { kind: "parsed", parse: String, optional: true, brief: "Clone this git URL as the app repo instead of scaffolding a starter app" },
         },
     },
-    async func(this: CommandContext, flags: { dir?: string; link: boolean }) {
+    async func(this: CommandContext, flags: { dir?: string; link: boolean; app?: string }) {
         const out = createOutput(this.process.stdout, outputMode(process.env));
-        const { intentDir, targetDir } = await scaffold(flags.dir ?? ".", version, flags.link);
-        out.text(`initialized ${intentDir} (with ${CONFIG_FILE}) and ${targetDir}`);
-        out.result({ intentDir, targetDir });
+        const { intentDir, targetDir, appDir } = await scaffold(flags.dir ?? ".", version, flags.link, flags.app);
+        out.text(`initialized ${intentDir} (with ${CONFIG_FILE}), ${targetDir}, and ${appDir}`);
+        out.result({ intentDir, targetDir, appDir });
     },
 });
 

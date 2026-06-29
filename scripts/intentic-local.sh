@@ -57,8 +57,10 @@ intentic() {
 build_image() {
     local ctx
     ctx="$(mktemp -d)"
+    # The docker base is pinned (tag + digest) identically to test/host/Dockerfile; keep the two in lockstep.
+    # Renovate can't see this heredoc as a Dockerfile, so a customManager in renovate.json5 maintains this pin.
     cat >"$ctx/Dockerfile" <<'DOCKERFILE'
-FROM docker:28-dind
+FROM docker:28.5.2-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 RUN apk add --no-cache openssh openssh-server openssl iproute2 docker-cli-compose \
     && ssh-keygen -A \
     && mkdir -p /root/.ssh /run/sshd \

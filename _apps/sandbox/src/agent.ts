@@ -45,8 +45,9 @@ export interface AgentRequest {
     readonly signal: AbortSignal;
     // Defaults to the account/subscription default; override with INTENTIC_AGENT_MODEL.
     readonly model?: string;
-    // The user's Claude subscription token, injected into the SDK for this turn. Supplied per-turn by the
-    // platform relay so no credentials are ever stored on the host or in the container env.
+    // The user's Claude subscription token, injected into the SDK for this turn. Resolved by the daemon from
+    // the sandbox's own stored credentials (the platform no longer relays it); undefined falls back to the
+    // container's ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN env.
     readonly oauthToken?: string;
     // Defaults to the autonomous sandbox posture; the container's isolation is what makes this safe.
     readonly permissionMode?: PermissionMode;

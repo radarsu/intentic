@@ -15,6 +15,16 @@
         "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)[\\s\\S]*?\"[^\"]*:(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[a-f0-9]+)\"",
       ],
     },
+    {
+      // The DinD host image is embedded as a heredoc Dockerfile inside intentic-local.sh (a shell string the
+      // built-in dockerfile manager can't see). Match its pinned `FROM docker:<tag>@sha256:<digest>` here so the
+      // tag + digest stay maintained in lockstep with test/host/Dockerfile.
+      customType: "regex",
+      managerFilePatterns: ["/scripts/intentic-local\\.sh$/"],
+      datasourceTemplate: "docker",
+      depNameTemplate: "docker",
+      matchStrings: ["FROM docker:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"],
+    },
   ],
   packageRules: [
     {

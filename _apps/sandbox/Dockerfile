@@ -4,7 +4,7 @@
 # At run time the runner injects agent credentials (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN) and mounts
 # the workspace (the three cloned repos) at /work — neither is baked into the image.
 
-FROM node:24-bookworm AS build
+FROM node:24.18.0-bookworm@sha256:fdddfb3e688158251943d52eba361de991548f6814007acba4917ae6b512d6be AS build
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
@@ -17,7 +17,7 @@ RUN pnpm build
 RUN pnpm --filter @intentic/sandbox deploy --prod /out/sandbox
 RUN pnpm --filter @intentic/cli deploy --prod /out/cli
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24.18.0-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc AS runtime
 # Links the GHCR package to the repo (inherits its visibility/permissions, shows under its Packages).
 LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 RUN apt-get update \

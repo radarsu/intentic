@@ -25,4 +25,5 @@ Thumbs.db
 # Intentic.
 /intent
 /desired-state
+/app
 /.demo

@@ -130,7 +130,7 @@ CLOUDFLARE_API_TOKEN=${apiToken}
 `;
 
 // A trivial buildable app: busybox httpd serving a known body on $PORT (Komodo sets PORT to appPort).
-const DOCKERFILE = `FROM busybox
+const DOCKERFILE = `FROM busybox:1.37.0
 RUN mkdir -p /www && printf '%s' '${APP_BODY}' > /www/index.html
 ENV PORT=8080
 EXPOSE 8080
