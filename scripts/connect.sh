@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # intentic connect — run the AI-agent workspace runner on THIS machine and dial it back to an intentic
 # platform, so a user without their own server can drive a sandbox from their PC.
 #
@@ -21,7 +21,8 @@
 #   RUNNER_IMAGE    runner image to run (default: ghcr.io/radarsu/intentic/runner:latest)
 #   SANDBOX_IMAGE   sandbox image the runner spawns (default: ghcr.io/radarsu/intentic/sandbox:latest)
 #   PREVIEW_PORT    local preview proxy port published by the runner (default: 8088)
-set -euo pipefail
+# POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
+set -eu
 
 PLATFORM_URL="${PLATFORM_URL:-${1:-}}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
