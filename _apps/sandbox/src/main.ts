@@ -33,6 +33,15 @@ if (devCommand !== undefined && devCommand !== "" && devPort !== undefined) {
     devServer.start({ command: devCommand.split(" "), cwd: workspace.repos.app, port: Number(devPort) });
 }
 
-const app = createDaemon({ workspace, devServer });
+// When the runner forwarded SELF_HOST_USER (+ HOST_SSH_KEY), this sandbox runs on a host wired as a deploy
+// target — expose it so the platform registers the `self` inventory host. address/port are fixed: the sandbox
+// reaches the host it runs on at host.docker.internal:22 (the runner adds the host-gateway mapping).
+const selfHostUser = process.env["SELF_HOST_USER"];
+const selfHost =
+    selfHostUser !== undefined && selfHostUser !== "" && (process.env["HOST_SSH_KEY"] ?? "") !== ""
+        ? { user: selfHostUser, address: "host.docker.internal", port: 22 }
+        : undefined;
+
+const app = createDaemon({ workspace, devServer, ...(selfHost !== undefined ? { selfHost } : {}) });
 serve({ fetch: app.fetch, port, hostname: host });
 process.stdout.write(`intentic sandbox daemon listening on http://${host}:${port} (workspace ${root})\n`);

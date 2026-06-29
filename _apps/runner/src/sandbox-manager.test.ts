@@ -38,6 +38,7 @@ test("ensureSandbox creates the container when absent, wiring network, volume, e
     expect(run).toBeDefined();
     const argv = (run ?? []).join(" ");
     expect(argv).toContain("--network intentic-workspace");
+    expect(argv).toContain("--add-host host.docker.internal:host-gateway");
     expect(argv).toContain("-v intentic-workspace-acme:/work");
     expect(argv).toContain("-e ANTHROPIC_API_KEY=sk-test");
     expect(argv).toContain("-e SANDBOX_HOST=0.0.0.0");

@@ -31,6 +31,9 @@ export interface RunSpec {
     // Each entry is a docker `-v` value, e.g. "intentic-workspace-acme:/work".
     readonly volumes?: readonly string[];
     readonly labels?: Readonly<Record<string, string>>;
+    // Each entry is a docker `--add-host` value, e.g. "host.docker.internal:host-gateway" — lets the sandbox
+    // reach the host it runs on (SSH self-host deploys).
+    readonly addHosts?: readonly string[];
 }
 
 // Whether the named container is running and on which image (absent container → not running).
@@ -47,6 +50,9 @@ export const runContainer = async (spec: RunSpec, docker: DockerRunner = default
     const args = ["run", "-d", "--restart", "unless-stopped", "--name", spec.name];
     if (spec.network !== undefined) {
         args.push("--network", spec.network);
+    }
+    for (const addHost of spec.addHosts ?? []) {
+        args.push("--add-host", addHost);
     }
     for (const [key, value] of Object.entries(spec.env ?? {})) {
         args.push("-e", `${key}=${value}`);

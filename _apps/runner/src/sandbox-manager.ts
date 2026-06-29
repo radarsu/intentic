@@ -69,6 +69,9 @@ export const ensureSandbox = async (spec: SandboxSpec, docker?: DockerRunner): P
             },
             volumes: [`${workspaceVolume(spec.project)}:/work`],
             labels: { "intentic.project": spec.project },
+            // Let the sandbox reach the host it runs on (SSH self-host deploys to host.docker.internal); the
+            // runner gets the same mapping from connect.sh. Harmless when self-host isn't used.
+            addHosts: ["host.docker.internal:host-gateway"],
         },
         docker,
     );

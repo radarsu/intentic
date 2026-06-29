@@ -27,6 +27,15 @@ test("GET /preview returns the dev server status", async () => {
     expect(await res.json()).toEqual({ running: true, port: 5173, healthy: true });
 });
 
+test("GET /self-host reports null by default, and the host descriptor when wired", async () => {
+    expect(await (await createDaemon(deps()).request("/self-host")).json()).toEqual({ selfHost: null });
+
+    const wired = createDaemon(deps({ selfHost: { user: "intentic", address: "host.docker.internal", port: 22 } }));
+    expect(await (await wired.request("/self-host")).json()).toEqual({
+        selfHost: { user: "intentic", address: "host.docker.internal", port: 22 },
+    });
+});
+
 test("POST /agent streams the agent events as SSE frames", async () => {
     const events: AgentEvent[] = [{ kind: "session", sessionId: "s1" }, { kind: "delta", text: "hi" }, { kind: "done" }];
     const app = createDaemon(

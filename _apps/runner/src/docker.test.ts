@@ -56,6 +56,14 @@ test("runContainer builds the run argv with network, env, volumes, and labels", 
     ]);
 });
 
+test("runContainer adds --add-host entries (so the sandbox can reach the host it runs on)", async () => {
+    const { docker, calls } = recordingDocker();
+    await runContainer({ name: "box", image: "img", addHosts: ["host.docker.internal:host-gateway"] }, docker);
+    const argv = calls[0] ?? [];
+    expect(argv).toContain("--add-host");
+    expect(argv[argv.indexOf("--add-host") + 1]).toBe("host.docker.internal:host-gateway");
+});
+
 test("runContainer throws on a non-zero exit", async () => {
     const failing: DockerRunner = async () => ({ stdout: "", stderr: "boom", code: 125 });
     await expect(runContainer({ name: "box", image: "img" }, failing)).rejects.toThrow("docker run box failed");

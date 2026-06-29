@@ -21,6 +21,10 @@
 #   RUNNER_IMAGE    runner image to run (default: ghcr.io/radarsu/intentic/runner:0.1.0)
 #   SANDBOX_IMAGE   sandbox image the runner spawns (default: ghcr.io/radarsu/intentic/sandbox:0.1.0)
 #   PREVIEW_PORT    local preview proxy port published by the runner (default: 8088)
+#   SELF_HOST       when set (the platform's curl one-liner sets SELF_HOST=1), wire THIS machine as a deploy
+#                   target: a dedicated service user in the docker group + a generated SSH key the sandbox uses
+#                   to reach the host back at host.docker.internal. Needs root (server, Linux only).
+#   SELF_HOST_USER  the service user to create/use for self-host (default: intentic).
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
 
@@ -34,9 +38,69 @@ PREVIEW_PORT="${PREVIEW_PORT:-8088}"
 # They ride straight into the sandbox container's env; they are never sent to the platform.
 HOST_SSH_KEY="${HOST_SSH_KEY:-}"
 CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
+# Self-host: wire this machine as a deploy target. Off unless SELF_HOST is set (the platform one-liner sets it).
+SELF_HOST="${SELF_HOST:-}"
+SELF_HOST_USER="${SELF_HOST_USER:-}"
 
 CONTAINER="intentic-runner"
 NETWORK="intentic-workspace"
+
+# Wire THIS machine as a deployable host: a dedicated service user in the docker group with a generated SSH key
+# the sandbox uses to reach the host back over host.docker.internal. Idempotent — an existing user/key is reused
+# so re-runs don't churn the key the platform pins. Needs root (uses `sudo -n` when not already root). Sets
+# HOST_SSH_KEY (the generated private key) and SELF_HOST_USER for the runner to forward into the sandbox.
+setup_self_host() {
+    user="${SELF_HOST_USER:-intentic}"
+    SELF_HOST_USER="$user"
+
+    if [ "$(id -u)" = 0 ]; then
+        SUDO=""
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+        SUDO="sudo -n"
+    else
+        echo "error: SELF_HOST setup needs root to create the '$user' user and authorize a key — re-run as root (sudo -i) or enable passwordless sudo." >&2
+        exit 1
+    fi
+    if ! command -v useradd >/dev/null 2>&1; then
+        echo "error: useradd not found — intentic self-host expects a standard Linux server (Debian/Ubuntu/RHEL)." >&2
+        exit 1
+    fi
+    if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
+        echo "intentic: warning — no SSH server found; the sandbox can't deploy to this host until sshd is running." >&2
+    fi
+
+    if ! id "$user" >/dev/null 2>&1; then
+        echo "intentic: creating service user '$user'…"
+        $SUDO useradd -m -s /bin/bash "$user"
+    fi
+    # The host provider runs `docker version` over SSH, so the user needs docker access; group membership
+    # applies to the sandbox's fresh SSH sessions. A missing docker group is a soft warning, not fatal.
+    $SUDO usermod -aG docker "$user" 2>/dev/null || echo "intentic: warning — could not add '$user' to the docker group." >&2
+
+    home="$(getent passwd "$user" | cut -d: -f6)"
+    [ -n "$home" ] || home="/home/$user"
+    ssh_dir="$home/.ssh"
+    key="$ssh_dir/intentic_ed25519"
+    auth="$ssh_dir/authorized_keys"
+    $SUDO mkdir -p "$ssh_dir"
+    # Generate once; reuse on re-runs so HOST_SSH_KEY (and the platform-pinned host key) stay stable.
+    if ! $SUDO test -f "$key"; then
+        echo "intentic: generating SSH key for '$user'…"
+        $SUDO ssh-keygen -t ed25519 -N "" -C intentic-self-host -f "$key" >/dev/null
+    fi
+    # Authorize the public key for the service user (idempotent).
+    pub="$($SUDO cat "$key.pub")"
+    if ! $SUDO grep -qF "$pub" "$auth" 2>/dev/null; then
+        echo "$pub" | $SUDO tee -a "$auth" >/dev/null
+    fi
+    $SUDO chown -R "$user:$user" "$ssh_dir"
+    $SUDO chmod 700 "$ssh_dir"
+    $SUDO chmod 600 "$auth" "$key"
+
+    # The sandbox reads HOST_SSH_KEY to authenticate as '$user' on host.docker.internal; ride it into the container.
+    HOST_SSH_KEY="$($SUDO cat "$key")"
+    echo "intentic: this server is registered as a deploy target (user '$user')."
+}
 
 echo "intentic: checking Docker…"
 if ! command -v docker >/dev/null 2>&1; then
@@ -52,6 +116,12 @@ fi
 if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
     echo "error: PLATFORM_URL and RUNNER_TOKEN are required (env or positional args)." >&2
     exit 1
+fi
+
+# When requested, wire this machine as a deploy target before starting the runner — sets HOST_SSH_KEY (the
+# generated key) and SELF_HOST_USER, which the runner forwards into the sandbox.
+if [ -n "$SELF_HOST" ]; then
+    setup_self_host
 fi
 
 # Pull explicitly (with visible progress) so a slow first-time pull doesn't look like a hang — and so a
@@ -78,6 +148,7 @@ docker run -d --restart unless-stopped --user root --name "$CONTAINER" \
     -e RUNNER_TOKEN="$RUNNER_TOKEN" \
     -e HOST_SSH_KEY="$HOST_SSH_KEY" \
     -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+    -e SELF_HOST_USER="$SELF_HOST_USER" \
     "$RUNNER_IMAGE" >/dev/null
 
 echo "intentic runner started and dialing ${PLATFORM_URL}."

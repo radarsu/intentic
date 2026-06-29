@@ -13,9 +13,19 @@ import { REPO_ROLES, type RepoRole, type WorkspacePaths } from "./workspace.js";
 import { readWorkspaceFile, resolveWithin, writeWorkspaceFile } from "./workspace-files.js";
 
 // The daemon's collaborators, injected so the HTTP wiring is testable without real subprocesses.
+// The host this sandbox runs on, when connect.sh wired it as a deploy target (a service user + key, reachable
+// from this container at host.docker.internal). The platform reads /self-host to mirror it into the inventory.
+export interface SelfHost {
+    readonly user: string;
+    readonly address: string;
+    readonly port: number;
+}
+
 export interface DaemonDeps {
     readonly workspace: WorkspacePaths;
     readonly devServer: DevServer;
+    // Present only when the runner forwarded SELF_HOST_USER (+ HOST_SSH_KEY) into this sandbox.
+    readonly selfHost?: SelfHost;
     readonly agent?: (request: AgentRequest) => AsyncIterable<AgentEvent>;
     readonly intentic?: (run: IntenticRun) => AsyncIterable<IntenticLine>;
     // The sandbox-owned Claude credential store (the platform no longer holds the token). Defaults to a JSON
@@ -91,6 +101,10 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
 
     app.get("/health", (c) => c.json({ ok: true }));
     app.get("/preview", async (c) => c.json(await devServer.status()));
+
+    // The host this sandbox runs on, when wired as a deploy target by connect.sh. The platform mirrors it into
+    // the inventory as i.have.host("self", …). null when this sandbox was not started in self-host mode.
+    app.get("/self-host", (c) => c.json({ selfHost: deps.selfHost ?? null }));
 
     app.post("/agent", async (c) => {
         const parsed = agentBody.safeParse(await c.req.json().catch(() => undefined));

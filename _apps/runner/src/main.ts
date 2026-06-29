@@ -35,7 +35,9 @@ const sandboxEnv: Record<string, string> = {};
 if (agentBaseUrl !== undefined && agentBaseUrl !== "") {
     sandboxEnv["ANTHROPIC_BASE_URL"] = agentBaseUrl;
 }
-for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN"]) {
+// SELF_HOST_USER rides along when connect.sh wired this machine as a deploy target: the sandbox exposes it via
+// /self-host so the platform registers the `self` inventory host that HOST_SSH_KEY authenticates.
+for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN", "SELF_HOST_USER"]) {
     const value = process.env[key];
     if (value !== undefined && value !== "") {
         sandboxEnv[key] = value;
