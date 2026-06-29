@@ -17,8 +17,8 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@hono/node-server": "^1.13.7",
-        "hono": "4.10.4",
+        "@hono/node-server": "catalog:",
+        "hono": "catalog:",
         "tslib": "catalog:"
     },
     "devDependencies": {

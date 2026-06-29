@@ -38,7 +38,7 @@
     "dependencies": {
         "@intentic/engine": "workspace:*",
         "@intentic/graph": "workspace:*",
-        "ssh2": "1.17.0",
+        "ssh2": "catalog:",
         "tslib": "catalog:",
         "zod": "catalog:"
     },
@@ -46,7 +46,7 @@
         "@intentic/sdk": "workspace:*",
         "@intentic/tsconfig": "workspace:*",
         "@types/node": "catalog:",
-        "@types/ssh2": "1.15.5",
+        "@types/ssh2": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
     }
