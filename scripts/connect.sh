@@ -102,6 +102,20 @@ setup_self_host() {
     echo "intentic: this server is registered as a deploy target (user '$user')."
 }
 
+# Pull a published image. intentic's runner/sandbox images are PUBLIC, so no login is needed. But if this host
+# has a stale/expired `docker login ghcr.io` (commonly left by Docker Desktop's credential store), docker
+# presents that token instead of pulling anonymously and GHCR rejects the pull with "denied". On any pull
+# failure, clear the ghcr.io login and retry once so the pull falls back to anonymous.
+pull_image() {
+    image="$1"
+    if docker pull "$image"; then
+        return 0
+    fi
+    echo "intentic: pull failed — clearing a stale ghcr.io login and retrying anonymously…" >&2
+    docker logout ghcr.io >/dev/null 2>&1 || true
+    docker pull "$image"
+}
+
 echo "intentic: checking Docker…"
 if ! command -v docker >/dev/null 2>&1; then
     echo "error: docker is not installed. Install Docker Engine (Linux) or Docker Desktop, then re-run." >&2
@@ -127,7 +141,7 @@ fi
 # Pull explicitly (with visible progress) so a slow first-time pull doesn't look like a hang — and so a
 # private/missing image surfaces as a clear error instead of silence.
 echo "intentic: pulling runner image ${RUNNER_IMAGE} (first run can take a minute)…"
-docker pull "$RUNNER_IMAGE"
+pull_image "$RUNNER_IMAGE"
 
 echo "intentic: starting runner…"
 # The runner reaches each sandbox by container name on this shared network; create it before the run.
