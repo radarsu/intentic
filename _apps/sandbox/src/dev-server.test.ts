@@ -65,3 +65,13 @@ test("an empty command is rejected", () => {
     const dev = createDevServer(recordingSpawner().spawner, async () => true);
     expect(() => dev.start({ command: [], cwd: "/work/app", port: 5173 })).toThrow("dev server command is empty");
 });
+
+// Regression: a non-existent dev command (pnpm absent / app not set up) emits ChildProcess 'error'. The real
+// spawner must not let that crash the daemon — it logs and clears running state instead.
+test("a failed spawn does not crash the daemon and clears running state", async () => {
+    const dev = createDevServer();
+    expect(() => dev.start({ command: ["intentic-no-such-binary"], cwd: process.cwd(), port: 5173 })).not.toThrow();
+    // The 'error' event fires asynchronously; give it a tick to land before checking the cleared state.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await dev.status()).toEqual({ running: false, healthy: false });
+});

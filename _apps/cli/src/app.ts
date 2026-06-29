@@ -34,6 +34,7 @@ import {
     writeStatus,
 } from "./artifact.js";
 import { forgejoIdentity, syncControlPlaneSecrets } from "./control-plane-sync.js";
+import { collectDeployments } from "./deployments.js";
 import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
 import { createKnownHostsStore } from "./known-hosts.js";
@@ -418,9 +419,22 @@ const restore = buildCommand<RestoreFlags>({
     },
 });
 
+const deploymentsCommand = buildCommand<{ artifact?: string }>({
+    docs: { brief: "List the app deployments Komodo manages, with their desired config (read-only)" },
+    parameters: {
+        flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_PATH})` } },
+    },
+    async func(this: CommandContext, flags: { artifact?: string }) {
+        const out = createOutput(this.process.stdout, outputMode(process.env));
+        const deployments = await collectDeployments(flags.artifact ?? ARTIFACT_PATH, out.log);
+        out.text(`${deployments.length} deployment(s)`);
+        out.result({ deployments });
+    },
+});
+
 export const app = buildApplication(
     buildRouteMap({
-        routes: { init, resolve: resolveCommand, plan: planCommand, apply, adopt, restore },
+        routes: { init, resolve: resolveCommand, plan: planCommand, apply, adopt, restore, deployments: deploymentsCommand },
         docs: { brief: "intentic — intent-driven deployment" },
     }),
     {

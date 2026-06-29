@@ -24,7 +24,17 @@ export type HealthProbe = (port: number) => Promise<boolean>;
 
 const defaultSpawn: Spawner = (command, args, cwd) => {
     const child = spawn(command, [...args], { cwd, env: process.env, stdio: "inherit" });
-    return { kill: () => child.kill("SIGTERM"), onExit: (callback) => child.on("exit", () => callback()) };
+    // A failed spawn (the dev command isn't installed, or the app repo has no deps yet) emits an 'error'
+    // event — with no listener Node rethrows it and kills the daemon. The dev server is auxiliary to the
+    // agent/claude/git routes, so log it and treat it like an exit instead of crashing the process.
+    child.on("error", (error) => process.stderr.write(`dev server failed to start (${command}): ${error.message}\n`));
+    return {
+        kill: () => child.kill("SIGTERM"),
+        onExit: (callback) => {
+            child.on("exit", () => callback());
+            child.on("error", () => callback());
+        },
+    };
 };
 
 // Healthy means the dev server answered at all (even a 404) — only a refused/failed connection is unhealthy,
