@@ -29,6 +29,11 @@ RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
 RUNNER_IMAGE="${RUNNER_IMAGE:-ghcr.io/radarsu/intentic/runner:0.1.0}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:0.1.0}"
 PREVIEW_PORT="${PREVIEW_PORT:-8088}"
+# Infra secrets the platform's Provision action needs `intentic apply` to read INSIDE the sandbox. Optional —
+# set them in your shell when running this (e.g. HOST_SSH_KEY="$(cat ~/.ssh/key)" CLOUDFLARE_API_TOKEN=… …).
+# They ride straight into the sandbox container's env; they are never sent to the platform.
+HOST_SSH_KEY="${HOST_SSH_KEY:-}"
+CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
 
 CONTAINER="intentic-runner"
 NETWORK="intentic-workspace"
@@ -71,6 +76,8 @@ docker run -d --restart unless-stopped --user root --name "$CONTAINER" \
     -e SANDBOX_IMAGE="$SANDBOX_IMAGE" \
     -e PLATFORM_URL="$PLATFORM_URL" \
     -e RUNNER_TOKEN="$RUNNER_TOKEN" \
+    -e HOST_SSH_KEY="$HOST_SSH_KEY" \
+    -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
     "$RUNNER_IMAGE" >/dev/null
 
 echo "intentic runner started and dialing ${PLATFORM_URL}."

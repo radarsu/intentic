@@ -1,11 +1,12 @@
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { createDaemon } from "./daemon.js";
 import { createDevServer } from "./dev-server.js";
 import { workspacePaths } from "./workspace.js";
 
 // The sandbox container's entrypoint. Config comes from env the runner sets at `docker run`; the workspace
-// (the three cloned repos) and agent credentials (ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN) are mounted
-// /injected by the runner, never baked in.
+// (the three repos) and agent credentials are injected by the runner, never baked in.
 const root = process.env["WORKSPACE_ROOT"] ?? "/work";
 const port = Number(process.env["SANDBOX_PORT"] ?? "8787");
 // Binds 0.0.0.0 by default: the sandbox sits on a private, non-host-published docker network, and the runner
@@ -13,6 +14,18 @@ const port = Number(process.env["SANDBOX_PORT"] ?? "8787");
 const host = process.env["SANDBOX_HOST"] ?? "0.0.0.0";
 const workspace = workspacePaths(root);
 const devServer = createDevServer();
+
+// First start with an empty workspace: scaffold the three repos (intent / desired-state / app) so chat,
+// inventory, and source-control have something to read, and the dev server has an app to run. Idempotent —
+// skipped once the repos exist. `intentic apply` (run later via the platform's Provision action) reads the
+// infra secrets the runner injected into this container's env.
+if (!existsSync(workspace.repos.intent)) {
+    process.stdout.write(`intentic sandbox: empty workspace — running intentic init…\n`);
+    const init = spawnSync("intentic", ["init", "--dir", root], { stdio: "inherit" });
+    if (init.status !== 0) {
+        process.stdout.write(`intentic sandbox: intentic init failed (status ${init.status ?? "?"}); the workspace may be incomplete\n`);
+    }
+}
 
 const devCommand = process.env["DEV_COMMAND"];
 const devPort = process.env["DEV_PORT"];

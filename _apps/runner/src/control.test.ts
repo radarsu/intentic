@@ -1,6 +1,9 @@
 import { expect, test } from "vitest";
-import { createController, type FetchFn } from "./control.js";
+import { createController, type FetchFn, type SleepFn } from "./control.js";
 import type { DockerRunner } from "./docker.js";
+
+const noSleep: SleepFn = async () => {};
+const healthyFetch: FetchFn = async () => new Response("", { status: 200 });
 
 const spec = {
     project: "acme",
@@ -26,9 +29,24 @@ const recordingDocker = (inspect: { running: boolean; image?: string }) => {
 
 test("ensure brings the sandbox up and returns how to reach its daemon", async () => {
     const { docker, calls } = recordingDocker({ running: false });
-    const sandbox = await createController({ spec, docker }).ensure();
+    const sandbox = await createController({ spec, docker, fetch: healthyFetch, sleep: noSleep }).ensure();
     expect(sandbox.daemonUrl).toBe("http://intentic-sandbox-acme:8787");
     expect(calls.some((call) => call[0] === "run")).toBe(true);
+});
+
+test("ensure waits for the daemon's /health to answer before resolving (no cold-start relay race)", async () => {
+    const { docker } = recordingDocker({ running: false });
+    const seen: string[] = [];
+    // 503 while the daemon binds, then 200 — ensure must poll past the not-ready response.
+    let ready = false;
+    const fetchFn: FetchFn = async (url) => {
+        seen.push(url);
+        const ok = ready;
+        ready = true;
+        return new Response("", { status: ok ? 200 : 503 });
+    };
+    await createController({ spec, docker, fetch: fetchFn, sleep: noSleep }).ensure();
+    expect(seen).toEqual(["http://intentic-sandbox-acme:8787/health", "http://intentic-sandbox-acme:8787/health"]);
 });
 
 test("status reports the container state", async () => {

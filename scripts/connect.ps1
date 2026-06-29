@@ -32,6 +32,10 @@ if (-not $RunnerToken) { $RunnerToken = $env:RUNNER_TOKEN }
 $RunnerImage  = if ($env:RUNNER_IMAGE)  { $env:RUNNER_IMAGE }  else { 'ghcr.io/radarsu/intentic/runner:latest' }
 $SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:latest' }
 $PreviewPort  = if ($env:PREVIEW_PORT)  { $env:PREVIEW_PORT }  else { '8088' }
+# Infra secrets the platform's Provision action needs `intentic apply` to read inside the sandbox. Optional —
+# set them in your shell when running this. They ride into the sandbox container's env; never sent to the platform.
+$HostSshKey = $env:HOST_SSH_KEY
+$CloudflareApiToken = $env:CLOUDFLARE_API_TOKEN
 
 $Container = 'intentic-runner'
 $Network   = 'intentic-workspace'
@@ -65,6 +69,8 @@ docker run -d --restart unless-stopped --user root --name $Container `
     -e SANDBOX_IMAGE=$SandboxImage `
     -e PLATFORM_URL=$PlatformUrl `
     -e RUNNER_TOKEN=$RunnerToken `
+    -e HOST_SSH_KEY=$HostSshKey `
+    -e CLOUDFLARE_API_TOKEN=$CloudflareApiToken `
     $RunnerImage | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Error 'failed to start the runner container (see the docker output above).'
