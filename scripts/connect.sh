@@ -33,6 +33,7 @@ PREVIEW_PORT="${PREVIEW_PORT:-8088}"
 CONTAINER="intentic-runner"
 NETWORK="intentic-workspace"
 
+echo "intentic: checking Docker…"
 if ! command -v docker >/dev/null 2>&1; then
     echo "error: docker is not installed. Install Docker Engine (Linux) or Docker Desktop, then re-run." >&2
     exit 1
@@ -46,6 +47,12 @@ if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
     exit 1
 fi
 
+# Pull explicitly (with visible progress) so a slow first-time pull doesn't look like a hang — and so a
+# private/missing image surfaces as a clear error instead of silence.
+echo "intentic: pulling runner image ${RUNNER_IMAGE} (first run can take a minute)…"
+docker pull "$RUNNER_IMAGE"
+
+echo "intentic: starting runner…"
 # The runner reaches each sandbox by container name on this shared network; create it before the run.
 docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
