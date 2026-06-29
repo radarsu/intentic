@@ -13,6 +13,10 @@ export interface SandboxSpec {
     readonly devPort: number;
     // The sandbox daemon's port (the runner reaches it by container name on the shared network).
     readonly daemonPort: number;
+    // The Cloudflare zone, when the host is on the control plane — used to build the sandbox's PUBLIC agent
+    // URL (`https://<project>.preview.<zone>/__agent`) the browser connects to directly. Absent for
+    // preview-only hosts.
+    readonly zone?: string;
     // Agent credentials (ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN) the runner passes through — never baked
     // into the image.
     readonly agentEnv: Readonly<Record<string, string>>;
@@ -23,6 +27,9 @@ export interface Sandbox {
     // Where the runner reaches the sandbox daemon (container DNS on the shared network).
     readonly daemonUrl: string;
     readonly devPort: number;
+    // The public base URL the browser hits to reach the daemon directly (via the preview tunnel + the
+    // runner proxy's `/__agent` route). Present only when a zone is configured.
+    readonly agentUrl?: string;
 }
 
 export const sandboxName = (project: string): string => `intentic-sandbox-${project}`;
@@ -32,6 +39,7 @@ const sandboxOf = (spec: SandboxSpec): Sandbox => ({
     name: sandboxName(spec.project),
     daemonUrl: `http://${sandboxName(spec.project)}:${spec.daemonPort}`,
     devPort: spec.devPort,
+    ...(spec.zone !== undefined && spec.zone !== "" ? { agentUrl: `https://${spec.project}.preview.${spec.zone}/__agent` } : {}),
 });
 
 // Bring the project's sandbox up on the desired image, idempotently: an already-running container on the

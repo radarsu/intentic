@@ -12,12 +12,19 @@ const previewPort = Number(process.env["PREVIEW_PORT"] ?? "8088");
 const devPort = Number(process.env["SANDBOX_DEV_PORT"] ?? "5173");
 const daemonPort = Number(process.env["SANDBOX_DAEMON_PORT"] ?? "8787");
 
-const proxy = createPreviewProxy({ zone, devPort });
-serve({ fetch: proxy.fetch, port: previewPort, hostname: "0.0.0.0" });
-process.stdout.write(`intentic runner: preview proxy on 0.0.0.0:${previewPort} for *.preview.${zone}\n`);
-
 const platformUrl = process.env["PLATFORM_URL"];
 const runnerToken = process.env["RUNNER_TOKEN"];
+
+// The proxy also serves `/__agent` (the browser driving the agent directly) when a runner token is set to
+// verify the platform-minted bearer; preview-only hosts get just the dev-server proxy.
+const proxy = createPreviewProxy({
+    zone,
+    devPort,
+    daemonPort,
+    ...(runnerToken !== undefined && runnerToken !== "" ? { runnerToken } : {}),
+});
+serve({ fetch: proxy.fetch, port: previewPort, hostname: "0.0.0.0" });
+process.stdout.write(`intentic runner: preview proxy on 0.0.0.0:${previewPort} for *.preview.${zone}\n`);
 // A custom Anthropic-compatible endpoint (e.g. a local model gateway), exported into each sandbox so the
 // agent uses it. Agent CREDENTIALS are still never held here — the platform injects them per turn.
 const agentBaseUrl = process.env["ANTHROPIC_BASE_URL"];
@@ -32,6 +39,7 @@ if (platformUrl !== undefined && platformUrl !== "" && runnerToken !== undefined
             devCommand: process.env["DEV_COMMAND"] ?? "pnpm dev",
             devPort,
             daemonPort,
+            ...(zone !== "" ? { zone } : {}),
             agentEnv: agentBaseUrl !== undefined && agentBaseUrl !== "" ? { ANTHROPIC_BASE_URL: agentBaseUrl } : {},
         },
     });
