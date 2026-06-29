@@ -18,16 +18,16 @@
 #   RUNNER_TOKEN    the per-project token the platform's setup screen shows you
 #
 # Optional env:
-#   RUNNER_IMAGE    runner image to run (default: ghcr.io/radarsu/intentic/runner:latest)
-#   SANDBOX_IMAGE   sandbox image the runner spawns (default: ghcr.io/radarsu/intentic/sandbox:latest)
+#   RUNNER_IMAGE    runner image to run (default: ghcr.io/radarsu/intentic/runner:0.1.0)
+#   SANDBOX_IMAGE   sandbox image the runner spawns (default: ghcr.io/radarsu/intentic/sandbox:0.1.0)
 #   PREVIEW_PORT    local preview proxy port published by the runner (default: 8088)
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
 
 PLATFORM_URL="${PLATFORM_URL:-${1:-}}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
-RUNNER_IMAGE="${RUNNER_IMAGE:-ghcr.io/radarsu/intentic/runner:latest}"
-SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:latest}"
+RUNNER_IMAGE="${RUNNER_IMAGE:-ghcr.io/radarsu/intentic/runner:0.1.0}"
+SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:0.1.0}"
 PREVIEW_PORT="${PREVIEW_PORT:-8088}"
 
 CONTAINER="intentic-runner"
@@ -38,8 +38,10 @@ if ! command -v docker >/dev/null 2>&1; then
     echo "error: docker is not installed. Install Docker Engine (Linux) or Docker Desktop, then re-run." >&2
     exit 1
 fi
-if ! docker info >/dev/null 2>&1; then
-    echo "error: the docker daemon is not running. Start Docker, then re-run." >&2
+# `docker info` aggregates CLI-plugin data and can hang (e.g. docker-scout/buildx); `docker version`
+# with a server-format does a fast daemon round-trip and fails cleanly if the daemon is unreachable.
+if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
+    echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
     exit 1
 fi
 if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
