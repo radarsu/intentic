@@ -11,6 +11,9 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     // The Discord guild (server) + the webhook URL for the #reconcile channel. Per-app webhook URLs are
     // dynamic (one per app that wires notify: discord), declared as a prefix pattern "appWebhook:".
     discord: ["guildId", "reconcileWebhook", "appWebhook:"],
+    // An external SaaS integration (e.g. Stripe). A pure sink in v1: the provider validates the API key on
+    // read/apply but exposes no refs — the apiKey is injected into consuming apps as a $secret env, not a $ref.
+    stripe: [],
     "cf-route": ["url"],
     tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken", "gitToken", "packagesToken"],

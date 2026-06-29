@@ -47,6 +47,12 @@ export interface DiscordInput {
     botToken: SecretRef;
 }
 
+// An external SaaS integration the apps use (e.g. Stripe). Only the API key is authored (a secret); intentic
+// validates it during reconcile and injects it into consuming apps' deployments. Absent = no integration.
+export interface StripeInput {
+    apiKey: SecretRef;
+}
+
 // How long restic keeps snapshots before `forget --prune` drops them. Omitted fields fall back to the
 // provider's defaults (7 daily / 4 weekly / 6 monthly).
 export interface BackupRetention {

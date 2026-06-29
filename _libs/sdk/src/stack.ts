@@ -17,6 +17,8 @@ import type {
     HostIntent,
     IntentSet,
     ServiceIntent,
+    StripeInput,
+    StripeIntent,
     TeamIntent,
     UserInput,
     UserIntent,
@@ -38,6 +40,7 @@ import type {
     Repo,
     Service,
     Stack,
+    Stripe,
     Team,
     User,
     WantAppInput,
@@ -76,6 +79,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         cloudflare?: CloudflareIntent;
         github?: GitHubIntent;
         discord?: DiscordIntent;
+        stripe?: StripeIntent;
         backup?: BackupIntent;
         users: UserIntent[];
         teams: TeamIntent[];
@@ -126,6 +130,15 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         claim(id);
         intent.discord = { id, input };
         return Object.freeze(makeRef(id)) as Discord;
+    };
+
+    const stripe = (id: string, input: StripeInput): Stripe => {
+        if (intent.stripe !== undefined) {
+            throw new Error("a Stripe integration is already declared; intentic supports a single Stripe account");
+        }
+        claim(id);
+        intent.stripe = { id, input };
+        return Object.freeze(makeRef(id)) as Stripe;
     };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
@@ -256,7 +269,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     };
 
     const stack: Stack = {
-        have: { host, cloudflare, github, backup, discord },
+        have: { host, cloudflare, github, backup, discord, stripe },
         want: { app, service, workspace, database, cache, auth, objectStorage, user, team },
         moved: recordMove,
     };

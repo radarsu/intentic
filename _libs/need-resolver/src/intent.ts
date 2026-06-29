@@ -8,6 +8,7 @@ import type {
     GitHubInput,
     HostInput,
     ServiceInput,
+    StripeInput,
     TeamInput,
     UserInput,
 } from "./inputs.js";
@@ -42,6 +43,12 @@ export interface GitHubIntent {
 export interface DiscordIntent {
     readonly id: string;
     readonly input: DiscordInput;
+}
+
+// The external SaaS integration the operator declared (i.have.stripe). A singleton, like discord.
+export interface StripeIntent {
+    readonly id: string;
+    readonly input: StripeInput;
 }
 
 export interface UserIntent {
@@ -128,6 +135,7 @@ export interface IntentSet {
     readonly cloudflare?: CloudflareIntent;
     readonly github?: GitHubIntent;
     readonly discord?: DiscordIntent;
+    readonly stripe?: StripeIntent;
     readonly backup?: BackupIntent;
     readonly users: readonly UserIntent[];
     readonly teams: readonly TeamIntent[];

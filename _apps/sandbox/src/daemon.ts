@@ -6,11 +6,13 @@ import { type AgentEvent, type AgentRequest, runAgent } from "./agent.js";
 import { resolvePlanDecision, resolveQuestionAnswer } from "./agent-requests.js";
 import { buildAuthorizeUrl, type ClaudeStore, ensureFreshToken, exchangeCode, fileClaudeStore } from "./claude-credentials.js";
 import type { DevServer } from "./dev-server.js";
-import { gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git.js";
+import { gitClone, gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git.js";
 import { type IntenticLine, type IntenticRun, runIntentic } from "./intentic-runner.js";
+import { isValidRepoName, listRepos } from "./repos.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions.js";
 import { REPO_ROLES, type RepoRole, type WorkspacePaths } from "./workspace.js";
 import { readWorkspaceFile, resolveWithin, writeWorkspaceFile } from "./workspace-files.js";
+import { isDeniedWorkspacePath, type WorkspaceTree, walkWorkspaceTree } from "./workspace-tree.js";
 
 // The daemon's collaborators, injected so the HTTP wiring is testable without real subprocesses.
 // The host this sandbox runs on, when connect.sh wired it as a deploy target (a service user + key, reachable
@@ -36,6 +38,7 @@ export interface DaemonDeps {
         readonly listFiles: (dir: string) => Promise<readonly string[]>;
         readonly commitAll: (dir: string, message: string, author: { name: string; email: string }) => Promise<boolean>;
         readonly push: (dir: string, branch: string) => Promise<void>;
+        readonly clone: (parentDir: string, name: string, cloneUrl: string, branch?: string) => Promise<void>;
     };
     // Repo-contained file read/write (the platform reads/edits deploy.config.ts + views source through these,
     // instead of holding a git token). Paths are guarded against escaping the repo by the routes.
@@ -43,6 +46,9 @@ export interface DaemonDeps {
         readonly read: (absPath: string) => Promise<string | undefined>;
         readonly write: (absPath: string, content: string) => Promise<void>;
     };
+    // The full /work filesystem tree the agent sees (untracked + generated files included), distinct from the
+    // git-tracked listing. Injected in tests; defaults to a real fs walk with ignore rules + depth/entry caps.
+    readonly workspaceTree?: (root: string) => Promise<WorkspaceTree>;
     // Past-conversation history: the Claude Agent SDK persists sessions on disk keyed by the workspace dir;
     // the platform relays these for the chat history menu. Injected in tests.
     readonly sessions?: {
@@ -77,6 +83,7 @@ const intenticBody = z.object({ args: z.array(z.string()) });
 const commitBody = z.object({ message: z.string().min(1) });
 const pushBody = z.object({ branch: z.string().min(1) });
 const fileWriteBody = z.object({ path: z.string().min(1), content: z.string() });
+const cloneRepoBody = z.object({ name: z.string().min(1), cloneUrl: z.string().min(1), branch: z.string().optional() });
 
 // The local HTTP API the runner drives (and relays to the UI). Bound to 127.0.0.1 by main.ts — the runner
 // reaches it on the loopback, so the daemon itself is unauthenticated; the runner owns auth to the platform.
@@ -89,8 +96,10 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         listFiles: (dir) => gitListFiles(dir),
         commitAll: (dir, message, author) => gitCommitAll(dir, message, author),
         push: (dir, branch) => gitPush(dir, branch),
+        clone: (parentDir, name, cloneUrl, branch) => gitClone(parentDir, name, cloneUrl, branch),
     };
     const files = deps.files ?? { read: (absPath) => readWorkspaceFile(absPath), write: (absPath, content) => writeWorkspaceFile(absPath, content) };
+    const workspaceTree = deps.workspaceTree ?? ((root) => walkWorkspaceTree(root));
     const sessions = deps.sessions ?? { list: (dir) => listWorkspaceSessions(dir), read: (dir, id) => readWorkspaceSession(dir, id) };
     const claudeStore = deps.claudeStore ?? fileClaudeStore(join(workspace.root, ".intentic", "claude.json"));
 
@@ -294,6 +303,48 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         }
         await files.write(target, parsed.data.content);
         return c.json({ ok: true });
+    });
+
+    // The FULL working tree the agent sees — every file under /work, including untracked ones, .intentic/, and
+    // generated artifacts (unlike /git/:repo/files, which is git-tracked only). The walker applies ignore rules,
+    // depth/entry caps, and a secret denylist. This is the platform's read-only "what the LLM sees" view.
+    app.get("/workspace/tree", async (c) => c.json(await workspaceTree(workspace.root)));
+
+    // Read any file under /work (untracked included), unlike /git/:repo/file which is scoped to one repo. 400
+    // when the path escapes /work; 404 when missing or denylisted (.env / .secrets.json / claude.json / .git).
+    app.get("/workspace/file", async (c) => {
+        const path = c.req.query("path");
+        const target = path === undefined ? undefined : resolveWithin(workspace.root, path);
+        if (target === undefined) {
+            return c.json({ error: "invalid path" }, 400);
+        }
+        if (isDeniedWorkspacePath(path as string)) {
+            return c.json({ error: "not found" }, 404);
+        }
+        const content = await files.read(target);
+        if (content === undefined) {
+            return c.json({ error: "not found" }, 404);
+        }
+        return c.json({ path, content });
+    });
+
+    // Extra repositories cloned into /work so the agent can work across more than the three fixed repos. They
+    // surface in the workspace tree automatically; the daemon owns the clone (no git token on the platform).
+    app.get("/workspace/repos", async (c) => c.json({ repos: await listRepos(workspace.root) }));
+
+    app.post("/workspace/repos", async (c) => {
+        const parsed = cloneRepoBody.safeParse(await c.req.json().catch(() => undefined));
+        if (!parsed.success) {
+            return c.json({ error: "invalid body" }, 400);
+        }
+        if (!isValidRepoName(parsed.data.name)) {
+            return c.json({ error: "invalid or reserved repo name" }, 400);
+        }
+        if ((await listRepos(workspace.root)).includes(parsed.data.name)) {
+            return c.json({ error: `a repo named "${parsed.data.name}" already exists` }, 409);
+        }
+        await git.clone(workspace.root, parsed.data.name, parsed.data.cloneUrl, parsed.data.branch);
+        return c.json({ name: parsed.data.name, path: parsed.data.name });
     });
 
     return app;

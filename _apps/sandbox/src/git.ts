@@ -48,6 +48,12 @@ export const gitPush = async (dir: string, branch: string, git: GitRunner = defa
     await git(dir, ["push", "origin", `HEAD:${branch}`]);
 };
 
+// Clone a repo into <parentDir>/<name> (optionally at a branch). Push/pull auth rides on the URL or the
+// credentials the host already holds — no token passes through the platform. The caller validates `name`.
+export const gitClone = async (parentDir: string, name: string, cloneUrl: string, branch?: string, git: GitRunner = defaultGit): Promise<void> => {
+    await git(parentDir, ["clone", ...(branch !== undefined ? ["--branch", branch] : []), cloneUrl, name]);
+};
+
 // The repo's tracked files (git ls-files), so the UI can render the source tree without node_modules/build
 // noise. Untracked-but-present files are intentionally excluded — they surface through status instead.
 export const gitListFiles = async (dir: string, git: GitRunner = defaultGit): Promise<string[]> =>

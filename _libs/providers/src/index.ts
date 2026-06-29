@@ -39,4 +39,6 @@ export { createRepoProvider } from "./repo.js";
 export type { HostKeyStore, SshExecutor, SshResult, SshSession, SshTarget } from "./ssh.js";
 export { createSshExecutor, inMemoryHostKeyStore, sshExecutor, verifyHostKey } from "./ssh.js";
 export { createSshProbe, hostTarget } from "./ssh-probe.js";
+export { createStripeProvider } from "./stripe.js";
+export { type StripeAccount, type StripeApi, stripeApi } from "./stripe-api.js";
 export { createTunnelProvider } from "./tunnel.js";

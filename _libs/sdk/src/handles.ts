@@ -9,6 +9,7 @@ import type {
     HostInput,
     KomodoRole,
     ServiceInput,
+    StripeInput,
     UserInput,
 } from "@intentic/need-resolver";
 
@@ -65,6 +66,10 @@ export type Backup = Ref<"backup">;
 // The Discord back-communication channel (i.have.discord). A bare ref — the provider owns the guild/channels
 // structure; the resolver references its webhook outputs to wire notifications.
 export type Discord = Ref<"discord">;
+
+// An external SaaS integration (i.have.stripe). A bare ref — the provider validates the API key during
+// reconcile; the key is injected into consuming apps as a $secret env, so nothing references an output off it.
+export type Stripe = Ref<"stripe">;
 
 // A team's members are User handles; its Komodo role applies to the deployments of the apps it manages.
 export interface WantTeamInput {
@@ -177,6 +182,7 @@ export interface Have {
     github(id: string, input: GitHubInput): GitHub;
     backup(id: string, input: BackupInput): Backup;
     discord(id: string, input: DiscordInput): Discord;
+    stripe(id: string, input: StripeInput): Stripe;
 }
 
 export interface Want {

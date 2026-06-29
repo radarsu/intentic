@@ -30,6 +30,7 @@ export type {
     Repo,
     Service,
     Stack,
+    Stripe,
     Team,
     User,
     Want,

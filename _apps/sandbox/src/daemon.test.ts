@@ -152,6 +152,7 @@ test("GET /git/:repo/status resolves the repo dir, and rejects an unknown repo",
                 listFiles: async () => [],
                 commitAll: async () => false,
                 push: async () => {},
+                clone: async () => {},
             },
         }),
     );
@@ -168,6 +169,7 @@ test("GET /git/:repo/files lists the repo's tracked files", async () => {
                 listFiles: async (dir) => (dir === "/work/intent" ? ["deploy.config.ts", "package.json"] : []),
                 commitAll: async () => false,
                 push: async () => {},
+                clone: async () => {},
             },
         }),
     );
@@ -217,4 +219,74 @@ test("PUT /git/:repo/file writes a contained file and rejects a path escape", as
     });
     expect(escape.status).toBe(400);
     expect(writes).toHaveLength(1);
+});
+
+test("GET /workspace/tree returns the full working tree from the walker", async () => {
+    const tree = { root: "/work", tree: [{ name: "app", path: "app", type: "dir" as const, children: [] }], truncated: false };
+    const app = createDaemon(deps({ workspaceTree: async () => tree }));
+    const res = await app.request("/workspace/tree");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(tree);
+});
+
+test("GET /workspace/file reads any contained file, denies secrets, 404s missing, 400s escape", async () => {
+    const app = createDaemon(
+        deps({
+            files: {
+                read: async (absPath) =>
+                    absPath === "/work/app/src/index.ts" ? "console.log(1);" : absPath === "/work/desired-state/.env" ? "SECRET=1" : undefined,
+                write: async () => {},
+            },
+        }),
+    );
+    // Any file under /work — untracked included, unlike the git route which is scoped to one repo.
+    const ok = await app.request("/workspace/file?path=app/src/index.ts");
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ path: "app/src/index.ts", content: "console.log(1);" });
+    // The secret denylist short-circuits before the read, even though files.read would return the contents.
+    expect((await app.request("/workspace/file?path=desired-state/.env")).status).toBe(404);
+    expect((await app.request("/workspace/file?path=.intentic/claude.json")).status).toBe(404);
+    expect((await app.request("/workspace/file?path=app/nope.ts")).status).toBe(404);
+    expect((await app.request("/workspace/file?path=../../etc/passwd")).status).toBe(400);
+});
+
+test("POST /workspace/repos clones a repo, rejects reserved names + a bad body", async () => {
+    const clones: { parentDir: string; name: string; cloneUrl: string }[] = [];
+    const app = createDaemon(
+        deps({
+            git: {
+                status: async () => ({ branch: "main", dirty: false, files: [] }),
+                listFiles: async () => [],
+                commitAll: async () => false,
+                push: async () => {},
+                clone: async (parentDir, name, cloneUrl) => {
+                    clones.push({ parentDir, name, cloneUrl });
+                },
+            },
+        }),
+    );
+    const ok = await app.request("/workspace/repos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "extra", cloneUrl: "https://example.com/extra.git" }),
+    });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ name: "extra", path: "extra" });
+    expect(clones).toEqual([{ parentDir: "/work", name: "extra", cloneUrl: "https://example.com/extra.git" }]);
+
+    // A reserved role (one of the three fixed repos) cannot be clobbered.
+    const reserved = await app.request("/workspace/repos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "intent", cloneUrl: "https://example.com/x.git" }),
+    });
+    expect(reserved.status).toBe(400);
+    // A path-escape name is rejected too.
+    const escaped = await app.request("/workspace/repos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "../evil", cloneUrl: "https://example.com/x.git" }),
+    });
+    expect(escaped.status).toBe(400);
+    expect(clones).toHaveLength(1);
 });

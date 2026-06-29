@@ -131,6 +131,17 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         });
     }
 
+    // An external SaaS integration (i.have.stripe). A standalone inventory node like discord: the provider
+    // validates the API key during reconcile. The key stays a $secret env, never an output ref.
+    if (intent.stripe !== undefined) {
+        nodes.push({
+            id: intent.stripe.id,
+            type: "stripe",
+            inputs: { apiKey: intent.stripe.input.apiKey },
+            explicitDependsOn: [],
+        });
+    }
+
     // Per-host ingress buckets (for tunnel aggregation).
     const ingressByHost = new Map<string, IngressPair[]>();
 

@@ -43,6 +43,9 @@ import { createRepoProvider } from "./repo.js";
 import { createSignozProvider } from "./signoz.js";
 import type { SshExecutor } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
+import { createStripeProvider } from "./stripe.js";
+import type { StripeApi } from "./stripe-api.js";
+import { stripeApi } from "./stripe-api.js";
 import { createTunnelProvider } from "./tunnel.js";
 import { createValkeyProvider } from "./valkey.js";
 import { createValkeyNamespaceProvider } from "./valkey-namespace.js";
@@ -58,6 +61,7 @@ export interface ProviderDeps {
     readonly komodo?: KomodoApi;
     readonly github?: GitHubApi;
     readonly discord?: DiscordApi;
+    readonly stripe?: StripeApi;
     readonly authentik?: AuthentikApi;
     // The cf-route DNS-propagation wait; defaults to the real DoH probe. In-memory tests inject a no-op so
     // they never hit the network.
@@ -73,6 +77,7 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
     const komodo = deps.komodo ?? komodoApi;
     const github = deps.github ?? githubApi;
     const discord = deps.discord ?? discordApi;
+    const stripe = deps.stripe ?? stripeApi;
     return {
         host: createHostProvider(ssh),
         cloudflare: createCloudflareProvider(cloudflare),
@@ -107,6 +112,7 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "gh-ci": createGhCiProvider(github),
         "gh-deployment": createGhDeploymentProvider(ssh),
         discord: createDiscordProvider(discord),
+        stripe: createStripeProvider(stripe),
         workspace: createWorkspaceRunnerProvider(ssh),
     };
 };

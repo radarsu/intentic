@@ -8,6 +8,7 @@ export type ResourceType =
     | "cloudflare"
     | "github"
     | "discord"
+    | "stripe"
     | "cf-route"
     | "tunnel"
     | "forgejo"
