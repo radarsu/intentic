@@ -60,6 +60,41 @@ test("the per-turn oauth token is injected into the SDK options env, and stays a
     expect(captured?.env).toBeUndefined();
 });
 
+test("the autonomous turn registers the request's tools as remote http MCP servers", async () => {
+    let captured: Options | undefined;
+    const capture: QueryFn = async function* (args) {
+        captured = args.options;
+        yield { type: "result", subtype: "success" } as SDKMessage;
+    };
+
+    await collect({ ...request, tools: [{ name: "obs", url: "https://signoz.example.com/mcp", token: "tok" }] }, capture);
+    expect(captured?.mcpServers).toEqual({
+        obs: { type: "http", url: "https://signoz.example.com/mcp", alwaysLoad: true, headers: { Authorization: "Bearer tok" } },
+    });
+
+    captured = undefined;
+    await collect(request, capture);
+    expect(captured?.mcpServers).toBeUndefined();
+});
+
+test("the plan turn keeps the ui server and merges the request's tools alongside it", async () => {
+    let captured: Options | undefined;
+    const capture: QueryFn = async function* (args) {
+        captured = args.options;
+        yield { type: "result", subtype: "success" } as SDKMessage;
+    };
+
+    await collect({ ...request, plan: true, tools: [{ name: "obs", url: "https://signoz.example.com/mcp", token: "tok" }] }, capture);
+    // The plan flow's AskUserQuestion server stays; the agent's remote tools are added next to it.
+    expect(captured?.mcpServers?.["ui"]).toBeDefined();
+    expect(captured?.mcpServers?.["obs"]).toEqual({
+        type: "http",
+        url: "https://signoz.example.com/mcp",
+        alwaysLoad: true,
+        headers: { Authorization: "Bearer tok" },
+    });
+});
+
 test("a non-success result becomes an error followed by done", async () => {
     const events = await collect(request, fakeQuery({ type: "result", subtype: "error_max_turns", session_id: "s" }));
     expect(events).toEqual([

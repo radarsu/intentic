@@ -17,6 +17,10 @@ interface ServiceSpec {
     // The pinned images this service's provider deploys, by input key. Carried here so adding a service is
     // one catalog entry (type + port + its images), and so the versions land in the desired-state graph.
     readonly images: Readonly<Record<string, string>>;
+    // How this kind is reached as an MCP tool from the sandbox agent, when a workspace exposes it via
+    // `i.want.workspace({ tools: [...] })`: the path on the service's routed domain that speaks MCP, and the
+    // intentic-generated secret key holding the scoped bearer token. Absent ⇒ the kind has no agent tool.
+    readonly mcp?: { readonly path: string; readonly tokenSecret: string };
 }
 
 const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
@@ -29,8 +33,13 @@ const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
             otelImage: IMAGES.signozOtelCollector,
             zookeeperImage: IMAGES.signozZookeeper,
         },
+        mcp: { path: "/mcp", tokenSecret: "SIGNOZ_MCP_TOKEN" },
     },
 };
+
+// The MCP endpoint descriptor for a service kind, or undefined when the kind exposes no agent tool. The
+// workspace resolver uses it to wire a tool's URL + scoped token into the runner.
+export const serviceMcp = (kind: ServiceKind): { readonly path: string; readonly tokenSecret: string } | undefined => catalog[kind].mcp;
 
 // The admin identity intentic seeds for a service's dashboard. Services authenticate by email (unlike the
 // Forgejo/Komodo username), so it is an address in the exposed zone; the password is intentic-generated.

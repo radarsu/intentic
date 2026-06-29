@@ -58,6 +58,18 @@ export const resolveNeeds = (intent: IntentSet): Need[] => {
             throw new Error(`app/service/workspace/backing targets undeclared host "${hostId}"; declare it with i.have.host`);
         }
     }
+    // A workspace's agent tools must reference declared services (the state resolver further checks the
+    // service kind exposes an MCP endpoint, which needs the catalog it owns).
+    const serviceIds = new Set(intent.services.map((service) => service.id));
+    for (const workspace of intent.workspaces) {
+        for (const toolId of workspace.tools ?? []) {
+            if (!serviceIds.has(toolId)) {
+                throw new Error(
+                    `workspace "${workspace.id}" exposes tool "${toolId}" that is not a declared service; declare it with i.want.service`,
+                );
+            }
+        }
+    }
     const cpHost = controlPlaneHostId(intent);
     if (cpHost === undefined) {
         throw new Error("intent declares apps/services/backings but no host; declare one with i.have.host");

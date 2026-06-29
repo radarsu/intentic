@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { createDaemon } from "./daemon.js";
 import { createDevServer } from "./dev-server.js";
+import { internalTools } from "./tools.js";
 import { workspacePaths } from "./workspace.js";
 
 // The sandbox container's entrypoint. Config comes from env the runner sets at `docker run`; the workspace
@@ -42,6 +43,10 @@ const selfHost =
         ? { user: selfHostUser, address: "host.docker.internal", port: 22 }
         : undefined;
 
-const app = createDaemon({ workspace, devServer, ...(selfHost !== undefined ? { selfHost } : {}) });
+// The intent-declared internal MCP tools the workspace provider forwarded through the runner (base64 JSON).
+// Constant for this sandbox's life; the daemon merges them with each turn's platform-relayed external tools.
+const tools = internalTools(process.env["INTENTIC_AGENT_TOOLS"]);
+
+const app = createDaemon({ workspace, devServer, ...(selfHost !== undefined ? { selfHost } : {}), ...(tools.length > 0 ? { tools } : {}) });
 serve({ fetch: app.fetch, port, hostname: host });
 process.stdout.write(`intentic sandbox daemon listening on http://${host}:${port} (workspace ${root})\n`);

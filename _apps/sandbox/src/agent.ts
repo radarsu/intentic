@@ -9,6 +9,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { createPlanRequest, createQuestionRequest, type QuestionResponse } from "./agent-requests.js";
+import { type AgentTool, mcpServersOf } from "./tools.js";
 
 // One interactive question the agent asks via the `ask` tool (mirrors AskUserQuestion's input shape).
 export interface AskOption {
@@ -57,6 +58,10 @@ export interface AgentRequest {
     // Reasoning controls forwarded to the SDK (effort level / extended thinking).
     readonly effort?: string;
     readonly thinking?: boolean;
+    // The agent's MCP tools for this turn: intent-declared internal services (forwarded by the runner) plus
+    // platform-configured external integrations. Each becomes a remote `http` MCP server. The daemon merges
+    // both sources before calling; absent ⇒ the agent runs with no MCP tools (its plain autonomous posture).
+    readonly tools?: readonly AgentTool[];
 }
 
 // The SDK `query` is injected so tests drive a fake message stream — no API calls, no bundled binary.
@@ -157,9 +162,11 @@ export async function* runAgent(request: AgentRequest, queryFn: QueryFn = defaul
 
     // Default autonomous posture: full tools, no prompting. The container's isolation makes this safe.
     const permissionMode: PermissionMode = request.permissionMode ?? "bypassPermissions";
+    const mcpServers = mcpServersOf(request.tools ?? []);
     const options: Options = {
         ...baseOptions(request, abortController, permissionMode),
         allowDangerouslySkipPermissions: permissionMode === "bypassPermissions",
+        ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
     };
     try {
         yield* streamSdk(queryFn, request.prompt, options);
@@ -216,7 +223,10 @@ async function* runPlanTurn(request: AgentRequest, queryFn: QueryFn, abortContro
 
     const options: Options = {
         ...baseOptions(request, abortController, "plan"),
-        mcpServers: { ui: uiServer },
+        // The `ui` server backs AskUserQuestion; the agent's remote MCP tools are merged in alongside it so
+        // the model can also consult them while planning (a same-named tool would override `ui`, but `ui` is
+        // reserved). canUseTool auto-allows every tool after approval, so the remote tools need no extra gate.
+        mcpServers: { ui: uiServer, ...mcpServersOf(request.tools ?? []) },
         toolAliases: { AskUserQuestion: "mcp__ui__ask" },
         planModeInstructions:
             "Propose a clear, concise approach for the user's request, then call ExitPlanMode to ask for approval before executing. When you need the user to choose between options, ask with the AskUserQuestion tool rather than writing the choices as plain text.",

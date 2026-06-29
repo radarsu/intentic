@@ -21,6 +21,9 @@ const defaultDocker: DockerRunner = async (args) => {
 export interface ContainerState {
     readonly running: boolean;
     readonly image?: string;
+    // The `intentic.config` digest label stamped at creation, when present — lets the lifecycle recreate a
+    // running sandbox whose spec (image aside) changed, e.g. its forwarded agent tools.
+    readonly config?: string;
 }
 
 export interface RunSpec {
@@ -36,14 +39,24 @@ export interface RunSpec {
     readonly addHosts?: readonly string[];
 }
 
-// Whether the named container is running and on which image (absent container → not running).
+// Whether the named container is running, on which image, and its `intentic.config` digest (absent container
+// → not running). `with` prints nothing for a missing label (no "<no value>"), so the space-split stays clean.
 export const inspectContainer = async (name: string, docker: DockerRunner = defaultDocker): Promise<ContainerState> => {
-    const result = await docker(["inspect", "--format", "{{.State.Running}} {{.Config.Image}}", name]);
+    const result = await docker([
+        "inspect",
+        "--format",
+        '{{.State.Running}} {{.Config.Image}} {{with index .Config.Labels "intentic.config"}}{{.}}{{end}}',
+        name,
+    ]);
     if (result.code !== 0) {
         return { running: false };
     }
-    const [running, image] = result.stdout.trim().split(" ");
-    return { running: running === "true", ...(image !== undefined && image !== "" ? { image } : {}) };
+    const [running, image, config] = result.stdout.trim().split(" ");
+    return {
+        running: running === "true",
+        ...(image !== undefined && image !== "" ? { image } : {}),
+        ...(config !== undefined && config !== "" ? { config } : {}),
+    };
 };
 
 export const runContainer = async (spec: RunSpec, docker: DockerRunner = defaultDocker): Promise<void> => {

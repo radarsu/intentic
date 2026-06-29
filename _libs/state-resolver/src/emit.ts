@@ -79,6 +79,8 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
 
     const apiToken = cloudflare.input.apiToken;
     const hostById = new Map(intent.hosts.map((h) => [h.id, h]));
+    // Services keyed by id, so a workspace can resolve its tool ids back to kind + domain for MCP wiring.
+    const serviceById = new Map(intent.services.map((service) => [service.id, service]));
     // The backing instances apps may bind, keyed by id, each with the host it runs on. Validates each backing
     // targets a declared host (apps reference these by id in their `use`). Passed into resolveApp so a binding
     // node can be emitted onto the instance's host.
@@ -245,7 +247,12 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
 
     for (const workspace of intent.workspaces) {
         const host = hostById.get(workspace.on)!;
-        const resolved = resolveWorkspace(workspace, host.input, zone, apiToken);
+        // Tool ids are validated against declared services in resolveNeeds, so the lookup always resolves.
+        const tools = (workspace.tools ?? []).map((id) => {
+            const service = serviceById.get(id)!;
+            return { id: service.id, kind: service.kind, domain: service.domain };
+        });
+        const resolved = resolveWorkspace(workspace, host.input, zone, apiToken, tools);
         nodes.push(...resolved.nodes);
         const hostIngress = ingressByHost.get(workspace.on) ?? [];
         hostIngress.push(...resolved.ingress);

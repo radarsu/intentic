@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { type DockerRunner, ensureNetwork, inspectContainer, removeContainer, runContainer } from "./docker.js";
 
 export interface SandboxSpec {
@@ -35,6 +36,23 @@ export interface Sandbox {
 export const sandboxName = (project: string): string => `intentic-sandbox-${project}`;
 const workspaceVolume = (project: string): string => `intentic-workspace-${project}`;
 
+// A digest of the spec inputs that shape the sandbox container (image aside, which is compared directly).
+// Stamped as the `intentic.config` label so a change to the forwarded agent env (e.g. INTENTIC_AGENT_TOOLS),
+// dev command, or zone recreates an already-running sandbox rather than silently reusing the stale one.
+export const configDigest = (spec: SandboxSpec): string =>
+    createHash("sha256")
+        .update(
+            JSON.stringify({
+                agentEnv: spec.agentEnv,
+                devCommand: spec.devCommand,
+                devPort: spec.devPort,
+                daemonPort: spec.daemonPort,
+                zone: spec.zone ?? "",
+            }),
+        )
+        .digest("hex")
+        .slice(0, 16);
+
 const sandboxOf = (spec: SandboxSpec): Sandbox => ({
     name: sandboxName(spec.project),
     daemonUrl: `http://${sandboxName(spec.project)}:${spec.daemonPort}`,
@@ -49,8 +67,9 @@ const sandboxOf = (spec: SandboxSpec): Sandbox => ({
 export const ensureSandbox = async (spec: SandboxSpec, docker?: DockerRunner): Promise<Sandbox> => {
     await ensureNetwork(spec.network, docker);
     const name = sandboxName(spec.project);
+    const digest = configDigest(spec);
     const state = await inspectContainer(name, docker);
-    if (state.running && state.image === spec.image) {
+    if (state.running && state.image === spec.image && state.config === digest) {
         return sandboxOf(spec);
     }
     await removeContainer(name, docker);
@@ -68,7 +87,7 @@ export const ensureSandbox = async (spec: SandboxSpec, docker?: DockerRunner): P
                 DEV_PORT: String(spec.devPort),
             },
             volumes: [`${workspaceVolume(spec.project)}:/work`],
-            labels: { "intentic.project": spec.project },
+            labels: { "intentic.project": spec.project, "intentic.config": digest },
             // Let the sandbox reach the host it runs on (SSH self-host deploys to host.docker.internal); the
             // runner gets the same mapping from connect.sh. Harmless when self-host isn't used.
             addHosts: ["host.docker.internal:host-gateway"],

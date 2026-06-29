@@ -174,6 +174,11 @@ export interface WantWorkspaceInput {
     // sandbox container). Point it at a local gateway (e.g. LiteLLM/Ollama) to run the agent against a local
     // model; absent ⇒ the agent talks to Anthropic's cloud.
     agentBaseUrl?: string;
+    // Provisioned internal services (i.want.service) to expose to the in-sandbox agent as MCP tools. Each is
+    // reached as a remote MCP endpoint at its routed domain, authenticated with an intentic-generated scoped
+    // token; the resolver wires the URL + token into the workspace node. The service's kind must expose an MCP
+    // endpoint in the catalog (e.g. signoz). Wire a provisioned tool exactly like an app wires `observe`.
+    tools?: readonly Service[];
 }
 
 export interface Have {

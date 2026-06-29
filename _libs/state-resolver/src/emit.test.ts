@@ -519,6 +519,40 @@ test("a workspace-only intent emits the runner node + its wildcard preview route
     expect(runner?.inputs["runnerToken"]).toBeUndefined();
 });
 
+test("a workspace exposing a service wires it as an MCP tool (domain URL + generated scoped token)", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        workspaces: [{ id: "workspace", on: "host", expose: "cf", tools: ["obs"] }],
+        backings: [],
+        apps: [],
+    };
+
+    const runner = emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace");
+    // The tool is addressed by its routed domain (works cross-host), with an intentic-generated bearer (raw
+    // SecretRef here — the $secret form is the compiled shape). The token key is shared with the tool itself.
+    expect(runner?.inputs["tools"]).toEqual([
+        { name: "obs", url: "https://signoz.example.com/mcp", token: { kind: "secret", source: "generated", key: "SIGNOZ_MCP_TOKEN" } },
+    ]);
+});
+
+test("a workspace without tools emits no tools input (preview-only runners are unchanged)", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        workspaces: [{ id: "workspace", on: "host", expose: "cf" }],
+        backings: [],
+        apps: [],
+    };
+    expect(emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace")?.inputs["tools"]).toBeUndefined();
+});
+
 test("a workspace with platformUrl emits the control-plane inputs (the runner dials back with RUNNER_TOKEN)", () => {
     const intent: IntentSet = {
         hosts: [host],

@@ -2,7 +2,26 @@ import { expect, test } from "vitest";
 import type { AgentEvent, AgentRequest } from "./agent.js";
 import { createDaemon, type DaemonDeps } from "./daemon.js";
 import type { DevServer } from "./dev-server.js";
+import type { AgentTool } from "./tools.js";
+import type { ToolsStore } from "./tools-store.js";
 import { workspacePaths } from "./workspace.js";
+
+// An in-memory external-tools store so the daemon's tool routes + turn merge are testable without the fs.
+const memoryToolsStore = (initial: AgentTool[] = []): ToolsStore => {
+    let tools = [...initial];
+    return {
+        list: async () => tools,
+        add: async (tool) => {
+            tools = [...tools.filter((existing) => existing.name !== tool.name), tool];
+        },
+        remove: async (name) => {
+            const next = tools.filter((tool) => tool.name !== name);
+            const existed = next.length !== tools.length;
+            tools = next;
+            return existed;
+        },
+    };
+};
 
 const fakeDevServer = (status: Awaited<ReturnType<DevServer["status"]>>): DevServer => ({
     start: () => {},
@@ -67,14 +86,82 @@ test("POST /agent resolves the oauth token from the sandbox store (not the body)
             },
         }),
     );
-    await app.request("/agent", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: "do it", sessionId: "s1", model: "opus" }),
-    });
+    // Drain the SSE stream (as the platform relay does) so the turn completes before we inspect the request.
+    await (
+        await app.request("/agent", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ prompt: "do it", sessionId: "s1", model: "opus" }),
+        })
+    ).text();
     expect(seen?.oauthToken).toBe("tok-xyz");
     expect(seen?.model).toBe("opus");
     expect(seen?.sessionId).toBe("s1");
+});
+
+test("POST /agent merges internal (env) tools with the sandbox's stored external tools for the turn", async () => {
+    let seen: AgentRequest | undefined;
+    const app = createDaemon(
+        deps({
+            tools: [{ name: "obs", url: "https://signoz.example.com/mcp", token: "internal" }],
+            externalTools: memoryToolsStore([{ name: "linear", url: "https://mcp.linear.app/sse", token: "external" }]),
+            agent: async function* (request) {
+                seen = request;
+                yield { kind: "done" } as AgentEvent;
+            },
+        }),
+    );
+    await (
+        await app.request("/agent", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ prompt: "do it" }),
+        })
+    ).text();
+    // Internal first, then external (last-wins on name collisions).
+    expect(seen?.tools).toEqual([
+        { name: "obs", url: "https://signoz.example.com/mcp", token: "internal" },
+        { name: "linear", url: "https://mcp.linear.app/sse", token: "external" },
+    ]);
+});
+
+test("the external-tools routes add / list (token-free) / delete against the sandbox store", async () => {
+    const store = memoryToolsStore();
+    const app = createDaemon(deps({ externalTools: store }));
+
+    const add = await app.request("/workspace/tools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "linear", url: "https://mcp.linear.app/sse", token: "lin_tok" }),
+    });
+    expect(add.status).toBe(200);
+
+    // The token is never returned — it stays in the sandbox; the list only reports presence.
+    const list = await (await app.request("/workspace/tools")).json();
+    expect(list).toEqual({ tools: [{ name: "linear", url: "https://mcp.linear.app/sse", hasToken: true }] });
+
+    const del = await app.request("/workspace/tools/linear", { method: "DELETE" });
+    expect(del.status).toBe(200);
+    expect(await (await app.request("/workspace/tools")).json()).toEqual({ tools: [] });
+
+    // Deleting an unknown tool is a 404.
+    expect((await app.request("/workspace/tools/ghost", { method: "DELETE" })).status).toBe(404);
+});
+
+test("POST /workspace/tools rejects an invalid tool name and a bad URL", async () => {
+    const app = createDaemon(deps({ externalTools: memoryToolsStore() }));
+    const badName = await app.request("/workspace/tools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "../evil", url: "https://x/mcp" }),
+    });
+    expect(badName.status).toBe(400);
+    const badUrl = await app.request("/workspace/tools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "ok", url: "not-a-url" }),
+    });
+    expect(badUrl.status).toBe(400);
 });
 
 test("POST /agent omits the oauth token when no account is connected (SDK falls back to container env)", async () => {
@@ -212,12 +299,12 @@ test("PUT /git/:repo/file writes a contained file and rejects a path escape", as
     expect(ok.status).toBe(200);
     expect(writes).toEqual([{ path: "/work/intent/deploy.config.ts", content: "next" }]);
 
-    const escape = await app.request("/git/intent/file", {
+    const escapeRes = await app.request("/git/intent/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ path: "../escape", content: "x" }),
     });
-    expect(escape.status).toBe(400);
+    expect(escapeRes.status).toBe(400);
     expect(writes).toHaveLength(1);
 });
 
@@ -246,6 +333,8 @@ test("GET /workspace/file reads any contained file, denies secrets, 404s missing
     // The secret denylist short-circuits before the read, even though files.read would return the contents.
     expect((await app.request("/workspace/file?path=desired-state/.env")).status).toBe(404);
     expect((await app.request("/workspace/file?path=.intentic/claude.json")).status).toBe(404);
+    // External-tool tokens live in .intentic/tools.json — also denied to the agent's file view.
+    expect((await app.request("/workspace/file?path=.intentic/tools.json")).status).toBe(404);
     expect((await app.request("/workspace/file?path=app/nope.ts")).status).toBe(404);
     expect((await app.request("/workspace/file?path=../../etc/passwd")).status).toBe(400);
 });

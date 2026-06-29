@@ -1,8 +1,13 @@
+import { createHash } from "node:crypto";
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshExecutor, SshSession } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
+
+// One agent MCP tool, resolved: a remote endpoint reached by URL with a scoped bearer. The engine resolves
+// the token secret before this provider runs, so `token` is the concrete string here.
+const toolSchema = z.object({ name: z.string(), url: z.string(), token: z.string() });
 
 const workspaceSchema = sshSchema.extend({
     internalIp: z.string(),
@@ -17,11 +22,19 @@ const workspaceSchema = sshSchema.extend({
     runnerToken: z.string().optional(),
     // Anthropic-compatible base URL the runner exports as ANTHROPIC_BASE_URL into each sandbox; absent ⇒ cloud.
     agentBaseUrl: z.string().optional(),
+    // The agent's MCP tools (intent-declared internal services); forwarded into each sandbox as the agent's
+    // remote MCP servers. Absent ⇒ no tools.
+    tools: z.array(toolSchema).optional(),
 });
 type WorkspaceInputs = z.infer<typeof workspaceSchema>;
 const parse = (inputs: ResolvedInputs): WorkspaceInputs => parseInputs(workspaceSchema, inputs, "workspace");
 
 const CONTAINER = "intentic-runner";
+
+// A stable digest of the resolved tools, stamped as a container label so a tools change (not just an image
+// bump) triggers a recreate. Empty when no tools are wired.
+const toolsDigest = (tools: WorkspaceInputs["tools"]): string =>
+    tools === undefined || tools.length === 0 ? "" : createHash("sha256").update(JSON.stringify(tools)).digest("hex").slice(0, 16);
 
 const internalUrl = (parsed: WorkspaceInputs): string => `http://${parsed.internalIp}:${parsed.previewPort}`;
 const outputsFor = (parsed: WorkspaceInputs): Record<string, unknown> => ({
@@ -37,6 +50,12 @@ const running = async (session: SshSession): Promise<boolean> => {
 
 const runningImage = async (session: SshSession): Promise<string> => {
     const result = await session.exec(`docker inspect --format '{{.Config.Image}}' ${CONTAINER} 2>/dev/null || true`);
+    return result.stdout.trim();
+};
+
+// The tools digest stamped on the running container (empty when the label is absent — e.g. a pre-tools runner).
+const runningToolsDigest = async (session: SshSession): Promise<string> => {
+    const result = await session.exec(`docker inspect --format '{{index .Config.Labels "intentic.tools"}}' ${CONTAINER} 2>/dev/null || true`);
     return result.stdout.trim();
 };
 
@@ -58,18 +77,26 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
             if (!(await running(session))) {
                 return undefined;
             }
-            return { outputs: outputsFor(parsed), detail: { image: await runningImage(session) } };
+            return { outputs: outputsFor(parsed), detail: { image: await runningImage(session), tools: await runningToolsDigest(session) } };
         } finally {
             await session.dispose();
         }
     },
-    // Recreate on a runner-image bump (the container is stateless — it reconstructs sandboxes on demand).
+    // Recreate on a runner-image bump or an agent-tools change (the container is stateless — it reconstructs
+    // sandboxes on demand, and each new sandbox picks up the forwarded tools).
     diff: (inputs, observed) => {
         const parsed = parse(inputs);
         if (observed.detail?.["image"] !== parsed.image) {
             return {
                 action: "update",
                 reason: `workspace runner image differs (running ${String(observed.detail?.["image"])}, want ${parsed.image})`,
+            };
+        }
+        const wantTools = toolsDigest(parsed.tools);
+        if (observed.detail?.["tools"] !== wantTools) {
+            return {
+                action: "update",
+                reason: `workspace agent tools changed (running ${String(observed.detail?.["tools"])}, want ${wantTools})`,
             };
         }
         return { action: "noop" };
@@ -89,15 +116,22 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
                     : ``;
             // Forwarded into each sandbox the runner spawns, so the agent talks to a custom Anthropic endpoint.
             const agentEnv = parsed.agentBaseUrl !== undefined ? ` -e ANTHROPIC_BASE_URL=${parsed.agentBaseUrl}` : ``;
+            // The agent's MCP tools, base64-encoded so the JSON (quotes/braces) rides the docker `-e` cleanly
+            // through the SSH command. The runner forwards it into each sandbox, which decodes + connects.
+            const digest = toolsDigest(parsed.tools);
+            const toolsEnv =
+                parsed.tools !== undefined && parsed.tools.length > 0
+                    ? ` -e INTENTIC_AGENT_TOOLS=${Buffer.from(JSON.stringify(parsed.tools)).toString("base64")}`
+                    : ``;
             const run = await session.exec(
                 // --user root: the runner manages sandboxes through the mounted docker socket (its default
                 // non-root user gets "permission denied" on /var/run/docker.sock). The preview port is published
                 // so cloudflared (--network host) reaches it at the host-internal ip; the runner is also on the
-                // shared network to resolve sandbox container names.
-                `docker run -d --restart unless-stopped --user root --name ${CONTAINER} --label intentic.id=${ctx.id} ` +
+                // shared network to resolve sandbox container names. The tools digest label drives recreate-on-change.
+                `docker run -d --restart unless-stopped --user root --name ${CONTAINER} --label intentic.id=${ctx.id} --label intentic.tools=${digest} ` +
                     `-p ${parsed.previewPort}:${parsed.previewPort} --network ${parsed.network} ` +
                     `-v /var/run/docker.sock:/var/run/docker.sock ` +
-                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage}${channelEnv}${agentEnv} ${parsed.image}`,
+                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage}${channelEnv}${agentEnv}${toolsEnv} ${parsed.image}`,
             );
             if (run.code !== 0) {
                 throw new Error(`failed to start workspace runner on host: exited ${run.code}: ${run.stderr.trim()}`);

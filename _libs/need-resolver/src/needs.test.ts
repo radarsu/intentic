@@ -49,3 +49,31 @@ test("multiple apps collapse to one set of needs on the shared host and cloud", 
 test("no apps derive no needs", () => {
     expect(resolveNeeds({ hosts: [], users: [], teams: [], apps: [], services: [], workspaces: [], backings: [] })).toEqual([]);
 });
+
+test("a workspace tool must reference a declared service", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        workspaces: [{ id: "workspace", on: "host", expose: "cf", tools: ["ghost"] }],
+        backings: [],
+        apps: [],
+    };
+    expect(() => resolveNeeds(intent)).toThrow('workspace "workspace" exposes tool "ghost" that is not a declared service');
+});
+
+test("a workspace tool that names a declared service resolves cleanly", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
+        workspaces: [{ id: "workspace", on: "host", expose: "cf", tools: ["obs"] }],
+        backings: [],
+        apps: [],
+    };
+    expect(() => resolveNeeds(intent)).not.toThrow();
+});

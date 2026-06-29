@@ -37,7 +37,8 @@ if (agentBaseUrl !== undefined && agentBaseUrl !== "") {
 }
 // SELF_HOST_USER rides along when connect.sh wired this machine as a deploy target: the sandbox exposes it via
 // /self-host so the platform registers the `self` inventory host that HOST_SSH_KEY authenticates.
-for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN", "SELF_HOST_USER"]) {
+// INTENTIC_AGENT_TOOLS carries the intent-declared MCP tools (base64 JSON) the sandbox connects the agent to.
+for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN", "SELF_HOST_USER", "INTENTIC_AGENT_TOOLS"]) {
     const value = process.env[key];
     if (value !== undefined && value !== "") {
         sandboxEnv[key] = value;

@@ -12,15 +12,21 @@ const recordingDocker = (responses: Readonly<Record<string, { stdout?: string; c
     return { docker, calls };
 };
 
-test("inspectContainer reports running state and image", async () => {
-    const { docker } = recordingDocker({
-        "inspect --format {{.State.Running}} {{.Config.Image}} c": { stdout: "true intentic/sandbox:1\n", code: 0 },
-    });
+// The exact `--format` template inspectContainer passes; the fake keys off the joined argv.
+const INSPECT = 'inspect --format {{.State.Running}} {{.Config.Image}} {{with index .Config.Labels "intentic.config"}}{{.}}{{end}} c';
+
+test("inspectContainer reports running state and image (no config label → config omitted)", async () => {
+    const { docker } = recordingDocker({ [INSPECT]: { stdout: "true intentic/sandbox:1\n", code: 0 } });
     expect(await inspectContainer("c", docker)).toEqual({ running: true, image: "intentic/sandbox:1" });
 });
 
+test("inspectContainer surfaces the intentic.config digest label when present", async () => {
+    const { docker } = recordingDocker({ [INSPECT]: { stdout: "true intentic/sandbox:1 abc123\n", code: 0 } });
+    expect(await inspectContainer("c", docker)).toEqual({ running: true, image: "intentic/sandbox:1", config: "abc123" });
+});
+
 test("inspectContainer treats an absent container as not running", async () => {
-    const { docker } = recordingDocker({ "inspect --format {{.State.Running}} {{.Config.Image}} c": { code: 1 } });
+    const { docker } = recordingDocker({ [INSPECT]: { code: 1 } });
     expect(await inspectContainer("c", docker)).toEqual({ running: false });
 });
 

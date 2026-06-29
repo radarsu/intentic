@@ -10,6 +10,8 @@ import { gitClone, gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git.
 import { type IntenticLine, type IntenticRun, runIntentic } from "./intentic-runner.js";
 import { isValidRepoName, listRepos } from "./repos.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions.js";
+import { type AgentTool, isValidToolName } from "./tools.js";
+import { fileToolsStore, type ToolsStore } from "./tools-store.js";
 import { REPO_ROLES, type RepoRole, type WorkspacePaths } from "./workspace.js";
 import { readWorkspaceFile, resolveWithin, writeWorkspaceFile } from "./workspace-files.js";
 import { isDeniedWorkspacePath, type WorkspaceTree, walkWorkspaceTree } from "./workspace-tree.js";
@@ -28,6 +30,12 @@ export interface DaemonDeps {
     readonly devServer: DevServer;
     // Present only when the runner forwarded SELF_HOST_USER (+ HOST_SSH_KEY) into this sandbox.
     readonly selfHost?: SelfHost;
+    // The intent-declared internal MCP tools the runner forwarded (INTENTIC_AGENT_TOOLS). Constant for the
+    // sandbox's life; merged with the sandbox's stored external tools before each agent turn. main.ts decodes them.
+    readonly tools?: readonly AgentTool[];
+    // The sandbox-owned store of user-configured EXTERNAL MCP tools (the platform manages these by relay, never
+    // holding them). Defaults to a JSON file beside the workspace; injected in tests.
+    readonly externalTools?: ToolsStore;
     readonly agent?: (request: AgentRequest) => AsyncIterable<AgentEvent>;
     readonly intentic?: (run: IntenticRun) => AsyncIterable<IntenticLine>;
     // The sandbox-owned Claude credential store (the platform no longer holds the token). Defaults to a JSON
@@ -69,6 +77,8 @@ const agentBody = z.object({
     effort: z.string().optional(),
     thinking: z.boolean().optional(),
 });
+// Add an external MCP tool to the sandbox's own store (the platform relays this; it stores nothing itself).
+const toolBody = z.object({ name: z.string().min(1), url: z.string().url(), token: z.string().optional() });
 // The platform UI relays the Claude OAuth handshake to the sandbox, which stores the resulting tokens; the
 // verifier/state round-trip through the browser (public client), so the sandbox keeps no pending-auth state.
 const claudeExchangeBody = z.object({ code: z.string().min(1), verifier: z.string().min(1), state: z.string().min(1) });
@@ -102,6 +112,7 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
     const workspaceTree = deps.workspaceTree ?? ((root) => walkWorkspaceTree(root));
     const sessions = deps.sessions ?? { list: (dir) => listWorkspaceSessions(dir), read: (dir, id) => readWorkspaceSession(dir, id) };
     const claudeStore = deps.claudeStore ?? fileClaudeStore(join(workspace.root, ".intentic", "claude.json"));
+    const externalTools = deps.externalTools ?? fileToolsStore(join(workspace.root, ".intentic", "tools.json"));
 
     const repoDir = (param: string): string | undefined =>
         (REPO_ROLES as readonly string[]).includes(param) ? workspace.repos[param as RepoRole] : undefined;
@@ -132,6 +143,9 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
                 await stream.writeSSE({ data: JSON.stringify({ kind: "done" } satisfies AgentEvent) });
                 return;
             }
+            // Internal (intent-declared, from env) tools first, then external (the sandbox's own store) — a
+            // same-named external tool overrides, matching mcpServersOf's last-wins merge.
+            const tools: AgentTool[] = [...(deps.tools ?? []), ...(await externalTools.list())];
             const request: AgentRequest = {
                 prompt: parsed.data.prompt,
                 cwd: workspace.root,
@@ -142,6 +156,7 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
                 ...(parsed.data.plan !== undefined ? { plan: parsed.data.plan } : {}),
                 ...(parsed.data.effort !== undefined ? { effort: parsed.data.effort } : {}),
                 ...(parsed.data.thinking !== undefined ? { thinking: parsed.data.thinking } : {}),
+                ...(tools.length > 0 ? { tools } : {}),
             };
             for await (const event of agent(request)) {
                 await stream.writeSSE({ data: JSON.stringify(event) });
@@ -346,6 +361,34 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         await git.clone(workspace.root, parsed.data.name, parsed.data.cloneUrl, parsed.data.branch);
         return c.json({ name: parsed.data.name, path: parsed.data.name });
     });
+
+    // External MCP tools the agent can use (user-configured integrations). The sandbox OWNS these — the
+    // platform manages them by relaying here and stores nothing. GET never returns the token (it stays in the
+    // sandbox); the UI only needs to know a tool exists and whether a token is set.
+    app.get("/workspace/tools", async (c) =>
+        c.json({ tools: (await externalTools.list()).map((tool) => ({ name: tool.name, url: tool.url, hasToken: tool.token !== undefined })) }),
+    );
+
+    app.post("/workspace/tools", async (c) => {
+        const parsed = toolBody.safeParse(await c.req.json().catch(() => undefined));
+        if (!parsed.success) {
+            return c.json({ error: "invalid body" }, 400);
+        }
+        if (!isValidToolName(parsed.data.name)) {
+            return c.json({ error: "invalid tool name (use letters, digits, '-' or '_'; must start alphanumeric)" }, 400);
+        }
+        // Upsert by name: re-posting the same name edits its url/token.
+        await externalTools.add({
+            name: parsed.data.name,
+            url: parsed.data.url,
+            ...(parsed.data.token !== undefined ? { token: parsed.data.token } : {}),
+        });
+        return c.json({ name: parsed.data.name });
+    });
+
+    app.delete("/workspace/tools/:name", async (c) =>
+        (await externalTools.remove(c.req.param("name"))) ? c.json({ ok: true }) : c.json({ error: "no tool with that name" }, 404),
+    );
 
     return app;
 };

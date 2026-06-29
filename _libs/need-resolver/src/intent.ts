@@ -125,6 +125,9 @@ export interface WorkspaceIntent {
     // When set, the runner exports it as ANTHROPIC_BASE_URL into each sandbox so the agent uses a custom
     // (e.g. local) Anthropic-compatible endpoint. Absent ⇒ the agent talks to Anthropic's cloud.
     readonly agentBaseUrl?: string;
+    // The ids of services (i.want.service) exposed to the in-sandbox agent as MCP tools. The resolver wires
+    // each one's MCP endpoint URL + a generated scoped token into the workspace node. Absent ⇒ no tools.
+    readonly tools?: readonly string[];
 }
 
 // hosts/cloudflare may be empty so an app-less intent stays valid; the SDK's `on`/`expose` types guarantee

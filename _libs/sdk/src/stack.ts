@@ -190,6 +190,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
             expose: input.expose.resourceId,
             ...(input.platformUrl !== undefined ? { platformUrl: input.platformUrl } : {}),
             ...(input.agentBaseUrl !== undefined ? { agentBaseUrl: input.agentBaseUrl } : {}),
+            ...(input.tools !== undefined ? { tools: input.tools.map((handle) => handle.resourceId) } : {}),
         });
         return Object.freeze({
             ...makeRef(id),
