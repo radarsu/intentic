@@ -72,7 +72,7 @@ export const IMAGES = Object.freeze({
     // tenant hosts can pull them. (sandbox is tag-only until its first nested publish — pin its digest then and
     // drop the FIRST_PARTY exemption in images.test.ts.)
     // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/runner
-    runner: "ghcr.io/radarsu/intentic/runner:0.1.0@sha256:1f147f3716f4ea05bbb9a456d538d55d645835e1529b8b07548858be12f6b26f",
+    runner: "ghcr.io/radarsu/intentic/runner:0.1.0@sha256:2cc116c3bb5826a035a5add7388ae4a89545b25a0bf3fa8de32924f542cac86e",
     // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
     sandbox: "ghcr.io/radarsu/intentic/sandbox:0.1.0",
 } as const);
