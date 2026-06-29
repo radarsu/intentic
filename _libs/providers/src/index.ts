@@ -1,7 +1,7 @@
 export { createAuthentikProvider } from "./authentik.js";
 export { type AuthentikApi, authentikApi } from "./authentik-api.js";
 export { createAuthentikClientProvider } from "./authentik-client.js";
-export { createBackupProvider } from "./backup.js";
+export { createBackupProvider, isLocalRepo } from "./backup.js";
 export { type RestoreArgs, type RestoreScope, restoreBackup } from "./backup-restore.js";
 export { createCfRouteProvider } from "./cf-route.js";
 export { createCiProvider } from "./ci.js";
@@ -32,6 +32,7 @@ export { createKomodoProvider } from "./komodo.js";
 export type { AlerterConfig, AlerterEndpoint, DeploymentConfig, KomodoApi, KomodoResource, ResourceTarget } from "./komodo-api.js";
 export { komodoApi } from "./komodo-api.js";
 export { createKomodoNotifyProvider } from "./komodo-notify.js";
+export { managedContainers, quiesceHost, snapshotNow, streamRepoVolume } from "./migrate-host.js";
 export type { ProviderDeps } from "./providers.js";
 export { createProviders } from "./providers.js";
 export { createRepoProvider } from "./repo.js";

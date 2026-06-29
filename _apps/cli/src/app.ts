@@ -1,9 +1,20 @@
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { createStore, type PruneOutcome, plan, prune, reconcile, resolveInputs } from "@intentic/engine";
-import { createProviders, createSshExecutor, createSshProbe, forgejoApi, hostTarget, type RestoreScope, restoreBackup } from "@intentic/providers";
+import { applyMoves, createStore, type PruneOutcome, plan, prune, reconcile, resolveInputs, rewriteGraphForMoves } from "@intentic/engine";
+import type { DesiredStateGraph } from "@intentic/graph";
+import {
+    createProviders,
+    createSshExecutor,
+    createSshProbe,
+    forgejoApi,
+    hostTarget,
+    type RestoreScope,
+    restoreBackup,
+    type SshExecutor,
+} from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
 import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
@@ -17,6 +28,7 @@ import {
     setRepoSecrets,
     writeControlPlaneWorkflows,
 } from "./adopt-pipelines.js";
+import { acquireApplyLock } from "./apply-lock.js";
 import {
     ACCESS_FILE,
     ARTIFACT_FILE,
@@ -38,13 +50,43 @@ import { collectDeployments } from "./deployments.js";
 import { ensureGeneratedSecrets, readGeneratedSecrets } from "./generated-secrets.js";
 import { scaffold } from "./init.js";
 import { createKnownHostsStore } from "./known-hosts.js";
+import { detectHostMoves, migrateHosts } from "./migrate.js";
 import { createOutput, outputMode } from "./output.js";
 import { discoverZone, loadIntent } from "./resolve.js";
+import { createHostSecretStore, createLayeredSecretStore, createLocalSecretStore, type SecretStore } from "./secret-store.js";
 import { collectSecrets, writeEnvExample } from "./secrets.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 const DEFAULT_MAX_ITERATIONS = 5;
+
+// The generated secrets (Forgejo/Komodo admin passwords) are control-plane secrets whose authoritative home is
+// the control-plane host — the host the Forgejo node runs on (its `server` ref). Anchoring there lets every
+// operator share one value instead of minting its own laptop-local one (which would leave whoever didn't
+// bootstrap unable to authenticate). The host node's inputs are pure SSH creds, so they resolve before the
+// generated secrets exist — resolving the Forgejo node itself would need those very secrets. Falls back to the
+// local cache alone when there is no Forgejo node or its host can't be found. `backfill` reconciles the layers
+// (promote a locally-minted value to the host, mirror the host value back to a fresh operator's local cache);
+// it is OFF for read-only commands so they never mutate a store.
+const generatedSecretStore = (
+    graph: DesiredStateGraph,
+    dir: string,
+    ssh: SshExecutor,
+    backfill: boolean,
+    log: (message: string) => void,
+): SecretStore => {
+    const local = createLocalSecretStore(dir);
+    const forgejo = Object.values(graph.resources).find((node) => node.type === "forgejo");
+    const serverRef = forgejo?.inputs["server"];
+    const hostId =
+        typeof serverRef === "object" && serverRef !== null && "$ref" in serverRef ? (serverRef as { readonly $ref: string }).$ref : undefined;
+    const hostNode = hostId !== undefined ? graph.resources[hostId] : undefined;
+    if (hostNode === undefined) {
+        return local;
+    }
+    const target = hostTarget(resolveInputs(hostNode.inputs, createStore(), process.env, { lenient: false }));
+    return createLayeredSecretStore([createHostSecretStore(target, ssh), local], { backfill, log });
+};
 
 const init = buildCommand<{ dir?: string; link: boolean; app?: string }>({
     docs: { brief: "Scaffold local intent, desired-state, and app git repos" },
@@ -106,7 +148,7 @@ const resolveCommand = buildCommand<ResolveFlags>({
             out.text(`set these in ${ENV_FILE} before apply (see ${ENV_FILE}.example): ${envKeys.join(", ")}`);
         }
         if (generated.length > 0) {
-            await ensureGeneratedSecrets(dir, generated, process.env);
+            await ensureGeneratedSecrets(createLocalSecretStore(dir), generated, process.env);
             out.text(`generated these (stored in .secrets.json): ${generated.join(", ")}`);
         }
         let synced: { readonly pushed: readonly string[]; readonly newEnv: readonly string[] } | undefined;
@@ -146,8 +188,10 @@ const planCommand = buildCommand<{ artifact?: string }>({
         const dir = dirname(artifact);
         loadEnvFile(dir);
         const graph = await readArtifact(artifact);
-        await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
         const ssh = createSshExecutor(createKnownHostsStore(dir));
+        // Read-only command: read generated secrets from the host-authoritative store (no backfill — plan never
+        // mutates a store), falling back to the local cache when the host is unreachable.
+        await ensureGeneratedSecrets(generatedSecretStore(graph, dir, ssh, false, out.log), collectSecrets(graph).generated, process.env);
         const outcome = await plan(graph, { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent });
         for (const step of outcome.steps) {
             out.text(`${step.action}\t${step.type}\t${step.id}${step.reason !== undefined ? `\t(${step.reason})` : ""}`);
@@ -187,16 +231,21 @@ const apply = buildCommand<ApplyFlags>({
         const dir = dirname(artifact);
         loadEnvFile(dir);
         const graph = await readArtifact(artifact);
-        await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
         const ssh = createSshExecutor(createKnownHostsStore(dir));
+        // The last successfully-applied artifact: the shared baseline for host-migration detection (a host
+        // whose address changed moved machines) and for prune below. A moved host is migrated before reconcile
+        // so its data lands on the new machine; its old machine is also locked so no concurrent run mutates it.
+        const previousPath = flags.previous ?? join(dir, LAST_APPLIED_FILE);
+        const previous = existsSync(previousPath) ? await readArtifact(previousPath) : undefined;
+        const hostMoves = previous !== undefined ? detectHostMoves(previous, graph) : [];
         // Readiness gates target host-internal urls (http://<internalIp>:<port>) reachable only from the host
         // itself, never from this CLI process. Build SSH probes from every host node in the graph so apply
         // gates on each host's own view; resolveInputs substitutes SSH_KEY secrets from the env loaded above.
         // The composite probe tries each host until one can reach the URL (the wrong host simply fails wget).
-        const hostNodes = Object.values(graph.resources).filter((node) => node.type === "host");
-        const probes = hostNodes.map((node) =>
-            createSshProbe(hostTarget(resolveInputs(node.inputs, createStore(), process.env, { lenient: false })), ssh),
-        );
+        const targets = Object.values(graph.resources)
+            .filter((node) => node.type === "host")
+            .map((node) => hostTarget(resolveInputs(node.inputs, createStore(), process.env, { lenient: false })));
+        const probes = targets.map((target) => createSshProbe(target, ssh));
         const probe =
             probes.length === 0
                 ? undefined
@@ -208,66 +257,111 @@ const apply = buildCommand<ApplyFlags>({
                       }
                       return false;
                   };
-        const result = await reconcile(
-            graph,
-            { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent, ...(probe !== undefined ? { probe } : {}) },
-            { maxIterations: flags.maxIterations ?? DEFAULT_MAX_ITERATIONS },
+        // Serialize this apply (and the prune that follows) against every host the graph touches, so a
+        // concurrent run cannot interleave mutations. Released in `finally`; a hard crash leaves the lock to
+        // free via its TTL. A SIGINT/SIGTERM handler releases on Ctrl-C before exiting.
+        // Lock every host the graph touches PLUS the old machine of any moved host, so neither end of a
+        // migration can be mutated by a concurrent run.
+        const oldMoveTargets = hostMoves.map((move) =>
+            hostTarget(resolveInputs(move.oldNode.inputs, createStore(), process.env, { lenient: false })),
         );
-        await writeStatus(join(dir, STATUS_FILE), {
-            converged: result.converged,
-            iterations: result.iterations,
-            steps: result.outcome.steps,
-        });
-        // Prune AFTER convergence (reconcile throws if it never converges, so a failed apply never deletes):
-        // tear down every resource in the last successfully-applied artifact that the new one no longer
-        // declares. Deletes need the kept platform nodes' creds, hence the same providers/env as the apply.
-        // When --previous isn't explicit, auto-read the .last-applied.json snapshot from the last successful run.
-        const previousPath = flags.previous ?? join(dir, LAST_APPLIED_FILE);
-        let pruned: PruneOutcome = { deleted: [], skipped: [] };
-        if (existsSync(previousPath)) {
-            const previous = await readArtifact(previousPath);
-            pruned = await prune(previous, graph, { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent, env: process.env });
-            if (pruned.deleted.length > 0 || pruned.skipped.length > 0) {
-                out.text(`pruned ${pruned.deleted.length} resource(s)${pruned.skipped.length > 0 ? `, ${pruned.skipped.length} left in place` : ""}`);
+        const lock = await acquireApplyLock(ssh, [...targets, ...oldMoveTargets], { log: out.log });
+        const onSignal = (): void => {
+            void lock.release().finally(() => process.exit(130));
+        };
+        process.once("SIGINT", onSignal);
+        process.once("SIGTERM", onSignal);
+        try {
+            // Mint/read generated secrets UNDER the lock, against the host-authoritative store (backfill on, so a
+            // value minted locally before the host existed is promoted to it). Under the lock this is the only
+            // run minting, so two operators can never bake divergent admin passwords into Forgejo/Komodo.
+            await ensureGeneratedSecrets(generatedSecretStore(graph, dir, ssh, true, out.log), collectSecrets(graph).generated, process.env);
+            // A host whose address changed moved machines: snapshot the old host and stream its data to the new
+            // one BEFORE reconcile, so its services come up on the new machine atop migrated data, not an empty
+            // disk. RESTIC_PASSWORD is in env now (ensureGeneratedSecrets above), so restore decrypts the repo.
+            if (hostMoves.length > 0) {
+                await migrateHosts(hostMoves, { next: graph, ssh, env: process.env, tmpDir: tmpdir(), log: out.log });
             }
-        }
-        // Snapshot the current artifact so the next apply can prune against it.
-        await writeFile(join(dir, LAST_APPLIED_FILE), await readFile(artifact, "utf8"));
-        const access = collectAccess(graph, result.outcome.outputs, process.env);
-        out.text(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
-        if (access.length > 0) {
-            await writeAccessFile(join(dir, ACCESS_FILE), access);
-            out.text(formatAccessSummary(access));
-        }
-        out.result({
-            converged: result.converged,
-            iterations: result.iterations,
-            steps: result.outcome.steps,
-            outputs: result.outcome.outputs,
-            orphans: result.outcome.orphans,
-            pruned,
-            access,
-        });
-        // Post a reconcile summary to the Discord #reconcile channel if the graph has a discord resource.
-        const reconcileWebhook = result.outcome.outputs["discord"]?.["reconcileWebhook"];
-        if (typeof reconcileWebhook === "string" && reconcileWebhook !== "") {
-            const creates = result.outcome.steps.filter((s) => s.action === "create").length;
-            const updates = result.outcome.steps.filter((s) => s.action === "update").length;
-            const noops = result.outcome.steps.filter((s) => s.action === "noop").length;
-            const summary = [
-                `**intentic apply** — ${result.converged ? "✅ converged" : "⚠️ did not converge"} in ${result.iterations} iteration(s)`,
-                `📊 ${result.outcome.steps.length} resources: ${creates} created, ${updates} updated, ${noops} unchanged`,
-                ...(result.outcome.orphans.length > 0 ? [`🗑️ ${result.outcome.orphans.length} orphan(s) detected`] : []),
-            ].join("\n");
-            try {
-                await fetch(reconcileWebhook, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content: summary }),
-                });
-            } catch {
-                out.log("discord: failed to post reconcile summary (non-fatal)");
+            // Consume any authored renames BEFORE reconcile: re-stamp each moved resource in place so reconcile
+            // sees it as already-present (a noop) instead of orphaning the old id and recreating the new one.
+            const movedApplied = await applyMoves(graph, {
+                providers: createProviders({ ssh }),
+                log: out.log,
+                onEvent: out.onEvent,
+                env: process.env,
+            });
+            const result = await reconcile(
+                graph,
+                { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent, ...(probe !== undefined ? { probe } : {}) },
+                { maxIterations: flags.maxIterations ?? DEFAULT_MAX_ITERATIONS },
+            );
+            await writeStatus(join(dir, STATUS_FILE), {
+                converged: result.converged,
+                iterations: result.iterations,
+                steps: result.outcome.steps,
+            });
+            // Prune AFTER convergence (reconcile throws if it never converges, so a failed apply never deletes):
+            // tear down every resource in the last successfully-applied artifact that the new one no longer
+            // declares. Deletes need the kept platform nodes' creds, hence the same providers/env as the apply.
+            // When --previous isn't explicit, auto-read the .last-applied.json snapshot from the last successful run.
+            let pruned: PruneOutcome = { deleted: [], skipped: [] };
+            if (previous !== undefined) {
+                // Prune is the destructive phase: push the takeover deadline out for a long apply, then confirm
+                // we still hold every lock before deleting anything (abort if another run took over).
+                await lock.renew();
+                await lock.verify();
+                // Rewrite the baseline for in-place renames so prune treats a moved id as "became", not
+                // "removed" — otherwise it would delete the resource we just re-stamped.
+                const baseline = rewriteGraphForMoves(previous, movedApplied);
+                pruned = await prune(baseline, graph, { providers: createProviders({ ssh }), log: out.log, onEvent: out.onEvent, env: process.env });
+                if (pruned.deleted.length > 0 || pruned.skipped.length > 0) {
+                    out.text(
+                        `pruned ${pruned.deleted.length} resource(s)${pruned.skipped.length > 0 ? `, ${pruned.skipped.length} left in place` : ""}`,
+                    );
+                }
             }
+            // Snapshot the current artifact so the next apply can prune against it.
+            await writeFile(join(dir, LAST_APPLIED_FILE), await readFile(artifact, "utf8"));
+            const access = collectAccess(graph, result.outcome.outputs, process.env);
+            out.text(`${result.converged ? "converged" : "did not converge"} in ${result.iterations} iteration(s)`);
+            if (access.length > 0) {
+                await writeAccessFile(join(dir, ACCESS_FILE), access);
+                out.text(formatAccessSummary(access));
+            }
+            out.result({
+                converged: result.converged,
+                iterations: result.iterations,
+                steps: result.outcome.steps,
+                outputs: result.outcome.outputs,
+                orphans: result.outcome.orphans,
+                pruned,
+                access,
+            });
+            // Post a reconcile summary to the Discord #reconcile channel if the graph has a discord resource.
+            const reconcileWebhook = result.outcome.outputs["discord"]?.["reconcileWebhook"];
+            if (typeof reconcileWebhook === "string" && reconcileWebhook !== "") {
+                const creates = result.outcome.steps.filter((s) => s.action === "create").length;
+                const updates = result.outcome.steps.filter((s) => s.action === "update").length;
+                const noops = result.outcome.steps.filter((s) => s.action === "noop").length;
+                const summary = [
+                    `**intentic apply** — ${result.converged ? "✅ converged" : "⚠️ did not converge"} in ${result.iterations} iteration(s)`,
+                    `📊 ${result.outcome.steps.length} resources: ${creates} created, ${updates} updated, ${noops} unchanged`,
+                    ...(result.outcome.orphans.length > 0 ? [`🗑️ ${result.outcome.orphans.length} orphan(s) detected`] : []),
+                ].join("\n");
+                try {
+                    await fetch(reconcileWebhook, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: summary }),
+                    });
+                } catch {
+                    out.log("discord: failed to post reconcile summary (non-fatal)");
+                }
+            }
+        } finally {
+            process.removeListener("SIGINT", onSignal);
+            process.removeListener("SIGTERM", onSignal);
+            await lock.release();
         }
     },
 });
@@ -377,7 +471,10 @@ const restore = buildCommand<RestoreFlags>({
         const dir = dirname(artifact);
         loadEnvFile(dir);
         const graph = await readArtifact(artifact);
-        await ensureGeneratedSecrets(dir, collectSecrets(graph).generated, process.env);
+        // Recovery re-applies against the same host, so read the admin passwords from the host-authoritative
+        // store (no backfill — restore reads what's there rather than reconciling layers).
+        const ssh = createSshExecutor(createKnownHostsStore(dir));
+        await ensureGeneratedSecrets(generatedSecretStore(graph, dir, ssh, false, out.log), collectSecrets(graph).generated, process.env);
         const backupNode = Object.values(graph.resources).find((node) => node.type === "backup");
         if (backupNode === undefined) {
             throw new Error("no backup resource in the artifact — declare one with i.have.backup and apply it first");
@@ -413,7 +510,7 @@ const restore = buildCommand<RestoreFlags>({
             snapshot: flags.snapshot ?? "latest",
             scope: scope as RestoreScope,
             log: out.log,
-            executor: createSshExecutor(createKnownHostsStore(dir)),
+            executor: ssh,
         });
         out.result({ snapshot: flags.snapshot ?? "latest", scope });
     },

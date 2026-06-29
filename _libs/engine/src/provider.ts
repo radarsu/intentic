@@ -42,6 +42,15 @@ export interface Provider {
     // absent from the new one, with that node's PREVIOUS resolved inputs. Must be idempotent (the resource
     // may already be gone). A provider without `delete` is left in place and logged (converge-forward).
     readonly delete?: (inputs: ResolvedInputs, ctx: ProviderContext) => Promise<void>;
+    // Optional: rename the live resource currently keyed by `oldId` to the node being reconciled (ctx.id),
+    // PRESERVING its state — so a renamed node is moved in place rather than orphaned + recreated (which for a
+    // stateful resource destroys data). Called once by applyMoves BEFORE reconcile, with the NEW node's inputs
+    // (resolved leniently — refs to not-yet-produced outputs are absent). Must be idempotent (the resource may
+    // already sit at the new id from a prior run). A type without `restamp` cannot rename in place: applyMoves
+    // logs a warning and the rename degrades to prune-old + create-new. Only stamp-keyed resources (whose id is
+    // baked into their on-host identity, e.g. a backing's compose project + volume) need it; resources matched
+    // by an intrinsic key (a DNS hostname, a repo name) reconcile across a node-id rename untouched.
+    readonly restamp?: (oldId: string, inputs: ResolvedInputs, ctx: ProviderContext) => Promise<void>;
 }
 
 // A node whose `type` has no registered provider is a hard error at reconcile time.

@@ -44,6 +44,7 @@ export { formatStamp, parseStamp, STAMP_KEY } from "./stamp.js";
 export type {
     DesiredStateGraph,
     Input,
+    Move,
     RawNode,
     Readiness,
     Ref,

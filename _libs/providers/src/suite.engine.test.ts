@@ -34,6 +34,7 @@ const serviceImages = (yaml: string): Record<string, string> => {
 const fakeSsh = (): SshExecutor => {
     const started = new Set<string>();
     const containerImages = new Map<string, string>();
+    const containerLabels = new Map<string, { schedule: string; repo: string }>();
     const files = new Map<string, string>();
     let tokenPersisted = false;
     let gitTokenPersisted = false;
@@ -76,6 +77,15 @@ const fakeSsh = (): SshExecutor => {
                             .join("\n"),
                     );
                 }
+                // Backup observe: the multi-field inspect (image|schedule|repo) from the container's create-time
+                // labels — distinct from the single-image inspect below, so match it first.
+                const backupInspect = /docker inspect --format '[^']*intentic\.schedule[^']*' (\S+)/.exec(command);
+                if (backupInspect?.[1] !== undefined) {
+                    const name = backupInspect[1];
+                    if (!started.has(name)) return ok("");
+                    const labels = containerLabels.get(name);
+                    return ok(`${containerImages.get(name) ?? ""}|${labels?.schedule ?? ""}|${labels?.repo ?? ""}`);
+                }
                 // Single-container image inspect (forgejo/forgejo-runner/tunnel).
                 const inspect = /docker inspect --format '\{\{\.Config\.Image\}\}' (\S+)/.exec(command);
                 if (inspect?.[1] !== undefined) return ok(containerImages.get(inspect[1]) ?? "");
@@ -88,6 +98,12 @@ const fakeSsh = (): SshExecutor => {
                     started.add(run[1]);
                     const image = /(\S+@sha256:[0-9a-f]+)/.exec(command);
                     if (image?.[1] !== undefined) containerImages.set(run[1], image[1]);
+                    // The backup container carries its schedule/repo as create-time labels (what its observe reads back).
+                    const schedule = /--label "intentic\.schedule=([^"]*)"/.exec(command);
+                    const repo = /--label "intentic\.repo=([^"]*)"/.exec(command);
+                    if (schedule?.[1] !== undefined && repo?.[1] !== undefined) {
+                        containerLabels.set(run[1], { schedule: schedule[1], repo: repo[1] });
+                    }
                     return ok("cid");
                 }
                 if (command.includes("docker compose") && command.includes("up -d")) {
@@ -233,6 +249,7 @@ const fullEnv = {
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
+    RESTIC_PASSWORD: "k",
 };
 
 const buildGraph = () =>
@@ -286,6 +303,7 @@ test("the full provider suite reconciles an app end-to-end, then is idempotent",
             "my-app.production-ci",
             "my-app.production",
             "cf-app-example-com",
+            "host-backup",
             "host-tunnel",
         ].sort(),
     );

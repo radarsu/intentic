@@ -200,4 +200,9 @@ export interface Want {
 export interface Stack {
     readonly have: Have;
     readonly want: Want;
+    // Record a node-id rename: the resource that was `from` is now `to`. Before the next apply, intentic
+    // re-stamps the live resource in place (e.g. migrating a database's volume) instead of destroying the old
+    // and creating the new. Author it alongside the rename and remove it once applied. `to` must be the new id
+    // in the config; `from` must no longer be declared.
+    moved(from: string, to: string): void;
 }

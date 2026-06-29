@@ -10,6 +10,12 @@ export interface SshResult {
 export interface SshSession {
     readonly exec: (command: string) => Promise<SshResult>;
     readonly dispose: () => Promise<void>;
+    // Streamed binary file transfer over SFTP — the real executor only; test fakes may omit. Used to relay a
+    // restic-repo tarball between two hosts THROUGH the CLI during a host migration, where neither host can
+    // reach the other directly (a NAT'd local host opens no inbound ports). Streamed to/from a file, so a
+    // multi-GB repo never buffers in memory the way `exec`'s string-collected stdout would.
+    readonly download?: (remotePath: string, localPath: string) => Promise<void>;
+    readonly upload?: (localPath: string, remotePath: string) => Promise<void>;
 }
 
 export interface SshTarget {
@@ -105,6 +111,28 @@ export const createSshExecutor = (store: HostKeyStore = inMemoryHostKeyStore()):
                                 resolveDispose();
                             });
                             client.end();
+                        }),
+                    // SFTP get/put over the same connection. ssh2 streams the transfer to/from the local path,
+                    // so the bytes never pass through `exec`'s utf8 string sink (which would corrupt binary).
+                    download: (remotePath, localPath) =>
+                        new Promise<void>((resolveTransfer, rejectTransfer) => {
+                            client.sftp((sftpError, sftp) => {
+                                if (sftpError) {
+                                    rejectTransfer(sftpError);
+                                    return;
+                                }
+                                sftp.fastGet(remotePath, localPath, (getError) => (getError ? rejectTransfer(getError) : resolveTransfer()));
+                            });
+                        }),
+                    upload: (localPath, remotePath) =>
+                        new Promise<void>((resolveTransfer, rejectTransfer) => {
+                            client.sftp((sftpError, sftp) => {
+                                if (sftpError) {
+                                    rejectTransfer(sftpError);
+                                    return;
+                                }
+                                sftp.fastPut(localPath, remotePath, (putError) => (putError ? rejectTransfer(putError) : resolveTransfer()));
+                            });
                         }),
                 });
             });

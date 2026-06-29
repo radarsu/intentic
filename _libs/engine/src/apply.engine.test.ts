@@ -8,12 +8,13 @@ import { createFakeProviders } from "./providers/fake.js";
 
 // The full secret set the example declaration references. The host SSH key and Cloudflare API token are
 // secrets; the host address/user are authored literals and the Cloudflare zone/account are discovered, so
-// they are not here.
+// they are not here. RESTIC_PASSWORD is the generated encryption password for the on-by-default backup.
 const fullEnv = {
     HOST_SSH_KEY: "k",
     CLOUDFLARE_API_TOKEN: "k",
     FORGEJO_ADMIN_PASSWORD: "k",
     KOMODO_ADMIN_PASSWORD: "k",
+    RESTIC_PASSWORD: "k",
     STAGING_DATABASE_URL: "k",
     PRODUCTION_DATABASE_URL: "k",
 };
@@ -41,7 +42,7 @@ test("apply creates every resource in dependency order, then is idempotent", asy
     const { providers } = createFakeProviders();
 
     const first = await apply(graph, { providers, env: fullEnv, probe: trueProbe, log: silent });
-    expect(first.steps).toHaveLength(15);
+    expect(first.steps).toHaveLength(16);
     expect(first.steps.every((step) => step.action === "create")).toBe(true);
     expect(first.steps.map((step) => step.id)).toEqual(linearize(graph));
     expect(Object.keys(first.outputs).sort()).toEqual(Object.keys(graph.resources).sort());

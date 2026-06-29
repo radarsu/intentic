@@ -1,10 +1,10 @@
 import { generated, makeRef } from "@intentic/graph";
-import type { HostInput, IntentSet } from "@intentic/need-resolver";
+import type { BackupInput, HostInput, IntentSet } from "@intentic/need-resolver";
 import { controlPlaneHostId } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { resolveApp } from "./app.js";
 import { resolveBacking } from "./backing.js";
-import { resolveBackup } from "./backup.js";
+import { defaultBackupInput, resolveBackup } from "./backup.js";
 import { emitGitHub } from "./emit-github.js";
 import { resolveIdentities } from "./identity.js";
 import { adminUsername, tunnelId, tunnelName } from "./ids.js";
@@ -91,6 +91,10 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         backingById.set(backing.id, { intent: backing, host: host.input });
     }
     const cpHost = hostById.get(cpId)!;
+    // Restic is on-by-default: when the operator declares no i.have.backup(), synthesize a default
+    // destination (on-host repo + generated password) so a snapshot can always be taken and the host-move
+    // path always exists. A declared backup is used verbatim.
+    const backupInput: BackupInput = intent.backup?.input ?? defaultBackupInput();
     const nodes: ResolvedNode[] = [];
 
     // Emit ALL host inventory nodes.
@@ -135,12 +139,9 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
     const serviceIds = new Set(intent.services.map((service) => service.id));
 
     if (intent.apps.length > 0) {
-        // Guarded updates need a restic repo to snapshot into; enabled only when the host opts in AND a
-        // backup destination is declared (the provider reuses its on-host restic.env for the password).
-        const guard =
-            cpHost.input.updatePolicy === "guarded" && intent.backup !== undefined
-                ? { repo: intent.backup.input.repo, resticImage: IMAGES.backup }
-                : undefined;
+        // Guarded updates need a restic repo to snapshot into; enabled when the host opts in (a backup
+        // destination is always present now, the provider reuses its on-host restic.env for the password).
+        const guard = cpHost.input.updatePolicy === "guarded" ? { repo: backupInput.repo, resticImage: IMAGES.backup } : undefined;
         const platform = resolvePlatform(cpId, cloudflare.id, zone, apiToken, cpHost.input, guard);
         nodes.push(...platform.nodes);
         const cpIngress = [...platform.ingress];
@@ -254,11 +255,13 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         }
     }
 
-    // --- Backup on the control-plane host (where Forgejo+Komodo data lives) ---
+    // --- Backup on the control-plane host (where Forgejo+Komodo data lives). On-by-default: emitted for
+    // every control plane so a snapshot can always be taken (and the host-move path always exists), using
+    // the operator's declared destination or the synthesized on-host default. ---
 
-    if (intent.backup !== undefined && intent.apps.length > 0) {
+    if (intent.apps.length > 0) {
         const signozService = intent.services.find((service) => service.kind === "signoz");
-        nodes.push(resolveBackup(cpId, cpHost.input, intent.backup.input, signozService?.id));
+        nodes.push(resolveBackup(cpId, cpHost.input, backupInput, signozService?.id));
     }
 
     // --- One Cloudflare Tunnel per host that has ingress ---

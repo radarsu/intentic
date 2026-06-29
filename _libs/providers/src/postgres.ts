@@ -1,6 +1,6 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { composeDown, composeUp, containerImage, stateDir, waitReady } from "./backing-ssh.js";
+import { composeDown, composeUp, containerImage, restampBacking, stateDir, waitReady } from "./backing-ssh.js";
 import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
 import type { SshSession } from "./ssh.js";
 import { type SshExecutor, sshExecutor } from "./ssh.js";
@@ -107,6 +107,18 @@ export const createPostgresProvider = (executor: SshExecutor = sshExecutor): Pro
         const session = await executor.connect(sshTarget(parsed));
         try {
             await composeDown(session, KIND, ctx.id);
+        } finally {
+            await session.dispose();
+        }
+    },
+    // Inputs are resolved leniently (the new node's internalIp ref is absent), so parse only the SSH block to
+    // connect; the image (a literal) drives the volume-copy container.
+    restamp: async (oldId, inputs, ctx) => {
+        const target = sshTarget(parseInputs(sshSchema, inputs, KIND));
+        const image = typeof inputs["image"] === "string" ? inputs["image"] : "busybox";
+        const session = await executor.connect(target);
+        try {
+            await restampBacking(session, KIND, oldId, ctx.id, image);
         } finally {
             await session.dispose();
         }

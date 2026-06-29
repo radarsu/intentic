@@ -30,6 +30,12 @@ const CRONTAB_FILE = `${STATE_DIR}/crontab`;
 // separator (cron has spaces, the repo may have ":" — neither contains "|").
 const SEP = "|";
 
+// The default on-host restic repo lives in this named volume, mounted into the backup + restore containers
+// at the repo path. A repo path starting with "/" is a restic LOCAL repo (the on-host default); one with a
+// scheme (s3:/b2:/rest:/sftp:) is remote and needs no volume. A host migration streams this volume old->new.
+export const REPO_VOLUME = "intentic-restic-repo";
+export const isLocalRepo = (repo: string): boolean => repo.startsWith("/");
+
 // The volumes backed up, host volume name -> in-container mount path. Komodo's compose prefixes its volumes
 // with the project name; Forgejo's is the single named data volume. SignOz's (large, reconstructable) are
 // added only when opted in.
@@ -61,6 +67,9 @@ const backupScript = (parsed: BackupInputs): string =>
         "# Komodo: logical pg_dump of the FerretDB-backing postgres (matched by its compose labels).",
         "PG=$(docker ps -q -f label=com.docker.compose.project=komodo -f label=com.docker.compose.service=postgres)",
         'if [ -n "$PG" ]; then docker exec "$PG" pg_dump -U komodo -d postgres > "$STAGING/komodo.sql"; else echo "komodo pg_dump skipped"; fi',
+        // The on-host default repo is intentic-owned, so self-init it on first use (idempotent: skip when the
+        // repo config already reads). A remote repo is the operator's — left as-is (they pre-create it).
+        ...(isLocalRepo(parsed.repo) ? [`restic -r "${parsed.repo}" cat config >/dev/null 2>&1 || restic -r "${parsed.repo}" init`] : []),
         `restic -r "${parsed.repo}" backup "$STAGING" /volumes /host-opt-intentic`,
         `restic -r "${parsed.repo}" forget --keep-daily ${parsed.retention.daily} --keep-weekly ${parsed.retention.weekly} --keep-monthly ${parsed.retention.monthly} --prune`,
         "",
@@ -102,6 +111,8 @@ const mountArgs = (parsed: BackupInputs, dockerBin: string): string => {
         "-v /var/run/docker.sock:/var/run/docker.sock",
         `-v ${dockerBin}:/usr/local/bin/docker:ro`,
         volumes,
+        // The on-host default repo's volume, mounted read-write at the repo path so restic can write to it.
+        ...(isLocalRepo(parsed.repo) ? [`-v ${REPO_VOLUME}:${parsed.repo}`] : []),
         "-v /opt/intentic:/host-opt-intentic:ro",
         `-v ${SCRIPT_FILE}:/backup.sh:ro`,
         `-v ${CRONTAB_FILE}:/etc/crontabs/root:ro`,

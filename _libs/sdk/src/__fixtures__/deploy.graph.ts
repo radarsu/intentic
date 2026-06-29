@@ -498,6 +498,30 @@ export const expectedGraph: DesiredStateGraph = {
             },
             dependsOn: ["host-git-org-squad", "host-git-user-dev", "my-app-repo", "host-git"],
         },
+        "host-backup": {
+            id: "host-backup",
+            type: "backup",
+            inputs: {
+                address: "203.0.113.10",
+                user: "deploy",
+                sshKey: {
+                    $secret: {
+                        source: "env",
+                        key: "HOST_SSH_KEY",
+                    },
+                },
+                repo: "/repo",
+                password: {
+                    $secret: {
+                        source: "generated",
+                        key: "RESTIC_PASSWORD",
+                    },
+                },
+                signoz: false,
+                image: "restic/restic:0.19.0@sha256:7f44e0057b82348597568ea209360762d0b38f8e1dbc8ad859661ac1055e45f2",
+            },
+            dependsOn: ["host-git", "host-deploy"],
+        },
         "host-tunnel": {
             id: "host-tunnel",
             type: "tunnel",

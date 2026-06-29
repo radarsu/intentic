@@ -1,7 +1,16 @@
+import { generated } from "@intentic/graph";
 import type { BackupInput, HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { backupId, forgejoId, komodoId } from "./ids.js";
 import { IMAGES } from "./images.js";
+
+// The default backup destination when the operator declares no i.have.backup(): a restic repo on a managed
+// on-host volume (the backup/restore providers mount intentic-restic-repo at this path, recognised as a
+// local repo because it starts with "/") plus an intentic-generated encryption password. Zero external
+// setup, so the migration path always exists — a host move streams this volume old->new. An operator who
+// wants off-host disaster recovery supplies their own repo via i.have.backup({ repo: "s3:…", … }).
+export const DEFAULT_BACKUP_REPO = "/repo";
+export const defaultBackupInput = (): BackupInput => ({ repo: DEFAULT_BACKUP_REPO, password: generated("RESTIC_PASSWORD") });
 
 // The scheduled restic backup for a host: one container that, on the declared cron, takes app-consistent
 // dumps of Forgejo + Komodo (and SignOz when opted in) and pushes them to the operator's restic repo. It is

@@ -1,3 +1,4 @@
+import type { Move } from "@intentic/graph";
 import { makeRef } from "@intentic/graph";
 import type {
     AppIntent,
@@ -65,6 +66,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     const services: ServiceIntent[] = [];
     const workspaces: WorkspaceIntent[] = [];
     const backings: BackingIntent[] = [];
+    const moved: Move[] = [];
     const hosts: HostIntent[] = [];
     // The capability of each declared backing, keyed by its id — so app() can map a `use` handle (an inert
     // ref carrying no runtime capability) back to its BackingCapability for the recorded AppBindingInput.
@@ -81,7 +83,8 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         services: ServiceIntent[];
         workspaces: WorkspaceIntent[];
         backings: BackingIntent[];
-    } = { hosts, users, teams, apps, services, workspaces, backings };
+        moved: Move[];
+    } = { hosts, users, teams, apps, services, workspaces, backings, moved };
 
     const host = (id: string, input: HostInput): Host => {
         claim(id);
@@ -248,9 +251,14 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         return Object.freeze(makeRef(id)) as Team;
     };
 
+    const recordMove = (from: string, to: string): void => {
+        moved.push({ from, to });
+    };
+
     const stack: Stack = {
         have: { host, cloudflare, github, backup, discord },
         want: { app, service, workspace, database, cache, auth, objectStorage, user, team },
+        moved: recordMove,
     };
     return { stack, intent };
 };

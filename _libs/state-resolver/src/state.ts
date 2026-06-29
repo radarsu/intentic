@@ -23,5 +23,7 @@ export const resolveState = (intent: IntentSet, zone?: string, catalog: Catalog 
         }
         byNeed.set(needKey(need), (options[0] as { id: string }).id);
     }
-    return compile(toNodeMap(emit(intent, { byNeed }, zone)));
+    const graph = compile(toNodeMap(emit(intent, { byNeed }, zone)));
+    // Carry the authored renames onto the artifact so apply can reconcile them in place before reconciling.
+    return intent.moved !== undefined && intent.moved.length > 0 ? { ...graph, moved: intent.moved } : graph;
 };

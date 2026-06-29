@@ -1,3 +1,4 @@
+import type { Move } from "@intentic/graph";
 import type {
     AppTeamGrantInput,
     BackupInput,
@@ -134,4 +135,6 @@ export interface IntentSet {
     readonly services: readonly ServiceIntent[];
     readonly workspaces: readonly WorkspaceIntent[];
     readonly backings: readonly BackingIntent[];
+    // Node-id renames to reconcile in place before apply (authored via i.moved).
+    readonly moved?: readonly Move[];
 }

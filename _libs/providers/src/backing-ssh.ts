@@ -54,6 +54,40 @@ export const composeDown = async (session: SshSession, kind: string, id: string)
     await session.exec(`rm -rf ${dir}`);
 };
 
+// Rename a single-volume backing instance in place: oldId → newId, preserving its data. The id is baked into
+// the compose project name, the host state dir, and (via the project prefix) the Docker named volume, so a
+// rename is a migration, not a relabel: stop the old project KEEPING its volume, copy the volume to the new
+// project's name (Docker has no volume rename), move the state dir, and let the next reconcile bring the
+// instance up under the new id against the migrated data. Idempotent: if the new state dir already exists a
+// prior run finished the move. `image` (the instance's own image, already on the host) runs the copy.
+export const restampBacking = async (session: SshSession, kind: string, oldId: string, newId: string, image: string): Promise<void> => {
+    const oldDir = stateDir(kind, oldId);
+    const newDir = stateDir(kind, newId);
+    const oldProject = projectName(kind, oldId);
+    const newProject = projectName(kind, newId);
+    const oldVolume = `${oldProject}_data`;
+    const newVolume = `${newProject}_data`;
+    const script = [
+        "set -e",
+        // Idempotent: the move already completed if the new state dir is in place.
+        `if [ -d ${newDir} ]; then exit 0; fi`,
+        // Stop the old project but KEEP its volume (no -v), tolerating an already-stopped stack.
+        `docker compose -p ${oldProject} --project-directory ${oldDir} --env-file ${oldDir}/.env -f ${oldDir}/compose.yaml down 2>/dev/null || true`,
+        // Migrate the named volume old → new (create + copy + remove), only when the old exists and the new does not.
+        `if docker volume inspect ${oldVolume} >/dev/null 2>&1 && ! docker volume inspect ${newVolume} >/dev/null 2>&1; then`,
+        `  docker volume create ${newVolume} >/dev/null`,
+        `  docker run --rm --entrypoint sh -v ${oldVolume}:/from -v ${newVolume}:/to ${image} -c 'cp -a /from/. /to/'`,
+        `  docker volume rm ${oldVolume} >/dev/null`,
+        "fi",
+        // Move the host-side state dir (compose.yaml + .env/conf) so the next apply finds it under the new id.
+        `if [ -d ${oldDir} ] && [ ! -d ${newDir} ]; then mkdir -p "$(dirname ${newDir})" && mv ${oldDir} ${newDir}; fi`,
+    ].join("\n");
+    const result = await session.exec(script);
+    if (result.code !== 0) {
+        throw new Error(`failed to restamp ${kind} "${oldId}" → "${newId}": exited ${result.code}: ${result.stderr.trim()}`);
+    }
+};
+
 // Poll `probe` (a host-side command returning code 0 when ready) until it passes or the deadline elapses.
 export const waitReady = async (session: SshSession, kind: string, id: string, probe: string, timeoutMs: number): Promise<void> => {
     const deadline = Date.now() + timeoutMs;

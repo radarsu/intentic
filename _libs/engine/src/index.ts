@@ -1,4 +1,5 @@
 export { apply } from "./apply.js";
+export { applyMoves, rewriteGraphForMoves } from "./moves.js";
 export { plan } from "./plan.js";
 export type { DiffResult, Observed, Provider, ProviderContext, Providers } from "./provider.js";
 export type { FakeWorld } from "./providers/fake.js";

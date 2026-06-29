@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SECRETS_FILE } from "./artifact.js";
+import type { SecretStore } from "./secret-store.js";
 
 type MutableEnv = Record<string, string | undefined>;
 
@@ -10,40 +11,34 @@ type MutableEnv = Record<string, string | undefined>;
 // `.env` echo), 128 bits — matching demo.ts's randomBytes(16).toString("hex").
 const generate = (): string => randomBytes(16).toString("hex");
 
-const secretsPath = (dir: string): string => join(dir, SECRETS_FILE);
-
-const readStore = async (path: string): Promise<Record<string, string>> =>
-    existsSync(path) ? (JSON.parse(await readFile(path, "utf8")) as Record<string, string>) : {};
-
 // Ensure every intentic-generated secret has a value. Precedence is ENV-FIRST: an already-set `env[key]` is
-// authoritative and neither reads nor writes `.secrets.json`. This is what lets the apply pipeline run inside
-// Forgejo — it injects the generated secrets (Forgejo/Komodo admin passwords) from Forgejo Actions secrets,
-// where `.secrets.json` does not exist; without env-first, a missing file would mint NEW passwords and lock us
-// out (Forgejo/Komodo bake the password in on first init and will not re-key). When env is unset (local
-// bootstrap) the value is read from `<dir>/.secrets.json` (gitignored), generated + persisted there ONCE and
-// reused forever. The engine then resolves them from `env` like any secret.
-export const ensureGeneratedSecrets = async (dir: string, keys: readonly string[], env: MutableEnv): Promise<void> => {
-    if (keys.length === 0) {
-        return;
-    }
-    const path = secretsPath(dir);
-    const store = await readStore(path);
-    let dirty = false;
+// authoritative and neither reads nor writes the store. This is what lets the apply pipeline run inside Forgejo
+// — it injects the generated secrets (Forgejo/Komodo admin passwords) from Forgejo Actions secrets, where the
+// store does not exist; without env-first, a missing value would mint NEW passwords and lock us out
+// (Forgejo/Komodo bake the password in on first init and will not re-key). When env is unset the value is read
+// from the `store`, generated + persisted there ONCE and reused forever. The engine then resolves them from
+// `env` like any secret. The store decides WHERE the value lives (local cache vs shared host); this policy is
+// identical across backends.
+export const ensureGeneratedSecrets = async (store: SecretStore, keys: readonly string[], env: MutableEnv): Promise<void> => {
     for (const key of keys) {
         if (env[key] !== undefined && env[key] !== "") {
             continue;
         }
-        if (store[key] === undefined) {
-            store[key] = generate();
-            dirty = true;
+        const existing = await store.get(key);
+        if (existing !== undefined) {
+            env[key] = existing;
+            continue;
         }
-        env[key] = store[key];
-    }
-    if (dirty) {
-        await writeFile(path, `${JSON.stringify(store, undefined, 4)}\n`, { mode: 0o600 });
+        const value = generate();
+        await store.set(key, value);
+        env[key] = value;
     }
 };
 
-// Read the generated secrets back (or `{}` if none yet) — for tools that drive the CLI and then need the
-// values, e.g. the demo/e2e signing into the Forgejo/Komodo they just provisioned.
-export const readGeneratedSecrets = (dir: string): Promise<Record<string, string>> => readStore(secretsPath(dir));
+// Read the generated secrets back as a map (or `{}` if none yet) — for tools that drive the CLI and then need
+// the values, e.g. the demo/e2e signing into the Forgejo/Komodo they just provisioned. Always the laptop-local
+// .secrets.json cache, which is what those tools have on hand after an apply.
+export const readGeneratedSecrets = async (dir: string): Promise<Record<string, string>> => {
+    const path = join(dir, SECRETS_FILE);
+    return existsSync(path) ? (JSON.parse(await readFile(path, "utf8")) as Record<string, string>) : {};
+};

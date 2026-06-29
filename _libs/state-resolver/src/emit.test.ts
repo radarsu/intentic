@@ -3,6 +3,7 @@ import type { CloudflareIntent, HostIntent, IntentSet } from "@intentic/need-res
 import { needKey, resolveNeeds } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
 
+import { DEFAULT_BACKUP_REPO } from "./backup.js";
 import { forgejoCatalog } from "./catalog.js";
 import type { Assignment } from "./emit.js";
 import { emit } from "./emit.js";
@@ -62,6 +63,7 @@ test("emit derives the full support stack for a two-environment app", () => {
         "app.production-ci",
         "app.production",
         "cf-app-example-com",
+        "host-backup",
         "host-tunnel",
     ]);
 });
@@ -474,7 +476,7 @@ test("a pinned host (default) leaves the guard inputs off even when a backup is 
     expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBeUndefined();
 });
 
-test("a guarded host WITHOUT a declared backup leaves the guard inputs off (nowhere to snapshot)", () => {
+test("a guarded host WITHOUT a declared backup guards against the default on-host repo (restic is on-by-default)", () => {
     const intent: IntentSet = {
         hosts: [{ id: "host", input: { ...host.input, updatePolicy: "guarded" } }],
         cloudflare,
@@ -486,7 +488,7 @@ test("a guarded host WITHOUT a declared backup leaves the guard inputs off (nowh
         apps: [oneApp],
     };
     const nodes = emit(intent, assign(intent), "example.com");
-    expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBeUndefined();
+    expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBe(DEFAULT_BACKUP_REPO);
 });
 
 test("a workspace-only intent emits the runner node + its wildcard preview route + tunnel, no app platform", () => {

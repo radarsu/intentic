@@ -8,8 +8,9 @@ import { buildAuthorizeUrl, type ClaudeStore, ensureFreshToken, exchangeCode, fi
 import type { DevServer } from "./dev-server.js";
 import { gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git.js";
 import { type IntenticLine, type IntenticRun, runIntentic } from "./intentic-runner.js";
-import { readWorkspaceFile, resolveWithin, writeWorkspaceFile } from "./workspace-files.js";
+import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions.js";
 import { REPO_ROLES, type RepoRole, type WorkspacePaths } from "./workspace.js";
+import { readWorkspaceFile, resolveWithin, writeWorkspaceFile } from "./workspace-files.js";
 
 // The daemon's collaborators, injected so the HTTP wiring is testable without real subprocesses.
 export interface DaemonDeps {
@@ -31,6 +32,12 @@ export interface DaemonDeps {
     readonly files?: {
         readonly read: (absPath: string) => Promise<string | undefined>;
         readonly write: (absPath: string, content: string) => Promise<void>;
+    };
+    // Past-conversation history: the Claude Agent SDK persists sessions on disk keyed by the workspace dir;
+    // the platform relays these for the chat history menu. Injected in tests.
+    readonly sessions?: {
+        readonly list: (dir: string) => Promise<SessionSummary[]>;
+        readonly read: (dir: string, id: string) => Promise<SessionTranscriptMessage[]>;
     };
 }
 
@@ -74,6 +81,7 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         push: (dir, branch) => gitPush(dir, branch),
     };
     const files = deps.files ?? { read: (absPath) => readWorkspaceFile(absPath), write: (absPath, content) => writeWorkspaceFile(absPath, content) };
+    const sessions = deps.sessions ?? { list: (dir) => listWorkspaceSessions(dir), read: (dir, id) => readWorkspaceSession(dir, id) };
     const claudeStore = deps.claudeStore ?? fileClaudeStore(join(workspace.root, ".intentic", "claude.json"));
 
     const repoDir = (param: string): string | undefined =>
@@ -168,6 +176,18 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
             parsed.data.cancelled === true ? { cancelled: true } : { answers: parsed.data.answers ?? {} },
         );
         return resolved ? c.json({ ok: true }) : c.json({ error: "no pending question for that request" }, 404);
+    });
+
+    // Past conversations in this workspace (the SDK-native session store, keyed on the workspace dir), for the
+    // platform's chat history menu. List returns summaries; the :id route restores one transcript for display.
+    app.get("/sessions", async (c) => c.json({ sessions: await sessions.list(workspace.root) }));
+
+    app.get("/sessions/:id", async (c) => {
+        try {
+            return c.json({ messages: await sessions.read(workspace.root, c.req.param("id")) });
+        } catch {
+            return c.json({ error: "session not found" }, 404);
+        }
     });
 
     app.post("/intentic", async (c) => {

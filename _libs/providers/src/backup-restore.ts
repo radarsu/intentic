@@ -1,3 +1,4 @@
+import { isLocalRepo, REPO_VOLUME } from "./backup.js";
 import type { SshExecutor, SshSession, SshTarget } from "./ssh.js";
 import { sshExecutor } from "./ssh.js";
 
@@ -27,7 +28,10 @@ const resticPrefix = (args: RestoreArgs): string => {
     const creds = Object.entries(args.credentials ?? {})
         .map(([key, value]) => `-e ${key}='${value}'`)
         .join(" ");
-    return `docker run --rm -e RESTIC_PASSWORD='${args.password}' ${creds} -v ${RESTORE_VOLUME}:/restore ${args.image} -r '${args.repo}'`;
+    // A local (on-host) repo lives in REPO_VOLUME — mount it at the repo path so restic can read it. The
+    // migration streams that volume onto this host first, so the repo is present before restore runs.
+    const repoMount = isLocalRepo(args.repo) ? `-v ${REPO_VOLUME}:${args.repo} ` : "";
+    return `docker run --rm -e RESTIC_PASSWORD='${args.password}' ${creds} ${repoMount}-v ${RESTORE_VOLUME}:/restore ${args.image} -r '${args.repo}'`;
 };
 
 // Overwrite a host volume from the snapshot's copy of it (the snapshot stored the read-only mount at

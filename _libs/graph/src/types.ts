@@ -66,7 +66,17 @@ export interface ResourceNode {
     readonly readyWhen?: SerializedReadiness;
 }
 
+// A rename: the resource previously addressed as `from` is the same resource now addressed as `to`. Authored
+// when a node id changes, consumed once before reconcile to re-stamp the live resource in place (preserving
+// its data) rather than orphaning the old id and creating the new one from scratch.
+export interface Move {
+    readonly from: string;
+    readonly to: string;
+}
+
 export interface DesiredStateGraph {
     readonly version: 1;
     readonly resources: Readonly<Record<string, ResourceNode>>;
+    // Renames to reconcile before this apply. Optional: most artifacts have none.
+    readonly moved?: readonly Move[];
 }

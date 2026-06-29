@@ -17,11 +17,12 @@ describe("loadIntent", () => {
 
     it("classifies secrets: externals are user-supplied, platform admin secrets are intentic-generated", async () => {
         const graph = resolveState(await loadIntent(example), "example.com");
-        // FORGEJO_ADMIN_PASSWORD / KOMODO_ADMIN_PASSWORD are injected by the resolver's platform layer and
-        // marked generated; the externals stay env (intentic can't invent them).
+        // FORGEJO_ADMIN_PASSWORD / KOMODO_ADMIN_PASSWORD / RESTIC_PASSWORD are injected by the resolver (the
+        // platform layer + the on-by-default backup) and marked generated; the externals stay env (intentic
+        // can't invent them).
         expect(collectSecrets(graph)).toEqual({
             env: ["CLOUDFLARE_API_TOKEN", "HOST_SSH_KEY", "PRODUCTION_DATABASE_URL", "STAGING_DATABASE_URL"],
-            generated: ["FORGEJO_ADMIN_PASSWORD", "KOMODO_ADMIN_PASSWORD"],
+            generated: ["FORGEJO_ADMIN_PASSWORD", "KOMODO_ADMIN_PASSWORD", "RESTIC_PASSWORD"],
         });
     });
 
