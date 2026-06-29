@@ -4,6 +4,88 @@ intentic is **intent-driven deployment**: you declare *what you have* (the host 
 they're exposed through) and *what you want* (apps); the system computes every valid way to satisfy that,
 picks one, and reconciles infrastructure until reality matches.
 
+## System topology & lifecycle
+
+The engine flow below is what runs *inside* one `intentic apply`. At runtime the whole product
+is three tiers: a thin **Platform** (the hub), a per-user **Runner + Sandbox** pair (where the
+agent and the CLI actually run), and the **infrastructure** the sandbox provisions.
+
+```mermaid
+flowchart TB
+    operator(["Operator (browser)"])
+
+    subgraph cloud["Intentic Platform — thin hub"]
+        web["Web UI · Angular"]
+        api["API · Hono / oRPC"]
+        db[("Postgres<br/>auth + connection token only")]
+        web --> api --> db
+    end
+
+    subgraph tenant["Tenant machine — your PC or a server"]
+        runner["Runner<br/>(holds the Docker socket)"]
+        subgraph sandbox["Sandbox — one per user"]
+            agent["Claude agent"]
+            cli["intentic CLI"]
+            repos["repos:<br/>intent · desired-state · app"]
+        end
+        runner -->|spawns + HTTP relay| sandbox
+    end
+
+    subgraph infra["Provisioned infrastructure — one or many hosts"]
+        cp["Control plane<br/>Forgejo (git/registry/CI) · Komodo (deploy)"]
+        appplane["Application plane<br/>apps · backings (db/cache/auth/storage) · extra runners"]
+    end
+
+    operator -->|"sign in (Google), drive UI"| web
+    runner -. "outbound WSS — dials platform, receives relayed commands" .-> api
+    cli ==>|"intentic apply: SSH · Docker · Cloudflare API"| cp
+    cli ==>|reconcile| appplane
+```
+
+- **Platform (thin hub)** — Angular UI + Hono/oRPC API. Persists only the operator's account
+  and one secret-free per-user connection token; it owns no infrastructure and no secrets.
+- **Runner** — one container per tenant machine. Holds the host Docker socket (so it can spawn
+  the sandbox) and **dials the platform outbound over WSS** — no inbound port. Also fronts
+  `*.preview.<zone>` previews.
+- **Sandbox** — one per user. Runs the Claude agent and the `intentic` CLI over the three repos
+  (`intent` = `deploy.config.ts`, the IaC; `desired-state` = resolved artifact + status; `app` =
+  the application code).
+- **Secret-free relay** — the platform relays commands (start sandbox, run agent, run intentic)
+  through the runner to the sandbox daemon; SSH keys, Cloudflare and Claude tokens are passed
+  straight into the sandbox and never reach the platform.
+
+The lifecycle, from first sign-in to a reconciled deployment the operator can watch:
+
+```mermaid
+sequenceDiagram
+    actor U as Operator
+    participant P as Platform
+    participant R as Runner
+    participant S as Sandbox
+    participant I as Infrastructure
+
+    U->>P: Sign in (Google) + open setup
+    P-->>U: curl one-liner + connection token
+    U->>R: curl … | sh   (docker run runner)
+    R->>P: dial WSS gateway (outbound)
+    P-->>U: setup ready
+    P->>R: ensure sandbox
+    R->>S: docker run sandbox (one per user)
+    U->>P: chat / Provision
+    P->>R: relay (agent · intentic)
+    R->>S: HTTP relay
+    S->>I: intentic apply (SSH · Docker · Cloudflare)
+    I-->>S: reconciled state
+    S-->>P: stream events · topology · plan (via runner)
+    P-->>U: visibility: infra, chat, files, deployments
+```
+
+**One image, two ways to start.** The runner that `connect.sh` boots on your PC and the runner
+the `i.want.workspace` provider deploys onto a remote host (over SSH) are the *same image* — the
+local one simply omits the Cloudflare preview tunnel. So the first runner is bootstrapped by
+hand, and every further runner is provisioned by the IaC itself, which is how the system fans
+out to "workers on many machines."
+
 ## The intent-driven flow
 
 ```
