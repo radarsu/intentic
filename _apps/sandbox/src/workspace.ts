@@ -12,8 +12,8 @@ export interface WorkspacePaths {
     readonly repos: Readonly<Record<RepoRole, string>>;
 }
 
-// The on-disk layout the runner clones each repo into before starting the daemon: <root>/<role>. Pure path
-// derivation so the daemon, the runner, and tests all agree on where each repo lives.
+// The on-disk layout each repo is cloned into under <root>/<role>. Pure path derivation so the daemon and
+// tests all agree on where each repo lives.
 export const workspacePaths = (root: string): WorkspacePaths => ({
     root,
     repos: {

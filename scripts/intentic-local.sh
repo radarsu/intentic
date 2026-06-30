@@ -112,7 +112,7 @@ export const intent = defineIntent((i) => {
         apiToken: env("CLOUDFLARE_API_TOKEN"),
     });
 
-    // The AI-agent workspace runner: a containerized dev sandbox for the project's repos, with live previews
+    // The AI-agent workspace: a dev sandbox for the project's repos, with live previews
     // served at the wildcard *.preview.${zone}.
     i.want.workspace("workspace", { on: host, expose: cf });
 
@@ -218,7 +218,7 @@ up() {
     # A re-created host presents fresh keys; drop the trust-on-first-use cache so the new key re-pins cleanly.
     rm -f "$WORKDIR/desired-state/.known-hosts.json"
 
-    log "resolve + apply — Forgejo + Komodo + the workspace runner + the Cloudflare tunnel …"
+    log "resolve + apply — Forgejo + Komodo + the workspace sandbox + the Cloudflare tunnel …"
     intentic resolve --config "$config" --out "$artifact"
     intentic apply --artifact "$artifact" --maxIterations 8
 

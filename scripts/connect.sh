@@ -10,12 +10,12 @@
 # boot the sandbox registers its public URL with the platform's directory, so its setup gate flips to "ready".
 #
 # Usage (env or positional args):
-#   PLATFORM_URL=wss://platform.example/runner/gateway RUNNER_TOKEN=<token> ./connect.sh
+#   PLATFORM_URL=https://platform.example RUNNER_TOKEN=<token> ./connect.sh
 #   ./connect.sh <PLATFORM_URL> <RUNNER_TOKEN>
 #   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.sh | PLATFORM_URL=… RUNNER_TOKEN=… sh
 #
 # Required (env or positional — the platform's setup screen fills these into the one-liner):
-#   PLATFORM_URL         the platform base the sandbox registers back to, e.g. wss://platform.example/runner/gateway
+#   PLATFORM_URL         the platform base the sandbox registers back to, e.g. https://platform.example
 #   RUNNER_TOKEN         the per-project connection token the platform's setup screen shows you
 #   CLOUDFLARE_API_TOKEN a Cloudflare token (Zone:Read, DNS:Edit, Tunnel:Edit) — intentic's reachability fabric
 #   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id; the daemon verifies your browser sign-in against it

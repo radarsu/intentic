@@ -1,8 +1,8 @@
 # The per-project AI-agent sandbox image (published as ghcr.io/radarsu/intentic/sandbox). Build from the REPO
 # ROOT so the monorepo workspace resolves:
 #   docker build -f _apps/sandbox/Dockerfile -t ghcr.io/radarsu/intentic/sandbox .
-# At run time the runner injects agent credentials (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN) and mounts
-# the workspace (the three cloned repos) at /work — neither is baked into the image.
+# At run time connect.sh / the workspace provider inject agent credentials (ANTHROPIC_API_KEY or
+# CLAUDE_CODE_OAUTH_TOKEN) and mount the workspace volume at /work — neither is baked into the image.
 
 FROM node:24.18.0-bookworm@sha256:fdddfb3e688158251943d52eba361de991548f6814007acba4917ae6b512d6be AS build
 ENV PNPM_HOME=/pnpm

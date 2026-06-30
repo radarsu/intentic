@@ -2,8 +2,8 @@
 // decentralized path). The platform is only a directory, never on the command path, so this is best-effort: a
 // failure here must not stop the daemon from serving.
 
-// Derive the platform's HTTP origin from the runner's WSS gateway URL (e.g. wss://host/runner/gateway →
-// https://host). undefined when the URL can't be parsed.
+// Derive the platform's HTTP origin from PLATFORM_URL — the base the sandbox registers against. Normalizes a
+// ws/wss scheme to http/https and strips any path (e.g. https://host/x → https://host). undefined when unparseable.
 export const platformBaseFrom = (platformUrl: string): string | undefined => {
     try {
         const url = new URL(platformUrl);

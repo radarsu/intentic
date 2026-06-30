@@ -53,9 +53,9 @@ export const intent = defineIntent((i) => {
     const auth = i.want.auth("auth", { on: host, expose: cf, domain: "auth.example.com" });
     const store = i.want.objectStorage("store", { on: host, expose: cf, domain: "s3.example.com" });
 
-    // What I want (the AI-agent workspace): a per-host runner that stands up a containerized dev sandbox for
-    // the project's repos and serves live previews. It takes no domain — previews are served at the wildcard
-    // `*.preview.<zone>` derived from the discovered zone. The web UI drives the agent through it.
+    // What I want (the AI-agent workspace): a per-host sandbox for the project's repos that serves live
+    // previews. It takes no domain — previews are served at the wildcard
+    // `*.preview.<zone>` derived from the discovered zone. The browser drives the agent in it directly.
     i.want.workspace("workspace", { on: host, expose: cf });
 
     // Who works on the app: people get a Forgejo git account + a Komodo UI user (each with an intentic-generated

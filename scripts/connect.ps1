@@ -13,10 +13,10 @@
   "ready". Requires Docker Desktop in Linux-containers mode (the sandbox image is Linux).
 
 .EXAMPLE
-  $env:PLATFORM_URL='wss://platform.example/runner/gateway'; $env:RUNNER_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
+  $env:PLATFORM_URL='https://platform.example'; $env:RUNNER_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
 
 .EXAMPLE
-  ./connect.ps1 -PlatformUrl wss://platform.example/runner/gateway -RunnerToken <token>
+  ./connect.ps1 -PlatformUrl https://platform.example -RunnerToken <token>
 #>
 param(
     [string]$PlatformUrl,

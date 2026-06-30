@@ -9,20 +9,21 @@ import { registerWithPlatform } from "./register.js";
 import { internalTools } from "./tools.js";
 import { workspacePaths } from "./workspace.js";
 
-// The sandbox container's entrypoint. Config comes from env the runner sets at `docker run`; the workspace
-// (the three repos) and agent credentials are injected by the runner, never baked in.
+// The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
+// the workspace provider (a server); the workspace (the three repos) and agent credentials are injected there,
+// never baked in.
 const root = process.env["WORKSPACE_ROOT"] ?? "/work";
 const port = Number(process.env["SANDBOX_PORT"] ?? "8787");
-// Binds 0.0.0.0 by default: the sandbox sits on a private, non-host-published docker network, and the runner
-// reaches its daemon by container name across that network. Override with SANDBOX_HOST for local runs.
+// Binds 0.0.0.0 by default: the daemon is reached over the sandbox's Cloudflare tunnel (your PC) or at the
+// host's internal ip (a server) — never a host-published port by default. Override with SANDBOX_HOST for local runs.
 const host = process.env["SANDBOX_HOST"] ?? "0.0.0.0";
 const workspace = workspacePaths(root);
 const devServer = createDevServer();
 
 // First start with an empty workspace: scaffold the three repos (intent / desired-state / app) so chat,
 // inventory, and source-control have something to read, and the dev server has an app to run. Idempotent —
-// skipped once the repos exist. `intentic apply` (run later via the platform's Provision action) reads the
-// infra secrets the runner injected into this container's env.
+// skipped once the repos exist. `intentic apply` (run later via the Provision action) reads the infra secrets
+// set in this container's env (by connect.sh / the workspace provider).
 if (!existsSync(workspace.repos.intent)) {
     process.stdout.write(`intentic sandbox: empty workspace — running intentic init…\n`);
     const init = spawnSync("intentic", ["init", "--dir", root], { stdio: "inherit" });
@@ -37,23 +38,23 @@ if (devCommand !== undefined && devCommand !== "" && devPort !== undefined) {
     devServer.start({ command: devCommand.split(" "), cwd: workspace.repos.app, port: Number(devPort) });
 }
 
-// When the runner forwarded SELF_HOST_USER (+ HOST_SSH_KEY), this sandbox runs on a host wired as a deploy
-// target — expose it so the platform registers the `self` inventory host. address/port are fixed: the sandbox
-// reaches the host it runs on at host.docker.internal:22 (the runner adds the host-gateway mapping).
+// When SELF_HOST_USER (+ HOST_SSH_KEY) is set, this sandbox runs on a host wired as a deploy target — expose
+// it so the `self` inventory host gets registered. address/port are fixed: the sandbox reaches the host it
+// runs on at host.docker.internal:22 (connect.sh / the provider add the host-gateway mapping).
 const selfHostUser = process.env["SELF_HOST_USER"];
 const selfHost =
     selfHostUser !== undefined && selfHostUser !== "" && (process.env["HOST_SSH_KEY"] ?? "") !== ""
         ? { user: selfHostUser, address: "host.docker.internal", port: 22 }
         : undefined;
 
-// The intent-declared internal MCP tools the workspace provider forwarded through the runner (base64 JSON).
-// Constant for this sandbox's life; the daemon merges them with each turn's platform-relayed external tools.
+// The intent-declared internal MCP tools the workspace provider set in this container's env (base64 JSON).
+// Constant for this sandbox's life; the daemon merges them with the sandbox's own stored external tools each turn.
 const tools = internalTools(process.env["INTENTIC_AGENT_TOOLS"]);
 
 // Browser-facing auth (the decentralized path): when a Google web client id is configured, this sandbox is
 // reached directly by the browser, so the daemon verifies each request's Google ID token (audience = this
 // client id) and binds its owner on first use. CONNECT_TOKEN, when set, gates that first bind; WEB_ORIGIN
-// scopes CORS to the platform's web app. Absent ⇒ loopback/runner mode (daemon stays open). See auth.ts.
+// scopes CORS to the platform's web app. Absent ⇒ loopback mode (tests only — the daemon stays open). See auth.ts.
 const googleClientId = process.env["GOOGLE_CLIENT_ID"];
 const connectToken = process.env["CONNECT_TOKEN"];
 const webOrigin = process.env["WEB_ORIGIN"];
@@ -90,7 +91,7 @@ serve({ fetch: app.fetch, port, hostname: host });
 process.stdout.write(`intentic sandbox daemon listening on http://${host}:${port} (workspace ${root})\n`);
 
 // Decentralized path: tell the platform where to reach this sandbox directly (best-effort, off the command
-// path). Needs the platform URL + connection token + this sandbox's public URL, all forwarded by the runner.
+// path). Needs the platform URL + connection token + this sandbox's public URL, all set in this container's env.
 const platformUrl = process.env["PLATFORM_URL"];
 const sandboxPublicUrl = process.env["SANDBOX_PUBLIC_URL"];
 if (

@@ -30,16 +30,16 @@ export interface SelfHost {
 export interface DaemonDeps {
     readonly workspace: WorkspacePaths;
     readonly devServer: DevServer;
-    // Present only when the runner forwarded SELF_HOST_USER (+ HOST_SSH_KEY) into this sandbox.
+    // Present only when SELF_HOST_USER (+ HOST_SSH_KEY) is set for this sandbox (connect.sh / the provider).
     readonly selfHost?: SelfHost;
     // This sandbox's own identity (container name + image), from SANDBOX_NAME/SANDBOX_IMAGE env — surfaced on the
     // platform's Connections card, read by the browser DIRECTLY via /info. Absent in loopback/test mode.
     readonly info?: { readonly name: string; readonly image: string };
-    // The intent-declared internal MCP tools the runner forwarded (INTENTIC_AGENT_TOOLS). Constant for the
+    // The intent-declared internal MCP tools set in this container's env (INTENTIC_AGENT_TOOLS). Constant for the
     // sandbox's life; merged with the sandbox's stored external tools before each agent turn. main.ts decodes them.
     readonly tools?: readonly AgentTool[];
-    // The sandbox-owned store of user-configured EXTERNAL MCP tools (the platform manages these by relay, never
-    // holding them). Defaults to a JSON file beside the workspace; injected in tests.
+    // The sandbox-owned store of user-configured EXTERNAL MCP tools (the browser adds them directly; the
+    // platform never holds them). Defaults to a JSON file beside the workspace; injected in tests.
     readonly externalTools?: ToolsStore;
     readonly agent?: (request: AgentRequest) => AsyncIterable<AgentEvent>;
     readonly intentic?: (run: IntenticRun) => AsyncIterable<IntenticLine>;
@@ -63,15 +63,15 @@ export interface DaemonDeps {
     // git-tracked listing. Injected in tests; defaults to a real fs walk with ignore rules + depth/entry caps.
     readonly workspaceTree?: (root: string) => Promise<WorkspaceTree>;
     // Past-conversation history: the Claude Agent SDK persists sessions on disk keyed by the workspace dir;
-    // the platform relays these for the chat history menu. Injected in tests.
+    // the browser reads these directly for the chat history menu. Injected in tests.
     readonly sessions?: {
         readonly list: (dir: string) => Promise<SessionSummary[]>;
         readonly read: (dir: string, id: string) => Promise<SessionTranscriptMessage[]>;
     };
     // When set, this sandbox is exposed directly (its own tunnel) and authenticates the browser on every route
     // except /health: `authorize` verifies the request's bearer Google ID token and enforces sandbox ownership
-    // (see auth.ts), and CORS is emitted so the browser can call it cross-origin. Absent ⇒ the loopback/runner
-    // mode (no auth) — so adding this is non-breaking.
+    // (see auth.ts), and CORS is emitted so the browser can call it cross-origin. Absent ⇒ no auth — tests, or
+    // the host-internal server preview where nothing public reaches the daemon.
     readonly auth?: {
         readonly authorize: (bearer: string, firstBind: string | undefined) => Promise<void>;
         readonly allowOrigin?: string;
@@ -83,17 +83,17 @@ const COMMIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const
 const agentBody = z.object({
     prompt: z.string().min(1),
     sessionId: z.string().optional(),
-    // The platform relays the chosen model per turn; the Claude token is the sandbox's own stored credential.
+    // The browser sends the chosen model per turn; the Claude token is the sandbox's own stored credential.
     model: z.string().optional(),
     // When true, run the always-plan flow (propose → approve → execute). Reasoning controls are optional.
     plan: z.boolean().optional(),
     effort: z.string().optional(),
     thinking: z.boolean().optional(),
 });
-// Add an external MCP tool to the sandbox's own store (the platform relays this; it stores nothing itself).
+// Add an external MCP tool to the sandbox's own store (the browser calls this directly; the platform stores nothing).
 const toolBody = z.object({ name: z.string().min(1), url: z.string().url(), token: z.string().optional() });
-// The platform UI relays the Claude OAuth handshake to the sandbox, which stores the resulting tokens; the
-// verifier/state round-trip through the browser (public client), so the sandbox keeps no pending-auth state.
+// The browser drives the Claude OAuth handshake against the sandbox directly, which stores the resulting tokens;
+// the verifier/state round-trip through the browser (public client), so the sandbox keeps no pending-auth state.
 const claudeExchangeBody = z.object({ code: z.string().min(1), verifier: z.string().min(1), state: z.string().min(1) });
 // Side-channel bodies: the UI posts these to resolve a turn paused on a plan approval / question.
 const decisionBody = z.object({ decisionId: z.string().min(1), approve: z.boolean(), feedback: z.string().optional() });
@@ -108,8 +108,9 @@ const pushBody = z.object({ branch: z.string().min(1) });
 const fileWriteBody = z.object({ path: z.string().min(1), content: z.string() });
 const cloneRepoBody = z.object({ name: z.string().min(1), cloneUrl: z.string().min(1), branch: z.string().optional() });
 
-// The local HTTP API the runner drives (and relays to the UI). Bound to 127.0.0.1 by main.ts — the runner
-// reaches it on the loopback, so the daemon itself is unauthenticated; the runner owns auth to the platform.
+// The HTTP API the browser drives DIRECTLY over the sandbox's own Cloudflare tunnel. main.ts binds 0.0.0.0;
+// when deps.auth is set the daemon verifies the owner's Google ID token on every route but /health (it owns
+// its own auth). No auth only in tests or the host-internal server preview.
 export const createDaemon = (deps: DaemonDeps): Hono => {
     const { workspace, devServer } = deps;
     const agent = deps.agent ?? ((request) => runAgent(request));
@@ -134,7 +135,7 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
 
     // Browser-facing auth + CORS, only when this sandbox is exposed directly (deps.auth set). cors() answers
     // OPTIONS preflight itself; the guard then requires a valid owner-matching Google ID token on every route
-    // but /health (liveness). In loopback/runner mode deps.auth is absent and the daemon stays open.
+    // but /health (liveness). In loopback mode (tests, or the host-internal server preview) deps.auth is absent and the daemon stays open.
     if (deps.auth !== undefined) {
         const authorize = deps.auth.authorize;
         app.use(
@@ -178,7 +179,7 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
             return c.json({ error: "invalid body" }, 400);
         }
         return streamSSE(c, async (stream) => {
-            // The Claude token is the sandbox's own credential (resolved + refreshed here), not relayed by the
+            // The Claude token is the sandbox's own credential (resolved + refreshed here), never held by the
             // platform. undefined means no account is connected — the SDK then falls back to the container env.
             let oauthToken: string | undefined;
             try {
@@ -408,9 +409,9 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         return c.json({ name: parsed.data.name, path: parsed.data.name });
     });
 
-    // External MCP tools the agent can use (user-configured integrations). The sandbox OWNS these — the
-    // platform manages them by relaying here and stores nothing. GET never returns the token (it stays in the
-    // sandbox); the UI only needs to know a tool exists and whether a token is set.
+    // External MCP tools the agent can use (user-configured integrations). The sandbox OWNS these — the browser
+    // adds/removes them here directly and the platform stores nothing. GET never returns the token (it stays in
+    // the sandbox); the UI only needs to know a tool exists and whether a token is set.
     app.get("/workspace/tools", async (c) =>
         c.json({ tools: (await externalTools.list()).map((tool) => ({ name: tool.name, url: tool.url, hasToken: tool.token !== undefined })) }),
     );

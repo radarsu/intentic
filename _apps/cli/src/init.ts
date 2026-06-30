@@ -44,8 +44,8 @@ const INTENT_GITIGNORE = "node_modules/\n";
 
 const APP_GITIGNORE = "node_modules/\n";
 
-// A minimal, runnable starter app: `pnpm dev` serves it on DEV_PORT (the sandbox passes that port through;
-// the runner's preview proxy fronts it), and the Dockerfile is the deploy build CI runs. Zero dependencies,
+// A minimal, runnable starter app: `pnpm dev` serves it on DEV_PORT (the sandbox runs it; the Cloudflare
+// tunnel fronts it at `*.preview.<zone>`), and the Dockerfile is the deploy build CI runs. Zero dependencies,
 // so there is no install step — the agent fills it in. Importing an existing repo (--app) skips all of this.
 const STARTER_APP_PACKAGE = `${JSON.stringify(
     {

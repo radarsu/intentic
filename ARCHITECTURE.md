@@ -7,52 +7,53 @@ picks one, and reconciles infrastructure until reality matches.
 ## System topology & lifecycle
 
 The engine flow below is what runs *inside* one `intentic apply`. At runtime the whole product
-is three tiers: a thin **Platform** (the hub), a per-user **Runner + Sandbox** pair (where the
-agent and the CLI actually run), and the **infrastructure** the sandbox provisions.
+is three tiers: a thin **Platform** (identity + directory), a per-user **Sandbox** (where the agent
+and the CLI actually run, reached by the browser directly), and the **infrastructure** the sandbox
+provisions.
 
 ```mermaid
 flowchart TB
     operator(["Operator (browser)"])
 
-    subgraph cloud["Intentic Platform — thin hub"]
-        web["Web UI · Angular"]
+    subgraph cloud["Intentic Platform — identity + directory"]
+        web["Web UI · Angular (SPA)"]
         api["API · Hono / oRPC"]
-        db[("Postgres<br/>auth + connection token only")]
+        db[("Postgres<br/>account + connection token + sandbox URL")]
         web --> api --> db
     end
 
     subgraph tenant["Tenant machine — your PC or a server"]
-        runner["Runner<br/>(holds the Docker socket)"]
-        subgraph sandbox["Sandbox — one per user"]
+        subgraph sandbox["Sandbox — one per user · its own Cloudflare tunnel"]
             agent["Claude agent"]
             cli["intentic CLI"]
             repos["repos:<br/>intent · desired-state · app"]
         end
-        runner -->|spawns + HTTP relay| sandbox
     end
 
     subgraph infra["Provisioned infrastructure — one or many hosts"]
         cp["Control plane<br/>Forgejo (git/registry/CI) · Komodo (deploy)"]
-        appplane["Application plane<br/>apps · backings (db/cache/auth/storage) · extra runners"]
+        appplane["Application plane<br/>apps · backings (db/cache/auth/storage)"]
     end
 
-    operator -->|"sign in (Google), drive UI"| web
-    runner -. "outbound WSS — dials platform, receives relayed commands" .-> api
+    operator -->|"sign in (Google) · load the SPA shell"| web
+    operator ==>|"drive the daemon DIRECTLY (Google ID token, over the tunnel):<br/>chat · intentic · files · inventory"| sandbox
+    sandbox -. "register daemon URL + heartbeat (directory only, outbound)" .-> api
     cli ==>|"intentic apply: SSH · Docker · Cloudflare API"| cp
     cli ==>|reconcile| appplane
 ```
 
-- **Platform (thin hub)** — Angular UI + Hono/oRPC API. Persists only the operator's account
-  and one secret-free per-user connection token; it owns no infrastructure and no secrets.
-- **Runner** — one container per tenant machine. Holds the host Docker socket (so it can spawn
-  the sandbox) and **dials the platform outbound over WSS** — no inbound port. Also fronts
-  `*.preview.<zone>` previews.
-- **Sandbox** — one per user. Runs the Claude agent and the `intentic` CLI over the three repos
-  (`intent` = `deploy.config.ts`, the IaC; `desired-state` = resolved artifact + status; `app` =
-  the application code).
-- **Secret-free relay** — the platform relays commands (start sandbox, run agent, run intentic)
-  through the runner to the sandbox daemon; SSH keys, Cloudflare and Claude tokens are passed
-  straight into the sandbox and never reach the platform.
+- **Platform (identity + directory)** — Angular SPA + Hono/oRPC API. Persists only the operator's
+  account, one secret-free per-user connection token, and the sandbox's public `daemonUrl`; it owns no
+  infrastructure, no secrets, and sits **off the command path**.
+- **Sandbox** — one per user, run **unprivileged** (its container holds no Docker socket). Runs the
+  Claude agent and the `intentic` CLI over the three repos (`intent` = `deploy.config.ts`, the IaC;
+  `desired-state` = resolved artifact + status; `app` = the application code), and exposes its daemon
+  over its **own Cloudflare tunnel**. SSH keys, Cloudflare and Claude tokens ride straight into it and
+  never reach the platform.
+- **Trust root = browser Google Sign-In** — the browser drives the daemon directly with a Google ID
+  token; the daemon verifies it against Google's JWKS and binds its owner. The platform never holds or
+  forges that token, so a platform breach can read the directory but **cannot drive any sandbox** — the
+  hub's blast radius is bounded to identity + directory.
 
 The lifecycle, from first sign-in to a reconciled deployment the operator can watch:
 
@@ -60,38 +61,35 @@ The lifecycle, from first sign-in to a reconciled deployment the operator can wa
 sequenceDiagram
     actor U as Operator
     participant P as Platform
-    participant R as Runner
     participant S as Sandbox
     participant I as Infrastructure
 
     U->>P: Sign in (Google) + open setup
     P-->>U: curl one-liner + connection token
-    U->>R: curl … | sh   (docker run runner)
-    R->>P: dial WSS gateway (outbound)
-    P-->>U: setup ready
-    P->>R: ensure sandbox
-    R->>S: docker run sandbox (one per user)
-    U->>P: chat / Provision
-    P->>R: relay (agent · intentic)
-    R->>S: HTTP relay
+    U->>S: curl … | sh   (docker run sandbox + its own Cloudflare tunnel)
+    S->>P: POST /sandbox/register (daemon URL) + heartbeat
+    P-->>U: setup ready (a fresh registration)
+    U->>S: drive directly — chat · Provision (Google ID token)
     S->>I: intentic apply (SSH · Docker · Cloudflare)
     I-->>S: reconciled state
-    S-->>P: stream events · topology · plan (via runner)
-    P-->>U: visibility: infra, chat, files, deployments
+    S-->>U: stream events · topology · plan · deployments (direct)
 ```
 
-**One image, two ways to start.** The runner that `connect.sh` boots on your PC and the runner
-the `i.want.workspace` provider deploys onto a remote host (over SSH) are the *same image* — the
-local one simply omits the runner's own `*.preview.<zone>` proxy tunnel (a local PC has no zone).
-The infrastructure it *provisions*, though, still builds Cloudflare tunnels on its target hosts
-(see below). So the first runner is bootstrapped by hand, and every further runner is provisioned
-by the IaC itself, which is how the system fans out to "workers on many machines."
+**One image, two ways to start.** The sandbox `connect.sh` runs on your PC and the one the
+`i.want.workspace` provider deploys onto a remote host (over SSH) are the *same image*. On your PC,
+`connect.sh` gives it its own Cloudflare tunnel — `sandbox-<id>.<zone>` for the daemon (browser-direct)
+plus `*.preview.<zone>` for the app preview. On a server it is just another service on that host's shared
+tunnel, exposing only `*.preview.<zone>` (the daemon stays host-internal — the server workspace is
+preview-only; `connect.sh` is the browser-direct path). The infrastructure it *provisions*, either way,
+builds Cloudflare tunnels on its target hosts (see below) — which is how the system fans out to "workers
+on many machines."
 
 ### Cloudflare is the reachability fabric (required)
 
 Cloudflare is not a user-facing convenience — it is the system's **reachability fabric**, and it is
-**required**. The operator never needs to open `git.<zone>` / `deploy.<zone>`; the **sandbox** reads the
-control plane and relays what the Platform UI shows. How each piece is actually reached is asymmetric:
+**required**. The operator never needs to open `git.<zone>` / `deploy.<zone>`; the **browser reads the
+control plane through the sandbox daemon directly** (over the sandbox's tunnel). How each piece is reached
+is asymmetric:
 
 | Reached over | Who / what |
 | --- | --- |
@@ -101,7 +99,7 @@ control plane and relays what the Platform UI shows. How each piece is actually 
 Why a tunnel, rather than "just use SSH and make Cloudflare optional":
 
 - **Outbound-only, NAT-traversing.** `cloudflared` dials out, so it works behind NAT/firewalls with no
-  inbound ports — the same bet the runner already makes when it dials the platform.
+  inbound ports — the same bet the sandbox already makes to expose its daemon and register with the platform.
 - **Cross-host coordination needs stable, routable names.** Worker→Core registration and image pulls are
   host-to-host; SSH from the sandbox only reaches *sandbox→service*, so an SSH-only design would still have
   to add an overlay network to serve them.
@@ -195,16 +193,15 @@ graph ──► resources ──► engine ──► providers
 | [`@intentic/engine`](_libs/engine) | lib | Stateless reconcile engine: `plan`/`apply`, the Provider SPI, and the `reconcile` loop. |
 | [`@intentic/providers`](_libs/providers) | lib | Real Provider SPI impls over SSH/Docker, Cloudflare, Forgejo, Komodo. |
 | [`@intentic/cli`](_apps/cli) | **app** | The runnable product: `init` local repos, `resolve` intent → artifact, `apply` it. CLI `bin: intentic`. |
-| [`@intentic/sandbox`](_apps/sandbox) | **app** (image) | The per-project AI-agent dev workspace daemon: the Claude agent on the repos + watch-mode previews. |
-| [`@intentic/runner`](_apps/runner) | **app** (image) | The tenant-side runner that manages the project's sandbox over the host Docker socket and fronts `*.preview.<zone>`. |
+| [`@intentic/sandbox`](_apps/sandbox) | **app** (image) | The per-project AI-agent dev workspace daemon (the Claude agent on the repos + watch-mode preview), reached by the browser directly over its own Cloudflare tunnel. |
 
-The libs + the CLI publish to npm; **`sandbox` and `runner` ship as Docker images** to the repo's GHCR
-(`ghcr.io/radarsu/intentic/{sandbox,runner}`, linked to the repo via the images' `org.opencontainers.image.source`
+The libs + the CLI publish to npm; **`sandbox` ships as a Docker image** to the repo's GHCR
+(`ghcr.io/radarsu/intentic/sandbox`, linked to the repo via the image's `org.opencontainers.image.source`
 label) — published by [scripts/publish-images.sh](scripts/publish-images.sh) continuously on push to main
-(`latest` + commit SHA) and version-tagged on release, and pinned (tag + sha256 digest) in
-[`images.ts`](_libs/state-resolver/src/images.ts) like every other deployed image. The two GHCR packages are
-public so tenant hosts pull them unauthenticated; the `workspace` provider runs the runner image, which in turn
-runs the sandbox image.
+(`latest` + commit SHA) and version-tagged on release, and recorded in
+[`images.ts`](_libs/state-resolver/src/images.ts) like every other deployed image. The GHCR package is
+public so tenant hosts pull it unauthenticated; both `connect.sh` (your PC) and the `workspace` provider
+(a server) run this image directly.
 
 ## The intent contract
 
@@ -241,8 +238,9 @@ passing nothing uses the real SSH/Cloudflare/Forgejo/Komodo implementations.
 exactly as an operator would. It boots a Docker-in-Docker "host"
 ([test/host/Dockerfile](test/host/Dockerfile)) via `testcontainers`, scaffolds with `init`, authors a
 `deploy.config.ts` pointed at the host's mapped SSH port (with a per-run generated key), fills
-`desired-state/.env`, then runs `resolve` + `apply`. Phase 1 stands up the platform (Forgejo + runner +
-Komodo) and exposes `git.<zone>`/`deploy.<zone>` through a **real Cloudflare tunnel**; phase 2 pushes a
+`desired-state/.env`, then runs `resolve` + `apply`. Phase 1 stands up the platform (Forgejo + its Actions
+runner + Komodo + the workspace sandbox) and exposes `git.<zone>`/`deploy.<zone>` through a **real
+Cloudflare tunnel**; phase 2 pushes a
 tiny Dockerfile and authors an environment so `apply` wires CI/CD — the Forgejo Actions workflow builds +
 pushes the image and Komodo rolls it out live at `app.<zone>`. It asserts the platform containers are up,
 the public URLs respond, and the app serves its body, then purges the Cloudflare DNS + tunnel it created.

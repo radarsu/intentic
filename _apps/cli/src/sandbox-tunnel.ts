@@ -49,7 +49,7 @@ export const createSandboxTunnel = async (args: {
     readonly apiToken: string;
     readonly connectToken: string;
     readonly service: string;
-    // When set, also route the app preview wildcard `*.preview.<zone>` here (the runner's preview proxy is gone).
+    // When set, also route the app preview wildcard `*.preview.<zone>` straight to the sandbox's dev server.
     readonly previewService?: string;
     readonly zone?: string;
     readonly log: (message: string) => void;

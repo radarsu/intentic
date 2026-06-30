@@ -4,7 +4,7 @@ export interface DevServerSpec {
     // The watch command split into argv, e.g. ["pnpm", "dev"].
     readonly command: readonly string[];
     readonly cwd: string;
-    // The port the dev server listens on; the runner's reverse proxy maps a preview hostname to it.
+    // The port the dev server listens on; the Cloudflare tunnel maps the `*.preview.<zone>` hostname to it.
     readonly port: number;
 }
 
@@ -55,7 +55,7 @@ export interface DevServer {
 }
 
 // Manages the single per-project watch-mode dev server. One sandbox = one project = one dev server, so a
-// second start while running is ignored. The daemon reports status; the runner's proxy fronts the port.
+// second start while running is ignored. The daemon reports status; the Cloudflare tunnel fronts the port.
 export const createDevServer = (spawner: Spawner = defaultSpawn, probe: HealthProbe = defaultProbe): DevServer => {
     let current: { readonly handle: SpawnHandle; readonly port: number } | undefined;
     return {

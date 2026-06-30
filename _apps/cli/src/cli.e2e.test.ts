@@ -253,7 +253,7 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         expect([200, 301, 302, 303, 401, 403, 404]).toContain(komodo.status);
 
         // The wildcard preview route resolves end-to-end: DNS (`*.preview.<zone>`) -> the host tunnel ingress ->
-        // the sandbox's OWN dev server (port 5173, bound to the host's internal ip — no runner proxy). The
+        // the sandbox's OWN dev server (port 5173, bound to the host's internal ip — served by the sandbox directly). The
         // scaffolded app's dev server installs + boots, so poll generously; any subdomain under the wildcard
         // hits it. (If it doesn't answer, confirm `intentic init`'s app brings up `pnpm dev` on 5173.)
         const preview = await pollUrl(`https://${PREVIEW_PROBE}`, 240_000);

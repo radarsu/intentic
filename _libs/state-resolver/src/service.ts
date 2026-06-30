@@ -38,7 +38,7 @@ const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
 };
 
 // The MCP endpoint descriptor for a service kind, or undefined when the kind exposes no agent tool. The
-// workspace resolver uses it to wire a tool's URL + scoped token into the runner.
+// workspace resolver uses it to wire a tool's URL + scoped token into the sandbox (for the agent).
 export const serviceMcp = (kind: ServiceKind): { readonly path: string; readonly tokenSecret: string } | undefined => catalog[kind].mcp;
 
 // The admin identity intentic seeds for a service's dashboard. Services authenticate by email (unlike the

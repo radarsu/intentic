@@ -58,7 +58,7 @@ export interface AgentRequest {
     // Reasoning controls forwarded to the SDK (effort level / extended thinking).
     readonly effort?: string;
     readonly thinking?: boolean;
-    // The agent's MCP tools for this turn: intent-declared internal services (forwarded by the runner) plus
+    // The agent's MCP tools for this turn: intent-declared internal services (set in this container's env) plus
     // platform-configured external integrations. Each becomes a remote `http` MCP server. The daemon merges
     // both sources before calling; absent ⇒ the agent runs with no MCP tools (its plain autonomous posture).
     readonly tools?: readonly AgentTool[];

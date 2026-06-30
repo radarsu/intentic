@@ -534,10 +534,10 @@ test("a workspace exposing a service wires it as an MCP tool (domain URL + gener
         apps: [],
     };
 
-    const runner = emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace");
+    const sandbox = emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace");
     // The tool is addressed by its routed domain (works cross-host), with an intentic-generated bearer (raw
     // SecretRef here — the $secret form is the compiled shape). The token key is shared with the tool itself.
-    expect(runner?.inputs["tools"]).toEqual([
+    expect(sandbox?.inputs["tools"]).toEqual([
         { name: "obs", url: "https://signoz.example.com/mcp", token: { kind: "secret", source: "generated", key: "SIGNOZ_MCP_TOKEN" } },
     ]);
 });

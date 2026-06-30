@@ -5,8 +5,8 @@ import { randomUUID } from "node:crypto";
  * interactive questions we block until the user answers. Decisions/answers arrive on separate
  * `POST /agent/decision` / `POST /agent/answer` requests and resolve the paused promise here.
  *
- * The daemon is single-tenant (one container per project, reached only via the trusted runner /
- * authenticated edge), so requests are keyed by an unguessable id alone — no per-user scoping. */
+ * The daemon is single-tenant (one container per project, reached only over its authenticated tunnel — the
+ * owner's Google ID token), so requests are keyed by an unguessable id alone — no per-user scoping. */
 
 export interface PlanDecision {
     readonly approve: boolean;
