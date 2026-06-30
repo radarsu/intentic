@@ -123,7 +123,7 @@ setup_self_host() {
     echo "intentic: this server is registered as a deploy target (user '$user')."
 }
 
-# Pull a published image. intentic's runner/sandbox images are PUBLIC, so no login is needed. But if this host
+# Pull a published image. intentic's sandbox image is PUBLIC, so no login is needed. But if this host
 # has a stale/expired `docker login ghcr.io` (commonly left by Docker Desktop's credential store), docker
 # presents that token instead of pulling anonymously and GHCR rejects the pull with "denied". On any pull
 # failure, clear the ghcr.io login and retry once so the pull falls back to anonymous.

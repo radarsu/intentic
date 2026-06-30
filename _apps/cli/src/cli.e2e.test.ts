@@ -47,14 +47,10 @@ const ENV = "production";
 const APP_DOMAIN = `${APP}.${ZONE}`;
 const GIT_DOMAIN = `git.${ZONE}`;
 const KOMODO_DOMAIN = `deploy.${ZONE}`;
-// The workspace runner exposes a wildcard preview route. The cf-route owns a proxied `*.preview.<zone>` CNAME
-// (purged on teardown); `probe`/`standin` are concrete subdomains under it the test curls through the tunnel.
+// The workspace sandbox exposes a wildcard preview route to its own dev server. The cf-route owns a proxied
+// `*.preview.<zone>` CNAME (purged on teardown); `probe` is a concrete subdomain under it the test curls.
 const WILDCARD_PREVIEW = `*.preview.${ZONE}`;
 const PREVIEW_PROBE = `probe.preview.${ZONE}`;
-const PREVIEW_STANDIN = `standin.preview.${ZONE}`;
-// A stand-in sandbox container (the runner only creates real sandboxes via the Phase-3 channel): a busybox
-// http server on the sandbox dev port (5173), on the shared network, so the runner proxies a preview to it.
-const STANDIN_BODY = "intentic-preview-standin";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const hostContext = join(repoRoot, "test", "host");
@@ -97,7 +93,7 @@ export const intent = defineIntent((i) => {
         },
     });
 
-    // The AI-agent workspace runner: stood up on the host, fronting previews at the wildcard *.preview.<zone>.
+    // The AI-agent workspace sandbox: stood up on the host, serving its dev-server preview at *.preview.<zone>.
     i.want.workspace("workspace", { on: host, expose: cf });
 });
 `;
@@ -231,9 +227,9 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         await writeFile(configPath, config(address, port));
         await writeFile(join(tmp, "desired-state", ".env"), envFile(privateKey));
 
-        // 3. Resolve + apply: brings up Forgejo + runner + Komodo + the workspace runner + the tunnel/routes,
-        // and wires the app's CI/CD. The workspace provider PULLS the published, digest-pinned runner image
-        // (ghcr.io/radarsu/intentic/runner) from GHCR — it must be published under that nested name + public.
+        // 3. Resolve + apply: brings up Forgejo + its Actions runner + Komodo + the workspace sandbox + the
+        // tunnel/routes, and wires the app's CI/CD. The workspace provider PULLS the published sandbox image
+        // (ghcr.io/radarsu/intentic/sandbox) from GHCR — it must be published under that nested name + public.
         await intentic("resolve", "--config", configPath, "--out", artifactPath);
         await intentic("apply", "--artifact", artifactPath, "--maxIterations", "8");
 
@@ -247,8 +243,8 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         // Komodo runs as a docker compose stack, so its core container is named "komodo-core-1".
         expect(running).toContain("komodo-core");
         expect(running.split("\n").some((name) => name.startsWith("intentic-tunnel-"))).toBe(true);
-        // The workspace runner came up too (apply gated on its /healthz before converging).
-        expect(running).toContain("intentic-runner");
+        // The workspace sandbox came up too (apply gated on its daemon /health before converging).
+        expect(running).toContain("intentic-sandbox-workspace");
 
         // Forgejo + Komodo are reachable from the public internet through the tunnel.
         const git = await pollUrl(`https://${GIT_DOMAIN}`, 120_000);
@@ -256,20 +252,12 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
         const komodo = await pollUrl(`https://${KOMODO_DOMAIN}`, 120_000);
         expect([200, 301, 302, 303, 401, 403, 404]).toContain(komodo.status);
 
-        // The wildcard preview route resolves end-to-end: DNS (`*.preview.<zone>`) -> tunnel ingress -> the
-        // runner's preview proxy, whose /healthz answers 200 for any host.
-        const previewHealth = await pollUrl(`https://${PREVIEW_PROBE}/healthz`, 120_000);
-        expect(previewHealth.status).toBe(200);
-
-        // Start a stand-in sandbox on the shared network (the runner creates real sandboxes only via the
-        // Phase-3 channel) and confirm the runner proxies <sub>.preview.<zone> to it by Host header.
-        await sshRun(
-            `docker run -d --name intentic-sandbox-standin --network intentic-workspace busybox ` +
-                `sh -c "mkdir -p /www && printf '%s' '${STANDIN_BODY}' > /www/index.html && httpd -f -p 5173 -h /www"`,
-        );
-        const preview = await pollUrl(`https://${PREVIEW_STANDIN}`, 120_000, STANDIN_BODY);
-        expect(preview.status).toBe(200);
-        expect(preview.body).toContain(STANDIN_BODY);
+        // The wildcard preview route resolves end-to-end: DNS (`*.preview.<zone>`) -> the host tunnel ingress ->
+        // the sandbox's OWN dev server (port 5173, bound to the host's internal ip — no runner proxy). The
+        // scaffolded app's dev server installs + boots, so poll generously; any subdomain under the wildcard
+        // hits it. (If it doesn't answer, confirm `intentic init`'s app brings up `pnpm dev` on 5173.)
+        const preview = await pollUrl(`https://${PREVIEW_PROBE}`, 240_000);
+        expect([200, 301, 302, 303, 401, 403, 404]).toContain(preview.status);
 
         // 4. Push a buildable app to the repo apply just created (the realistic "developer pushes code").
         await forgejoApi.commitFile({

@@ -82,7 +82,7 @@ test("want.service derives a signoz node + route, and want.app's observe wires t
     expect(graph.resources["app.prod"]?.dependsOn).toContain("obs");
 });
 
-test("want.workspace derives the runner node + its wildcard *.preview.<zone> route", () => {
+test("want.workspace derives the sandbox node + its wildcard *.preview.<zone> route", () => {
     const graph = defineStack((i) => {
         const { host, cf } = inventory(i);
         i.want.workspace("workspace", { on: host, expose: cf });

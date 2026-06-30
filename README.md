@@ -210,8 +210,7 @@ A pnpm + Turbo monorepo (`_*/*` workspaces). The libraries form the intent → n
 | `@intentic/engine` | [_libs/engine](_libs/engine) | Stateless `plan`/`apply`/`reconcile` over the Provider SPI. |
 | `@intentic/providers` | [_libs/providers](_libs/providers) | Real SPI impls: SSH/Docker, Cloudflare, Forgejo, Komodo, Authentik. |
 | `@intentic/cli` | [_apps/cli](_apps/cli) | The `intentic` CLI — `init`/`resolve`/`plan`/`apply`/`adopt`/`restore`. |
-| `@intentic/runner` | [_apps/runner](_apps/runner) | Host-side runner image: preview proxy + outbound WSS channel to the platform. |
-| `@intentic/sandbox` | [_apps/sandbox](_apps/sandbox) | Per-project AI-agent dev daemon image (Claude Agent SDK). |
+| `@intentic/sandbox` | [_apps/sandbox](_apps/sandbox) | Per-project AI-agent dev daemon image (Claude Agent SDK); the browser drives it directly over its own Cloudflare tunnel. |
 | `@intentic/tsconfig` | [_tools/tsconfig](_tools/tsconfig) | Shared TypeScript base configs. |
 
 ## Working in this repo (for agents)

@@ -7,6 +7,7 @@ import { DEFAULT_BACKUP_REPO } from "./backup.js";
 import { forgejoCatalog } from "./catalog.js";
 import type { Assignment } from "./emit.js";
 import { emit } from "./emit.js";
+import { IMAGES } from "./images.js";
 
 // The authored inventory every test intent wires its apps to (on: "host", expose: "cf").
 const host: HostIntent = { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } };
@@ -491,7 +492,7 @@ test("a guarded host WITHOUT a declared backup guards against the default on-hos
     expect(nodes.find((n) => n.id === "host-git")?.inputs["guardRepo"]).toBe(DEFAULT_BACKUP_REPO);
 });
 
-test("a workspace-only intent emits the runner node + its wildcard preview route + tunnel, no app platform", () => {
+test("a workspace-only intent emits the sandbox node + its wildcard preview route + tunnel, no app platform", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
@@ -504,19 +505,21 @@ test("a workspace-only intent emits the runner node + its wildcard preview route
     };
 
     const nodes = emit(intent, assign(intent), "example.com");
-    const runner = nodes.find((node) => node.id === "workspace");
-    expect(runner?.type).toBe("workspace");
-    expect(runner?.inputs["domain"]).toBe("*.preview.example.com");
-    expect(runner?.inputs["network"]).toBe("intentic-workspace");
+    const sandbox = nodes.find((node) => node.id === "workspace");
+    expect(sandbox?.type).toBe("workspace");
+    // The workspace IS the sandbox image now (no runner); the daemon + dev server ports are resolver constants.
+    expect(sandbox?.inputs["image"]).toBe(IMAGES.sandbox);
+    expect(sandbox?.inputs["domain"]).toBe("*.preview.example.com");
+    expect(sandbox?.inputs["network"]).toBe("intentic-workspace");
+    expect(sandbox?.inputs["devPort"]).toBe(5173);
+    expect(sandbox?.inputs["daemonPort"]).toBe(8787);
     // No app platform for a workspace-only intent.
     expect(nodes.some((node) => node.type === "forgejo")).toBe(false);
     expect(nodes.some((node) => node.type === "komodo")).toBe(false);
-    // The wildcard hostname flows unchanged into the cf-route (id slugged) and the host tunnel's ingress.
+    // The wildcard hostname flows unchanged into the cf-route (id slugged) and routes to the sandbox's dev
+    // server on the host tunnel's ingress (the daemon stays host-internal — preview-only).
     expect(nodes.find((node) => node.type === "cf-route")?.inputs["hostname"]).toBe("*.preview.example.com");
-    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["ingress"]).toEqual([{ hostname: "*.preview.example.com", port: 8088 }]);
-    // Without platformUrl the runner is preview-only — no control-plane inputs.
-    expect(runner?.inputs["platformUrl"]).toBeUndefined();
-    expect(runner?.inputs["runnerToken"]).toBeUndefined();
+    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["ingress"]).toEqual([{ hostname: "*.preview.example.com", port: 5173 }]);
 });
 
 test("a workspace exposing a service wires it as an MCP tool (domain URL + generated scoped token)", () => {
@@ -539,7 +542,7 @@ test("a workspace exposing a service wires it as an MCP tool (domain URL + gener
     ]);
 });
 
-test("a workspace without tools emits no tools input (preview-only runners are unchanged)", () => {
+test("a workspace without tools emits no tools input (preview-only sandboxes are unchanged)", () => {
     const intent: IntentSet = {
         hosts: [host],
         cloudflare,
@@ -551,22 +554,4 @@ test("a workspace without tools emits no tools input (preview-only runners are u
         apps: [],
     };
     expect(emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace")?.inputs["tools"]).toBeUndefined();
-});
-
-test("a workspace with platformUrl emits the control-plane inputs (the runner dials back with RUNNER_TOKEN)", () => {
-    const intent: IntentSet = {
-        hosts: [host],
-        cloudflare,
-        users: [],
-        teams: [],
-        services: [],
-        workspaces: [{ id: "workspace", on: "host", expose: "cf", platformUrl: "wss://platform.example/runner/gateway" }],
-        backings: [],
-        apps: [],
-    };
-
-    const runner = emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace");
-    expect(runner?.inputs["platformUrl"]).toBe("wss://platform.example/runner/gateway");
-    // emit returns raw nodes — env() is a SecretRef here (the $secret form is the compiled shape).
-    expect(runner?.inputs["runnerToken"]).toEqual({ kind: "secret", source: "env", key: "RUNNER_TOKEN" });
 });

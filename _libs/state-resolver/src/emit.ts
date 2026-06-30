@@ -243,7 +243,7 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         ingressByHost.set(service.on, hostIngress);
     }
 
-    // --- Workspaces: the per-host AI-agent runner, exposed via a wildcard *.preview.<zone> route ---
+    // --- Workspaces: the per-host AI-agent sandbox, exposed via a wildcard *.preview.<zone> route ---
 
     for (const workspace of intent.workspaces) {
         const host = hostById.get(workspace.on)!;

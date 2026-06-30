@@ -92,12 +92,12 @@ export interface Service extends Ref<"signoz"> {
     readonly otlpEndpoint: Ref<string>;
 }
 
-// --- The per-host AI-agent workspace runner (i.want.workspace); its output refs are inert. Unlike a service
+// --- The per-host AI-agent workspace sandbox (i.want.workspace); its output refs are inert. Unlike a service
 // it takes no domain — its route is the wildcard `*.preview.<zone>` derived from the discovered zone. ---
 
 export interface Workspace extends Ref<"workspace"> {
-    // The runner's host-internal preview-proxy url, its /healthz url, and the `preview.<zone>` base every
-    // per-project preview hostname sits under.
+    // The sandbox's host-internal daemon url, the daemon's /health url, and the `preview.<zone>` base its
+    // dev-server preview sits under.
     readonly internalUrl: Ref<string>;
     readonly healthUrl: Ref<string>;
     readonly previewBase: Ref<string>;

@@ -1,10 +1,10 @@
 # @intentic/sandbox
 
-The **per-project AI-agent dev daemon** — a Docker image that runs inside a project's sandbox container on the customer's host. It exposes a loopback HTTP API the runner drives: run a Claude Agent turn over the project's three repos, run the `intentic` CLI, do git operations, and report the dev-server preview. Ships to GHCR as `ghcr.io/radarsu/intentic/sandbox`. A private package (not published to npm).
+The **per-project AI-agent dev daemon** — a Docker image that runs as the project's workspace container on the customer's host. It exposes an HTTP API the browser drives **directly** over the sandbox's own Cloudflare tunnel (Google-verified auth): run a Claude Agent turn over the project's three repos, run the `intentic` CLI, do git operations, read/write inventory, and report the dev-server preview. Ships to GHCR as `ghcr.io/radarsu/intentic/sandbox`. A private package (not published to npm).
 
 ## Responsibilities
 
-- Serve the daemon API (`/agent`, `/intentic`, `/git/:repo/*`, `/preview`, `/health`) bound to the container loopback — the runner reaches it; it is itself unauthenticated (the runner owns platform auth).
+- Serve the daemon API (`/agent`, `/intentic`, `/git/:repo/*`, `/inventory`, `/info`, `/preview`, `/health`); the browser calls it directly over the sandbox's tunnel, each request authenticated by the owner's Google ID token (`/health` carved out for liveness).
 - Run one Claude Agent turn (`runAgent`) over the workspace, streaming typed `AgentEvent`s as SSE `data:` frames.
 - Run the `intentic` CLI in-workspace and stream its ndjson lines; commit/push the repos.
 - Manage the app dev server and report preview status.
@@ -20,10 +20,10 @@ The **per-project AI-agent dev daemon** — a Docker image that runs inside a pr
 
 ## How it fits
 
-The agent half of the dev plane. [`@intentic/runner`](../runner) starts and relays to this container; the platform's chat relay sends a prompt **plus the user's Claude OAuth token per turn** in the `/agent` request body, which `runAgent` injects into the SDK's per-query env.
+The agent half of the dev plane. The browser talks to this daemon **directly** over the sandbox's own Cloudflare tunnel; the daemon verifies the owner's Google ID token, resolves the Claude token from its **own** stored credentials, and injects it into the SDK per turn. The platform is never on this path — it only holds the directory entry that points the browser here.
 
 ## Conventions & gotchas
 
-- Credentials are **never** baked in or stored: the OAuth token arrives per-turn in the request body and is only passed to the SDK for that call (no container-env secret).
-- The daemon trusts its caller — it must stay loopback-only; exposure is the runner's responsibility.
+- The Claude credential lives in the sandbox's own store (connected via the daemon's `/claude/*` flow), resolved + injected into the SDK per turn — never held by the platform.
+- The daemon authenticates every request itself (the owner's Google ID token, verified via Google's JWKS), since it is reached directly over its public tunnel — it owns its own auth.
 - Built on Hono + the Claude Agent SDK + zod; `runAgent`'s `QueryFn` is injectable so co-located `*.test.ts` run without the SDK or network.

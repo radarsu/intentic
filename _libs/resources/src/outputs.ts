@@ -36,8 +36,8 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     "forgejo-notify": [],
     "komodo-notify": [],
     signoz: ["url", "internalUrl", "otlpEndpoint"],
-    // The per-host workspace runner: its host-internal preview-proxy url, a /healthz url for readiness, and
-    // the `preview.<zone>` base that per-project preview hostnames sit under.
+    // The per-host workspace sandbox: its host-internal daemon url, the daemon's /health url for readiness,
+    // and the `preview.<zone>` base its dev-server preview sits under.
     workspace: ["internalUrl", "healthUrl", "previewBase"],
     // A scheduled backup job — a pure sink (nothing refs an output off it), like ci/forgejo-runner.
     backup: [],
