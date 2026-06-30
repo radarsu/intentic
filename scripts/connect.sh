@@ -145,8 +145,7 @@ fi
 # `docker info` aggregates CLI-plugin data and can hang (e.g. docker-scout/buildx); `docker version`
 # with a server-format does a fast daemon round-trip and fails cleanly if the daemon is unreachable.
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
-    echo "error: can't reach the docker daemon. Start Docker — and if it is running, your user may lack" >&2
-    echo "       access: add it to the 'docker' group (then re-login or 'newgrp docker'), or re-run with sudo." >&2
+    echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
     exit 1
 fi
 if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
