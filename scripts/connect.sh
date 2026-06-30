@@ -60,7 +60,7 @@ SELF_HOST_USER="${SELF_HOST_USER:-}"
 # connect (gated by CONNECT_TOKEN). WEB_ORIGIN, when set, scopes the daemon's CORS to the platform web app; left
 # empty the daemon allows any origin (the Google-token audience is the real gate). ZONE picks the zone when the
 # token sees several.
-GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-481795963975-4i51psdmlk3c1lhepn6l17o9ekmdc0uv.apps.googleusercontent.com}"
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-481795963975-cq9msl6higcd91joidrfp8mjlkuq5fk3.apps.googleusercontent.com}"
 WEB_ORIGIN="${WEB_ORIGIN:-}"
 ZONE="${ZONE:-}"
 CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.1}"

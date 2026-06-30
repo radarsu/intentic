@@ -56,7 +56,7 @@ $SelfHostAddress = ''
 # browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID, the
 # platform's PUBLIC web client id, hardcoded here since it's a static platform value; env can override). WEB_ORIGIN,
 # when set, scopes the daemon's CORS (else open — the Google-token audience is the real gate); ZONE picks the zone.
-$GoogleClientId = if ($env:GOOGLE_CLIENT_ID) { $env:GOOGLE_CLIENT_ID } else { '481795963975-4i51psdmlk3c1lhepn6l17o9ekmdc0uv.apps.googleusercontent.com' }
+$GoogleClientId = if ($env:GOOGLE_CLIENT_ID) { $env:GOOGLE_CLIENT_ID } else { '481795963975-cq9msl6higcd91joidrfp8mjlkuq5fk3.apps.googleusercontent.com' }
 $WebOrigin = $env:WEB_ORIGIN
 $Zone = $env:ZONE
 $CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else { 'cloudflare/cloudflared:2026.6.1' }
