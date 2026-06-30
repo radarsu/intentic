@@ -22,7 +22,7 @@
 #   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id the daemon verifies sign-in against (default: hardcoded below)
 #
 # Optional env:
-#   SANDBOX_IMAGE   sandbox image to run (default: ghcr.io/radarsu/intentic/sandbox:0.1.0)
+#   SANDBOX_IMAGE   sandbox image to run (default: ghcr.io/radarsu/intentic/sandbox:latest)
 #   DEV_COMMAND     the app's dev/watch command inside the sandbox (default: pnpm dev)
 #   DEV_PORT        the app's dev-server port, exposed at *.preview.<zone> (default: 5173)
 #   WEB_ORIGIN      scopes the daemon's CORS to the platform web app (default: open — the Google-token audience is the real gate)
@@ -37,7 +37,7 @@ set -eu
 # dev against a non-prod platform overrides it. The sandbox registers its public URL at ${PLATFORM_URL}/sandbox/register.
 PLATFORM_URL="${PLATFORM_URL:-${1:-https://platform.intentic.dev}}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
-SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:0.1.0}"
+SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:latest}"
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
 DEV_COMMAND="${DEV_COMMAND:-pnpm dev}"
 DEV_PORT="${DEV_PORT:-5173}"
