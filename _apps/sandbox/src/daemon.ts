@@ -6,6 +6,7 @@ import { z } from "zod";
 import { type AgentEvent, type AgentRequest, runAgent } from "./agent.js";
 import { resolvePlanDecision, resolveQuestionAnswer } from "./agent-requests.js";
 import { buildAuthorizeUrl, type ClaudeStore, ensureFreshToken, exchangeCode, fileClaudeStore } from "./claude-credentials.js";
+import { AddInventoryInputSchema, type InventoryEntry, readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
 import type { DevServer } from "./dev-server.js";
 import { gitClone, gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git.js";
 import { type IntenticLine, type IntenticRun, runIntentic } from "./intentic-runner.js";
@@ -427,6 +428,66 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
     app.delete("/workspace/tools/:name", async (c) =>
         (await externalTools.remove(c.req.param("name"))) ? c.json({ ok: true }) : c.json({ error: "no tool with that name" }, 404),
     );
+
+    // --- Inventory: the i.have.* / i.want.service entries in the managed region of intent/deploy.config.ts. The
+    // sandbox owns the file (the browser calls these directly now); add/remove rewrite the managed region and
+    // commit it (mirroring an agent edit). ensureSelfHost mirrors this host into the inventory when connect.sh
+    // wired it as a deploy target, so `resolve` sees it. Ported from the platform's inventory.ts/deploy-config.ts.
+    const INVENTORY_CONFIG = "deploy.config.ts";
+    const SELF_HOST_NAME = "self";
+    const readInventoryConfig = async (): Promise<string> => (await files.read(join(workspace.repos.intent, INVENTORY_CONFIG))) ?? scaffoldDeployConfig([]);
+    const writeInventoryConfig = async (content: string, message: string): Promise<void> => {
+        await files.write(join(workspace.repos.intent, INVENTORY_CONFIG), content);
+        await git.commitAll(workspace.repos.intent, message, COMMIT_AUTHOR);
+    };
+    const ensureSelfHost = async (content: string, entries: InventoryEntry[]): Promise<InventoryEntry[]> => {
+        if (deps.selfHost === undefined || entries.some((entry) => entry.name === SELF_HOST_NAME)) {
+            return entries;
+        }
+        const next: InventoryEntry[] = [
+            { kind: "backend", provider: "host", name: SELF_HOST_NAME, values: { address: deps.selfHost.address, user: deps.selfHost.user, port: deps.selfHost.port } },
+            ...entries,
+        ];
+        await writeInventoryConfig(writeManagedRegion(content, next), "chore(intentic): register self host");
+        return next;
+    };
+
+    app.get("/inventory", async (c) => {
+        const content = await readInventoryConfig();
+        return c.json({ entries: await ensureSelfHost(content, readManagedRegion(content)) });
+    });
+
+    app.post("/inventory", async (c) => {
+        const parsed = AddInventoryInputSchema.safeParse(await c.req.json().catch(() => undefined));
+        if (!parsed.success) {
+            return c.json({ error: "invalid body" }, 400);
+        }
+        const content = await readInventoryConfig();
+        // Upsert by name: a re-added capability replaces the old declaration.
+        const next: InventoryEntry[] = [...readManagedRegion(content).filter((entry) => entry.name !== parsed.data.name), parsed.data];
+        const label = parsed.data.kind === "service" ? parsed.data.service : parsed.data.provider;
+        await writeInventoryConfig(writeManagedRegion(content, next), `chore(intentic): add ${label} "${parsed.data.name}"`);
+        return c.json({ entries: next });
+    });
+
+    app.delete("/inventory/:name", async (c) => {
+        const name = c.req.param("name");
+        const content = await readInventoryConfig();
+        const entries = readManagedRegion(content);
+        const next = entries.filter((entry) => entry.name !== name);
+        if (next.length !== entries.length) {
+            await writeInventoryConfig(writeManagedRegion(content, next), `chore(intentic): remove "${name}"`);
+        }
+        return c.json({ entries: next });
+    });
+
+    // Idempotent self-host registration the provision flow calls before `resolve` (which reads deploy.config.ts),
+    // so a self-hosted user can provision without first opening the Inventory page.
+    app.post("/inventory/self-host", async (c) => {
+        const content = await readInventoryConfig();
+        await ensureSelfHost(content, readManagedRegion(content));
+        return c.json({ ok: true });
+    });
 
     return app;
 };
