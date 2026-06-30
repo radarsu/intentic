@@ -1,12 +1,10 @@
 import { spawn } from "node:child_process";
+import type { IntenticLine } from "@intentic/sandbox-contract";
 
-// One parsed line from `intentic … --output ndjson` (the engine events, provider `log`, and the terminal
-// `result` — see the CLI's output contract). Kept structurally decoupled from @intentic/engine: the sandbox
-// runs a pinned intentic binary in a separate process, so it consumes the wire shape, not the engine types.
-export interface IntenticLine {
-    readonly kind: string;
-    readonly [key: string]: unknown;
-}
+// `IntenticLine` (one parsed line from `intentic … --output ndjson`: engine events, provider `log`, the
+// terminal `result`) is the wire shape the daemon streams, so it lives in @intentic/sandbox-contract. It stays
+// structurally decoupled from @intentic/engine: the sandbox runs a pinned intentic binary in a separate
+// process, so it consumes the wire shape, not the engine types.
 
 // Parse a single ndjson line. Blank lines yield undefined; a non-object or one without a string `kind` is
 // not a valid event and yields undefined. Malformed JSON throws (it would be a real contract violation).

@@ -1,3 +1,4 @@
+- Work only on the current branch.
 - No legacy support – make clean breaking changes; update all usages.
 - No re-exports or aliases – import from the true source; use original names.
 - No redundant assignments/coercions – avoid renaming, ?? null, or key renames without purpose.

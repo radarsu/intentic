@@ -7,15 +7,15 @@ picks one, and reconciles infrastructure until reality matches.
 ## System topology & lifecycle
 
 The engine flow below is what runs *inside* one `intentic apply`. At runtime the whole product
-is three tiers: a thin **Platform** (identity + directory), a per-user **Sandbox** (where the agent
-and the CLI actually run, reached by the browser directly), and the **infrastructure** the sandbox
-provisions.
+is three tiers: a thin **Platform** (identity + sandbox-URL store), a per-user **Sandbox** (where the
+agent and the CLI actually run, reached by the browser directly), and the **infrastructure** the
+sandbox provisions.
 
 ```mermaid
 flowchart TB
     operator(["Operator (browser)"])
 
-    subgraph cloud["Intentic Platform — identity + directory"]
+    subgraph cloud["Intentic Platform — identity + sandbox-URL store"]
         web["Web UI · Angular (SPA)"]
         api["API · Hono / oRPC"]
         db[("Postgres<br/>account + connection token + sandbox URL")]
@@ -35,15 +35,15 @@ flowchart TB
         appplane["Application plane<br/>apps · backings (db/cache/auth/storage)"]
     end
 
-    operator -->|"sign in (Google) · load the SPA shell"| web
-    operator ==>|"drive the daemon DIRECTLY (Google ID token, over the tunnel):<br/>chat · intentic · files · inventory"| sandbox
-    sandbox -. "register daemon URL + heartbeat (directory only, outbound)" .-> api
+    operator -->|"sign in (Google) · load the SPA shell · store the derived sandbox URL (setup.bind)"| web
+    operator ==>|"drive the daemon DIRECTLY (Google ID token, over the tunnel):<br/>liveness probe (/health) · chat · intentic · files · inventory"| sandbox
     cli ==>|"intentic apply: SSH · Docker · Cloudflare API"| cp
     cli ==>|reconcile| appplane
 ```
 
-- **Platform (identity + directory)** — Angular SPA + Hono/oRPC API. Persists only the operator's
-  account, one secret-free per-user connection token, and the sandbox's public `daemonUrl`; it owns no
+- **Platform (identity + sandbox-URL store)** — Angular SPA + Hono/oRPC API. Persists only the
+  operator's account, one secret-free per-user connection token, and the sandbox's public `daemonUrl`
+  (which the **browser** derives and writes); it never probes the sandbox or tracks liveness, owns no
   infrastructure, no secrets, and sits **off the command path**.
 - **Sandbox** — one per user, run **unprivileged** (its container holds no Docker socket). Runs the
   Claude agent and the `intentic` CLI over the three repos (`intent` = `deploy.config.ts`, the IaC;
@@ -52,8 +52,8 @@ flowchart TB
   never reach the platform.
 - **Trust root = browser Google Sign-In** — the browser drives the daemon directly with a Google ID
   token; the daemon verifies it against Google's JWKS and binds its owner. The platform never holds or
-  forges that token, so a platform breach can read the directory but **cannot drive any sandbox** — the
-  hub's blast radius is bounded to identity + directory.
+  forges that token, so a platform breach can read the stored URL but **cannot drive any sandbox** — the
+  hub's blast radius is bounded to identity + the sandbox URL.
 
 The lifecycle, from first sign-in to a reconciled deployment the operator can watch:
 
@@ -66,9 +66,9 @@ sequenceDiagram
 
     U->>P: Sign in (Google) + open setup
     P-->>U: curl one-liner + connection token
+    U->>P: store derived sandbox URL (setup.bind: sandbox-<hash(token)>.<zone>)
     U->>S: curl … | sh   (docker run sandbox + its own Cloudflare tunnel)
-    S->>P: POST /sandbox/register (daemon URL) + heartbeat
-    P-->>U: setup ready (a fresh registration)
+    U->>S: probe /health directly until reachable (no platform involved)
     U->>S: drive directly — chat · Provision (Google ID token)
     S->>I: intentic apply (SSH · Docker · Cloudflare)
     I-->>S: reconciled state
@@ -99,7 +99,7 @@ is asymmetric:
 Why a tunnel, rather than "just use SSH and make Cloudflare optional":
 
 - **Outbound-only, NAT-traversing.** `cloudflared` dials out, so it works behind NAT/firewalls with no
-  inbound ports — the same bet the sandbox already makes to expose its daemon and register with the platform.
+  inbound ports — the same bet the sandbox already makes to expose its daemon.
 - **Cross-host coordination needs stable, routable names.** Worker→Core registration and image pulls are
   host-to-host; SSH from the sandbox only reaches *sandbox→service*, so an SSH-only design would still have
   to add an overlay network to serve them.

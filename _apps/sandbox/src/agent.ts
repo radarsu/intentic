@@ -7,35 +7,10 @@ import {
     type SDKMessage,
     tool,
 } from "@anthropic-ai/claude-agent-sdk";
+import type { AgentEvent, AskQuestion } from "@intentic/sandbox-contract";
 import { z } from "zod";
 import { createPlanRequest, createQuestionRequest, type QuestionResponse } from "./agent-requests.js";
 import { type AgentTool, mcpServersOf } from "./tools.js";
-
-// One interactive question the agent asks via the `ask` tool (mirrors AskUserQuestion's input shape).
-export interface AskOption {
-    readonly label: string;
-    readonly description: string;
-    readonly preview?: string;
-}
-export interface AskQuestion {
-    readonly question: string;
-    readonly header: string;
-    readonly multiSelect: boolean;
-    readonly options: AskOption[];
-}
-
-// One frame from an agent turn, relayed to the UI. `kind`-discriminated to match intentic's event style
-// (EngineEvent, IntenticLine); the platform relay maps these to the browser's `type` shape. `tool` surfaces
-// agent actions ("editing <file>" / "running <command>") so the UI shows what the agent is doing. `plan`
-// and `question` pause the turn until the user answers on a side channel (see agent-requests.ts).
-export type AgentEvent =
-    | { readonly kind: "session"; readonly sessionId: string }
-    | { readonly kind: "delta"; readonly text: string }
-    | { readonly kind: "tool"; readonly name: string; readonly target?: string }
-    | { readonly kind: "plan"; readonly decisionId: string; readonly text: string }
-    | { readonly kind: "question"; readonly requestId: string; readonly questions: AskQuestion[] }
-    | { readonly kind: "error"; readonly message: string }
-    | { readonly kind: "done" };
 
 export interface AgentRequest {
     readonly prompt: string;

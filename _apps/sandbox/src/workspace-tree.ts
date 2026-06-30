@@ -1,23 +1,11 @@
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import type { WorkspaceTree, WorkspaceTreeEntry } from "@intentic/sandbox-contract";
 
-// One node of the full /work filesystem tree the agent sees. Distinct from the git-tracked tree: untracked
-// files, generated artifacts, and .intentic/ all show here. `path` is root-relative with forward slashes so
-// the platform can feed it straight back to the file route.
-export interface WorkspaceTreeEntry {
-    readonly name: string;
-    readonly path: string;
-    readonly type: "file" | "dir";
-    readonly size?: number;
-    readonly children?: readonly WorkspaceTreeEntry[];
-}
-
-export interface WorkspaceTree {
-    readonly root: string;
-    readonly tree: readonly WorkspaceTreeEntry[];
-    // True when the walk hit the depth/entry cap and the returned tree is partial.
-    readonly truncated: boolean;
-}
+// WorkspaceTree / WorkspaceTreeEntry (the full /work tree the agent sees — untracked files, generated
+// artifacts, and .intentic/ included, distinct from the git-tracked listing) are the /workspace/tree wire
+// shape, so they live in @intentic/sandbox-contract. `path` is root-relative with forward slashes so it feeds
+// straight back to the file route.
 
 // Directories never worth surfacing — huge or machine-generated; the agent ignores them too. `.git` is also
 // excluded because it can hold remote URLs with embedded tokens.

@@ -94,8 +94,7 @@ export const exchangeCode = (pastedCode: string, verifier: string, fallbackState
 
 export type RefreshFn = (refreshToken: string) => Promise<StoredAccount>;
 
-const refreshTokens: RefreshFn = (refreshToken) =>
-    requestTokens({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: CLIENT_ID });
+const refreshTokens: RefreshFn = (refreshToken) => requestTokens({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: CLIENT_ID });
 
 // The credential store, injected so the daemon's tests need no filesystem.
 export interface ClaudeStore {

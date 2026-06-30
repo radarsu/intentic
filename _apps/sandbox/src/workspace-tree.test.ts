@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { WorkspaceTreeEntry } from "@intentic/sandbox-contract";
 import { expect, test } from "vitest";
-import { isDeniedWorkspacePath, isSecretFile, type WorkspaceTreeEntry, walkWorkspaceTree } from "./workspace-tree.js";
+import { isDeniedWorkspacePath, isSecretFile, walkWorkspaceTree } from "./workspace-tree.js";
 
 test("isSecretFile flags credential files but allows .env.example", () => {
     expect(isSecretFile(".env")).toBe(true);

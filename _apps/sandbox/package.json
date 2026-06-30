@@ -13,20 +13,30 @@
     "scripts": {
         "build": "tsc",
         "watch": "tsc --build --watch",
+        "dev": "tsx watch ./src/main.ts",
         "test": "vitest run",
         "test:watch": "vitest"
     },
     "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "catalog:",
         "@hono/node-server": "catalog:",
+        "@intentic/sandbox-contract": "workspace:*",
+        "@orpc/openapi": "catalog:",
+        "@orpc/server": "catalog:",
+        "@puristic/env": "catalog:",
         "hono": "catalog:",
         "jose": "catalog:",
+        "pino": "catalog:",
         "tslib": "catalog:",
         "zod": "catalog:"
     },
     "devDependencies": {
         "@intentic/tsconfig": "workspace:*",
+        "@orpc/client": "catalog:",
+        "@orpc/openapi-client": "catalog:",
         "@types/node": "catalog:",
+        "pino-pretty": "catalog:",
+        "tsx": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
     }

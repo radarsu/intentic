@@ -1,6 +1,7 @@
 import type { Options, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { AgentEvent } from "@intentic/sandbox-contract";
 import { expect, test } from "vitest";
-import { type AgentEvent, type QueryFn, runAgent } from "./agent.js";
+import { type QueryFn, runAgent } from "./agent.js";
 
 // Build a fake QueryFn yielding canned SDK messages (cast to SDKMessage — tests exercise only the fields
 // runAgent reads), so the agent loop is verified without the SDK, a binary, or network.

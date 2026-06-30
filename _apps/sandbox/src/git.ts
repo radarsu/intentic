@@ -11,8 +11,9 @@ const defaultGit: GitRunner = (dir, args) => exec("git", ["-C", dir, ...args]);
 export interface GitStatus {
     readonly branch: string;
     readonly dirty: boolean;
-    // Porcelain entries (e.g. " M src/app.ts"), one per changed path.
-    readonly files: readonly string[];
+    // Porcelain entries (e.g. " M src/app.ts"), one per changed path. Mutable to match the wire schema
+    // (GitStatusSchema) the status route returns directly.
+    readonly files: string[];
 }
 
 const porcelainFiles = (stdout: string): string[] =>

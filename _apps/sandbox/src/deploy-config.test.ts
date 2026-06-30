@@ -1,9 +1,17 @@
+import type { InventoryEntry } from "@intentic/sandbox-contract";
 import { describe, expect, test } from "vitest";
-import { type InventoryEntry, readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
+import { readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
 
 const hostEntry: InventoryEntry = { kind: "backend", provider: "host", name: "self", values: { address: "1.2.3.4", user: "deploy", port: 22 } };
 const cfEntry: InventoryEntry = { kind: "backend", provider: "cloudflare", name: "cf", values: {} };
-const signozEntry: InventoryEntry = { kind: "service", service: "signoz", name: "obs", on: "self", expose: "cf", values: { domain: "signoz.example.com" } };
+const signozEntry: InventoryEntry = {
+    kind: "service",
+    service: "signoz",
+    name: "obs",
+    on: "self",
+    expose: "cf",
+    values: { domain: "signoz.example.com" },
+};
 
 describe("deploy-config managed region", () => {
     test("a scaffold has an empty managed region", () => {
@@ -14,7 +22,9 @@ describe("deploy-config managed region", () => {
         const src = scaffoldDeployConfig([hostEntry]);
         // The rendered host carries sshKey: env("HOST_SSH_KEY"); the parser surfaces only the non-secret scalars.
         expect(src).toContain(`sshKey: env("HOST_SSH_KEY")`);
-        expect(readManagedRegion(src)).toEqual([{ kind: "backend", provider: "host", name: "self", values: { address: "1.2.3.4", user: "deploy", port: 22 } }]);
+        expect(readManagedRegion(src)).toEqual([
+            { kind: "backend", provider: "host", name: "self", values: { address: "1.2.3.4", user: "deploy", port: 22 } },
+        ]);
     });
 
     test("round-trips a service losslessly (on/expose stay bare-name refs, domain stays a value)", () => {
@@ -50,10 +60,7 @@ describe("deploy-config managed region", () => {
     });
 
     test("skips declarations for providers it does not model", () => {
-        const src = scaffoldDeployConfig([]).replace(
-            `// </intentic>`,
-            `    const x = i.have.mystery("x", { foo: "bar" });\n    // </intentic>`,
-        );
+        const src = scaffoldDeployConfig([]).replace(`// </intentic>`, `    const x = i.have.mystery("x", { foo: "bar" });\n    // </intentic>`);
         expect(readManagedRegion(src)).toEqual([]);
     });
 });

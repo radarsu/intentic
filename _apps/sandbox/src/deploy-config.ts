@@ -1,52 +1,18 @@
-import { z } from "zod";
+import type { InventoryEntry, InventoryProvider, ServiceKind } from "@intentic/sandbox-contract";
 
 /* The platform-owned region of an intent's deploy.config.ts. Everything between the markers is regenerated
  * wholesale from the structured inventory entries, so the UI can edit the file deterministically; the user's
- * code outside the markers is never touched. The sandbox owns this now (the browser calls the daemon's
- * /inventory routes directly) — ported from the platform's api/deploy-config.ts.
+ * code outside the markers is never touched. The sandbox owns this (the browser calls the daemon's /inventory
+ * routes directly).
  *
  * Two entry shapes live in the region: `backend` (i.have.<provider>(...) — host/cloudflare/github/stripe) and
  * `service` (i.want.service(...) — an authorable shared tool like SigNoz). A service references an existing
  * host + cloudflare binding by NAME, rendered as bare const references (`on: self`), and parsed back to those
- * names — the render→parse cycle must be lossless so repeated edits never mangle a user's services. */
-
-// ---- Inventory wire contract. Duplicated from the platform's @app_/api-contract (a separate repo we can't
-// import) — the daemon produces these and the browser validates them against the platform's matching schema,
-// the same cross-repo-contract pattern as AgentEvent / IntenticLine. Keep the two in sync. ----
-export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe"]);
-export type InventoryProvider = z.infer<typeof InventoryProviderSchema>;
-export const ServiceKindSchema = z.enum(["signoz"]);
-export type ServiceKind = z.infer<typeof ServiceKindSchema>;
-// Non-secret option values the user provides; secret options (sshKey, apiToken, apiKey) are emitted as env()
-// references and never travel over the wire.
-export const InventoryValuesSchema = z.record(z.string(), z.union([z.string(), z.number()]));
-// `const <name>` binding in deploy.config.ts, so it must be a valid identifier.
-const inventoryName = z
-    .string()
-    .min(1)
-    .max(60)
-    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/);
-export const BackendEntrySchema = z.object({
-    kind: z.literal("backend"),
-    provider: InventoryProviderSchema,
-    name: z.string(),
-    values: InventoryValuesSchema,
-});
-export const ServiceEntrySchema = z.object({
-    kind: z.literal("service"),
-    service: ServiceKindSchema,
-    name: z.string(),
-    values: InventoryValuesSchema,
-    on: z.string(),
-    expose: z.string(),
-});
-export const InventoryEntrySchema = z.discriminatedUnion("kind", [BackendEntrySchema, ServiceEntrySchema]);
-export type InventoryEntry = z.infer<typeof InventoryEntrySchema>;
-export const AddInventoryInputSchema = z.discriminatedUnion("kind", [
-    BackendEntrySchema.extend({ name: inventoryName }),
-    ServiceEntrySchema.extend({ name: inventoryName }),
-]);
-export type AddInventoryInput = z.infer<typeof AddInventoryInputSchema>;
+ * names — the render→parse cycle must be lossless so repeated edits never mangle a user's services.
+ *
+ * The inventory wire schemas (InventoryEntry / AddInventoryInputSchema / the provider + service enums) live in
+ * @intentic/sandbox-contract — the single source the daemon and the browser client both validate against. This
+ * module only renders/parses those entries to and from TypeScript. */
 
 // ---- managed-region parser/renderer ----
 
