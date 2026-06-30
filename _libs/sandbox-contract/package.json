@@ -31,9 +31,7 @@
     },
     "scripts": {
         "build": "tsc",
-        "watch": "tsc --build --watch",
-        "test": "vitest run",
-        "test:watch": "vitest"
+        "watch": "tsc --build --watch"
     },
     "dependencies": {
         "@orpc/contract": "catalog:",
@@ -42,7 +40,6 @@
     },
     "devDependencies": {
         "@intentic/tsconfig": "workspace:*",
-        "typescript": "catalog:",
-        "vitest": "catalog:"
+        "typescript": "catalog:"
     }
 }
