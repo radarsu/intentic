@@ -1,8 +1,8 @@
 import { claudeContract } from "@intentic/sandbox-contract";
 import { implement } from "@orpc/server";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
 import { buildAuthorizeUrl, exchangeCode } from "./claude-credentials.js";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
 
 // Claude subscription OAuth — the sandbox owns the credential, the platform never sees it. `start` hands the
 // browser the authorize URL + PKCE material; `exchange` stores the tokens here; the agent route reads them.

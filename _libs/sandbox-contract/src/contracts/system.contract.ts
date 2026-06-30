@@ -1,6 +1,6 @@
 import { eventIterator, oc } from "@orpc/contract";
-import { HeartbeatSchema } from "./events.js";
-import { InfoSchema, PreviewSchema, SelfHostResponseSchema } from "./schemas.js";
+import { HeartbeatSchema } from "../events.js";
+import { InfoSchema, PreviewSchema, SelfHostResponseSchema } from "../schemas.js";
 
 // Sandbox status + identity, plus the long-lived liveness stream. `events` yields a heartbeat frame until the
 // request aborts; the browser holds it open to detect the sandbox dying instantly.

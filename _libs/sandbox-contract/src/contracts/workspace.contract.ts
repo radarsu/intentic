@@ -11,7 +11,7 @@ import {
     WorkspaceFileQuerySchema,
     WorkspaceFileSchema,
     WorkspaceTreeSchema,
-} from "./schemas.js";
+} from "../schemas.js";
 
 // The full /work view + extra-repo cloning + the sandbox-owned external MCP tools store. The binary preview
 // (/workspace/raw) is intentionally NOT here — it stays a plain Hono route serving raw bytes with a

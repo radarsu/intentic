@@ -1,19 +1,19 @@
 import { join } from "node:path";
 import type { AgentEvent, IntenticLine, SelfHost, WorkspaceTree } from "@intentic/sandbox-contract";
 import type { Logger } from "pino";
-import { type AgentRequest, runAgent } from "./agent.js";
-import { createAuthorizer, createGoogleVerifier, fileOwnerStore } from "./auth.js";
-import { type ClaudeStore, fileClaudeStore } from "./claude-credentials.js";
-import { createDevServer, type DevServer } from "./dev-server.js";
+import { type AgentRequest, runAgent } from "./agent/agent.js";
+import { createAuthorizer, createGoogleVerifier, fileOwnerStore } from "./auth/auth.js";
+import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
-import { type GitStatus, gitClone, gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git.js";
-import { type IntenticRun, runIntentic } from "./intentic-runner.js";
-import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions.js";
-import { type AgentTool, internalTools } from "./tools.js";
-import { fileToolsStore, type ToolsStore } from "./tools-store.js";
-import { type WorkspacePaths, workspacePaths } from "./workspace.js";
-import { readWorkspaceFile, readWorkspaceFileBytes, statWorkspaceFileSize, writeWorkspaceFile } from "./workspace-files.js";
-import { walkWorkspaceTree } from "./workspace-tree.js";
+import { type GitStatus, gitClone, gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git/git.js";
+import { type IntenticRun, runIntentic } from "./intentic/intentic-runner.js";
+import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions/sessions.js";
+import { createDevServer, type DevServer } from "./system/dev-server.js";
+import { type AgentTool, internalTools } from "./workspace/tools.js";
+import { fileToolsStore, type ToolsStore } from "./workspace/tools-store.js";
+import { type WorkspacePaths, workspacePaths } from "./workspace/workspace.js";
+import { readWorkspaceFile, readWorkspaceFileBytes, statWorkspaceFileSize, writeWorkspaceFile } from "./workspace/workspace-files.js";
+import { walkWorkspaceTree } from "./workspace/workspace-tree.js";
 
 // The daemon's collaborators, wired once at boot and handed to the route factories — the injection seam the
 // route tests build fakes against (the equivalent of the old createDaemon `deps` object). Stateful members

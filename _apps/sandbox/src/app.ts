@@ -5,8 +5,8 @@ import { cors } from "hono/cors";
 import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { createRouter } from "./router.js";
-import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace-files.js";
-import { isDeniedWorkspacePath } from "./workspace-tree.js";
+import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
+import { isDeniedWorkspacePath } from "./workspace/workspace-tree.js";
 
 // Only genuine server faults (5xx) are logged; expected ORPCErrors (NOT_FOUND/BAD_REQUEST/…) are the routes'
 // normal control flow and would be noise.

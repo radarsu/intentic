@@ -7,13 +7,13 @@ import type { Hono } from "hono";
 import { expect, test } from "vitest";
 import { createApp } from "./app.js";
 import type { Services } from "./composition.js";
-import type { DevServer } from "./dev-server.js";
 import type { Config } from "./env.config.js";
 import { createLogger } from "./logger.js";
-import type { AgentTool } from "./tools.js";
-import type { ToolsStore } from "./tools-store.js";
-import { workspacePaths } from "./workspace.js";
-import { MAX_RAW_BYTES } from "./workspace-files.js";
+import type { DevServer } from "./system/dev-server.js";
+import type { AgentTool } from "./workspace/tools.js";
+import type { ToolsStore } from "./workspace/tools-store.js";
+import { workspacePaths } from "./workspace/workspace.js";
+import { MAX_RAW_BYTES } from "./workspace/workspace-files.js";
 
 // An in-memory external-tools store so the tool routes + turn merge are testable without the fs.
 const memoryToolsStore = (initial: AgentTool[] = []): ToolsStore => {

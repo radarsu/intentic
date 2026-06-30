@@ -1,6 +1,6 @@
 import { eventIterator, oc } from "@orpc/contract";
-import { AgentEventSchema } from "./events.js";
-import { AgentTurnSchema, AnswerSchema, DecisionSchema, OkSchema } from "./schemas.js";
+import { AgentEventSchema } from "../events.js";
+import { AgentTurnSchema, AnswerSchema, DecisionSchema, OkSchema } from "../schemas.js";
 
 // One agent turn streams typed AgentEvents (session/delta/tool/plan/question/error/done); decision/answer
 // resolve a turn paused on an ExitPlanMode approval or an interactive question (the side channels).

@@ -1,7 +1,7 @@
 import { type Heartbeat, systemContract } from "@intentic/sandbox-contract";
 import { implement } from "@orpc/server";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
 
 // Long-lived liveness stream: the browser holds it open so it detects the sandbox dying instantly (the tunnel
 // drops the proxied response when the origin goes away). Heartbeat frames also trip a client watchdog.

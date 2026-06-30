@@ -10,7 +10,7 @@ import {
     OkSchema,
     PushSchema,
     RepoParamSchema,
-} from "./schemas.js";
+} from "../schemas.js";
 
 // Per-repo git ops over the three workspace repos (intent / desired-state / app). An unknown {repo} is a
 // handler-thrown NOT_FOUND; a path that escapes the repo is a BAD_REQUEST.

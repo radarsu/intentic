@@ -1,9 +1,9 @@
 import { gitContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
-import { REPO_ROLES, type RepoRole } from "./workspace.js";
-import { resolveWithin } from "./workspace-files.js";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
+import { REPO_ROLES, type RepoRole } from "../workspace/workspace.js";
+import { resolveWithin } from "../workspace/workspace-files.js";
 
 const COMMIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const;
 

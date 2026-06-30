@@ -1,5 +1,5 @@
 import { oc } from "@orpc/contract";
-import { AddInventoryInputSchema, InventoryListSchema, InventoryNameParamSchema, OkSchema } from "./schemas.js";
+import { AddInventoryInputSchema, InventoryListSchema, InventoryNameParamSchema, OkSchema } from "../schemas.js";
 
 // The i.have.* / i.want.service entries in deploy.config.ts's managed region. add/remove rewrite the region
 // and commit it (mirroring an agent edit); selfHost idempotently registers this sandbox's host as a deploy

@@ -5,8 +5,8 @@ import { createApp } from "./app.js";
 import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
 import { createLogger } from "./logger.js";
-import { registerWithPlatform } from "./register.js";
-import { zoneFromPublicUrl } from "./zone.js";
+import { registerWithPlatform } from "./system/register.js";
+import { zoneFromPublicUrl } from "./system/zone.js";
 
 // The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
 // the workspace provider (a server); the workspace (the three repos) and agent credentials are injected there,

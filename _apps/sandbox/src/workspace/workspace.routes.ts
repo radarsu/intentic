@@ -1,7 +1,7 @@
 import { workspaceContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
 import { isValidRepoName, listRepos } from "./repos.js";
 import { isValidToolName } from "./tools.js";
 import { resolveWithin } from "./workspace-files.js";

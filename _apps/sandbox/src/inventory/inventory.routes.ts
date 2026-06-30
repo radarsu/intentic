@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { type InventoryEntry, inventoryContract } from "@intentic/sandbox-contract";
 import { implement } from "@orpc/server";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
 import { readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
 
 const INVENTORY_CONFIG = "deploy.config.ts";

@@ -1,7 +1,7 @@
 import { sessionsContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
 
 // Past conversations in this workspace (SDK-native session store, keyed on the workspace dir). A read that
 // throws (no such session) becomes NOT_FOUND — the route's documented behavior, not a swallowed error.

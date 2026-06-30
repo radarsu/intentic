@@ -1,22 +1,22 @@
-import { agentContract } from "./agent.contract.js";
-import { claudeContract } from "./claude.contract.js";
-import { gitContract } from "./git.contract.js";
-import { intenticContract } from "./intentic.contract.js";
-import { inventoryContract } from "./inventory.contract.js";
-import { sessionsContract } from "./sessions.contract.js";
-import { systemContract } from "./system.contract.js";
-import { workspaceContract } from "./workspace.contract.js";
+import { agentContract } from "./contracts/agent.contract.js";
+import { claudeContract } from "./contracts/claude.contract.js";
+import { gitContract } from "./contracts/git.contract.js";
+import { intenticContract } from "./contracts/intentic.contract.js";
+import { inventoryContract } from "./contracts/inventory.contract.js";
+import { sessionsContract } from "./contracts/sessions.contract.js";
+import { systemContract } from "./contracts/system.contract.js";
+import { workspaceContract } from "./contracts/workspace.contract.js";
 
-export { agentContract } from "./agent.contract.js";
-export { claudeContract } from "./claude.contract.js";
+export { agentContract } from "./contracts/agent.contract.js";
+export { claudeContract } from "./contracts/claude.contract.js";
+export { gitContract } from "./contracts/git.contract.js";
+export { intenticContract } from "./contracts/intentic.contract.js";
+export { inventoryContract } from "./contracts/inventory.contract.js";
+export { sessionsContract } from "./contracts/sessions.contract.js";
+export { systemContract } from "./contracts/system.contract.js";
+export { workspaceContract } from "./contracts/workspace.contract.js";
 export * from "./events.js";
-export { gitContract } from "./git.contract.js";
-export { intenticContract } from "./intentic.contract.js";
-export { inventoryContract } from "./inventory.contract.js";
 export * from "./schemas.js";
-export { sessionsContract } from "./sessions.contract.js";
-export { systemContract } from "./system.contract.js";
-export { workspaceContract } from "./workspace.contract.js";
 
 // The aggregated contract — implemented on the server by the per-domain route factories and consumed by the
 // browser's typed oRPC client (ContractRouterClient<typeof sandboxContract>). The wire paths it declares are

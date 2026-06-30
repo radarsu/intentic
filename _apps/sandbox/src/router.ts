@@ -1,12 +1,12 @@
-import { createAgentRoutes } from "./agent.routes.js";
-import { createClaudeRoutes } from "./claude.routes.js";
+import { createAgentRoutes } from "./agent/agent.routes.js";
+import { createClaudeRoutes } from "./claude/claude.routes.js";
 import type { Services } from "./composition.js";
-import { createGitRoutes } from "./git.routes.js";
-import { createIntenticRoutes } from "./intentic.routes.js";
-import { createInventoryRoutes } from "./inventory.routes.js";
-import { createSessionsRoutes } from "./sessions.routes.js";
-import { createSystemRoutes } from "./system.routes.js";
-import { createWorkspaceRoutes } from "./workspace.routes.js";
+import { createGitRoutes } from "./git/git.routes.js";
+import { createIntenticRoutes } from "./intentic/intentic.routes.js";
+import { createInventoryRoutes } from "./inventory/inventory.routes.js";
+import { createSessionsRoutes } from "./sessions/sessions.routes.js";
+import { createSystemRoutes } from "./system/system.routes.js";
+import { createWorkspaceRoutes } from "./workspace/workspace.routes.js";
 
 // The implemented oRPC router — the per-domain route factories assembled into the sandboxContract shape. The
 // OpenAPIHandler in app.ts serves it.

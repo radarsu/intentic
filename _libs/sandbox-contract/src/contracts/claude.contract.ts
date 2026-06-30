@@ -1,5 +1,5 @@
 import { oc } from "@orpc/contract";
-import { AuthorizeChallengeSchema, ClaudeAccountSchema, ClaudeExchangeSchema, OkSchema } from "./schemas.js";
+import { AuthorizeChallengeSchema, ClaudeAccountSchema, ClaudeExchangeSchema, OkSchema } from "../schemas.js";
 
 // Claude subscription OAuth — the sandbox owns the credential. `start` hands the browser the authorize URL +
 // PKCE material; `exchange` stores the resulting tokens; `account`/`disconnect` report and clear them.

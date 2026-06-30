@@ -1,5 +1,5 @@
 import { oc } from "@orpc/contract";
-import { SessionIdParamSchema, SessionsListSchema, SessionTranscriptSchema } from "./schemas.js";
+import { SessionIdParamSchema, SessionsListSchema, SessionTranscriptSchema } from "../schemas.js";
 
 // Past conversations in this workspace (the SDK-native session store, keyed on the workspace dir). `list`
 // returns summaries for the history menu; `get` restores one transcript for display.

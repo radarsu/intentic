@@ -9,8 +9,8 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentEvent, AskQuestion } from "@intentic/sandbox-contract";
 import { z } from "zod";
+import { type AgentTool, mcpServersOf } from "../workspace/tools.js";
 import { createPlanRequest, createQuestionRequest, type QuestionResponse } from "./agent-requests.js";
-import { type AgentTool, mcpServersOf } from "./tools.js";
 
 export interface AgentRequest {
     readonly prompt: string;

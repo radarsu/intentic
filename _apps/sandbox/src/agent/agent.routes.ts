@@ -1,10 +1,10 @@
 import { type AgentEvent, type AgentTurn, agentContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
+import { ensureFreshToken } from "../claude/claude-credentials.js";
+import type { Services } from "../composition.js";
+import type { OrpcContext } from "../context.js";
 import type { AgentRequest } from "./agent.js";
 import { resolvePlanDecision, resolveQuestionAnswer } from "./agent-requests.js";
-import { ensureFreshToken } from "./claude-credentials.js";
-import type { Services } from "./composition.js";
-import type { OrpcContext } from "./context.js";
 
 // Run one agent turn, streaming typed AgentEvents. The Claude token is the sandbox's own credential (resolved
 // + refreshed here), never held by the platform; undefined falls back to the container env. A turn with no
