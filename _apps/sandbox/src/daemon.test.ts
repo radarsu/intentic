@@ -5,6 +5,7 @@ import type { DevServer } from "./dev-server.js";
 import type { AgentTool } from "./tools.js";
 import type { ToolsStore } from "./tools-store.js";
 import { workspacePaths } from "./workspace.js";
+import { MAX_RAW_BYTES } from "./workspace-files.js";
 
 // An in-memory external-tools store so the daemon's tool routes + turn merge are testable without the fs.
 const memoryToolsStore = (initial: AgentTool[] = []): ToolsStore => {
@@ -269,6 +270,8 @@ test("GET /git/:repo/file reads a contained file, 404s a missing one, and 400s a
             files: {
                 read: async (absPath) => (absPath === "/work/intent/deploy.config.ts" ? "export const intent = 1;" : undefined),
                 write: async () => {},
+                readBytes: async () => undefined,
+                size: async () => undefined,
             },
         }),
     );
@@ -288,6 +291,8 @@ test("PUT /git/:repo/file writes a contained file and rejects a path escape", as
                 write: async (absPath, content) => {
                     writes.push({ path: absPath, content });
                 },
+                readBytes: async () => undefined,
+                size: async () => undefined,
             },
         }),
     );
@@ -323,6 +328,8 @@ test("GET /workspace/file reads any contained file, denies secrets, 404s missing
                 read: async (absPath) =>
                     absPath === "/work/app/src/index.ts" ? "console.log(1);" : absPath === "/work/desired-state/.env" ? "SECRET=1" : undefined,
                 write: async () => {},
+                readBytes: async () => undefined,
+                size: async () => undefined,
             },
         }),
     );
@@ -337,6 +344,37 @@ test("GET /workspace/file reads any contained file, denies secrets, 404s missing
     expect((await app.request("/workspace/file?path=.intentic/tools.json")).status).toBe(404);
     expect((await app.request("/workspace/file?path=app/nope.ts")).status).toBe(404);
     expect((await app.request("/workspace/file?path=../../etc/passwd")).status).toBe(400);
+});
+
+test("GET /workspace/raw streams bytes with a content-type, denies secrets, 404s missing, 400s escape, 413s oversize", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const app = createDaemon(
+        deps({
+            files: {
+                read: async () => undefined,
+                write: async () => {},
+                readBytes: async (absPath) => (absPath === "/work/app/logo.png" ? png : undefined),
+                size: async (absPath) =>
+                    absPath === "/work/app/logo.png"
+                        ? png.byteLength
+                        : absPath === "/work/app/huge.png"
+                          ? MAX_RAW_BYTES + 1
+                          : absPath === "/work/desired-state/.env"
+                            ? 10
+                            : undefined,
+            },
+        }),
+    );
+    const ok = await app.request("/workspace/raw?path=app/logo.png");
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await ok.arrayBuffer())).toEqual(new Uint8Array(png));
+    // The denylist short-circuits before size/read, even though size would resolve.
+    expect((await app.request("/workspace/raw?path=desired-state/.env")).status).toBe(404);
+    // Oversize is refused on the size check, before the bytes are loaded.
+    expect((await app.request("/workspace/raw?path=app/huge.png")).status).toBe(413);
+    expect((await app.request("/workspace/raw?path=app/missing.png")).status).toBe(404);
+    expect((await app.request("/workspace/raw?path=../../etc/passwd")).status).toBe(400);
 });
 
 test("POST /workspace/repos clones a repo, rejects reserved names + a bad body", async () => {

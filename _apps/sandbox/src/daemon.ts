@@ -15,7 +15,15 @@ import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type 
 import { type AgentTool, isValidToolName } from "./tools.js";
 import { fileToolsStore, type ToolsStore } from "./tools-store.js";
 import { REPO_ROLES, type RepoRole, type WorkspacePaths } from "./workspace.js";
-import { readWorkspaceFile, resolveWithin, writeWorkspaceFile } from "./workspace-files.js";
+import {
+    contentTypeForPath,
+    MAX_RAW_BYTES,
+    readWorkspaceFile,
+    readWorkspaceFileBytes,
+    resolveWithin,
+    statWorkspaceFileSize,
+    writeWorkspaceFile,
+} from "./workspace-files.js";
 import { isDeniedWorkspacePath, type WorkspaceTree, walkWorkspaceTree } from "./workspace-tree.js";
 
 // The daemon's collaborators, injected so the HTTP wiring is testable without real subprocesses.
@@ -58,6 +66,10 @@ export interface DaemonDeps {
     readonly files?: {
         readonly read: (absPath: string) => Promise<string | undefined>;
         readonly write: (absPath: string, content: string) => Promise<void>;
+        // Raw bytes + size back the binary /workspace/raw preview (images/PDF), where a utf8 read would corrupt
+        // the file. `size` is checked before `readBytes` so an oversized file is refused, not loaded into memory.
+        readonly readBytes: (absPath: string) => Promise<Buffer | undefined>;
+        readonly size: (absPath: string) => Promise<number | undefined>;
     };
     // The full /work filesystem tree the agent sees (untracked + generated files included), distinct from the
     // git-tracked listing. Injected in tests; defaults to a real fs walk with ignore rules + depth/entry caps.
@@ -122,7 +134,12 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         push: (dir, branch) => gitPush(dir, branch),
         clone: (parentDir, name, cloneUrl, branch) => gitClone(parentDir, name, cloneUrl, branch),
     };
-    const files = deps.files ?? { read: (absPath) => readWorkspaceFile(absPath), write: (absPath, content) => writeWorkspaceFile(absPath, content) };
+    const files = deps.files ?? {
+        read: (absPath) => readWorkspaceFile(absPath),
+        write: (absPath, content) => writeWorkspaceFile(absPath, content),
+        readBytes: (absPath) => readWorkspaceFileBytes(absPath),
+        size: (absPath) => statWorkspaceFileSize(absPath),
+    };
     const workspaceTree = deps.workspaceTree ?? ((root) => walkWorkspaceTree(root));
     const sessions = deps.sessions ?? { list: (dir) => listWorkspaceSessions(dir), read: (dir, id) => readWorkspaceSession(dir, id) };
     const claudeStore = deps.claudeStore ?? fileClaudeStore(join(workspace.root, ".intentic", "claude.json"));
@@ -172,6 +189,19 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
     // This sandbox's own identity (container name + image), for the platform's Connections + account panel. The
     // browser reads it DIRECTLY (auth-gated like every route); the platform holds nothing. {} when unset.
     app.get("/info", (c) => c.json(deps.info ?? {}));
+
+    // Long-lived liveness stream: the browser holds this open so it detects the sandbox dying instantly — the
+    // tunnel drops the proxied response when the origin goes away. Periodic heartbeat frames also let the client
+    // trip a watchdog if the connection silently half-opens. Auth-gated like every route but /health.
+    app.get("/events", (c) =>
+        streamSSE(c, async (stream) => {
+            const signal = c.req.raw.signal;
+            while (!signal.aborted && !stream.aborted) {
+                await stream.writeSSE({ data: JSON.stringify({ kind: "heartbeat" }) });
+                await stream.sleep(2000);
+            }
+        }),
+    );
 
     app.post("/agent", async (c) => {
         const parsed = agentBody.safeParse(await c.req.json().catch(() => undefined));
@@ -388,6 +418,34 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
             return c.json({ error: "not found" }, 404);
         }
         return c.json({ path, content });
+    });
+
+    // Raw bytes for any file under /work, with a Content-Type by extension — the browser previews images/PDF from
+    // this (the text route above utf8-decodes and would corrupt them). Same guards/order as /workspace/file: 400
+    // on escape, 404 on denylist/.git/secrets, 404 on missing; plus 413 when the file exceeds the raw cap.
+    app.get("/workspace/raw", async (c) => {
+        const path = c.req.query("path");
+        const target = path === undefined ? undefined : resolveWithin(workspace.root, path);
+        if (target === undefined) {
+            return c.json({ error: "invalid path" }, 400);
+        }
+        if (isDeniedWorkspacePath(path as string)) {
+            return c.json({ error: "not found" }, 404);
+        }
+        const size = await files.size(target);
+        if (size === undefined) {
+            return c.json({ error: "not found" }, 404);
+        }
+        if (size > MAX_RAW_BYTES) {
+            return c.json({ error: "file too large" }, 413);
+        }
+        const bytes = await files.readBytes(target);
+        if (bytes === undefined) {
+            return c.json({ error: "not found" }, 404);
+        }
+        // Wrap in a fresh Uint8Array so the body type is exactly Uint8Array<ArrayBuffer> (a Buffer's backing is
+        // ArrayBufferLike, which Hono's body type rejects); bounded by MAX_RAW_BYTES, so the copy is cheap.
+        return c.body(new Uint8Array(bytes), 200, { "Content-Type": contentTypeForPath(target), "Content-Length": String(bytes.byteLength) });
     });
 
     // Extra repositories cloned into /work so the agent can work across more than the three fixed repos. They
