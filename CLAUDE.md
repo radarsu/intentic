@@ -6,3 +6,6 @@
 - Prefer undefined – use it consistently; avoid mixing with null.
 - No migration logic – assume fresh state; remove compatibility layers.
 - Use early returns – handle edge cases first.
+
+---
+For more context, check related platform repo: /home/radarsu/radarsu/repositories/intentic-platform
