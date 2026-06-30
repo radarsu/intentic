@@ -1,6 +1,6 @@
 import { compile, toNodeMap } from "@intentic/graph";
 import { expect, test } from "vitest";
-import type { Provider, Providers } from "./provider.js";
+import type { Provider, Providers } from "../provider.js";
 import { prune } from "./prune.js";
 
 const config = (providers: Providers) => ({ providers, env: {}, log: () => {} });

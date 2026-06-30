@@ -2,7 +2,6 @@ import type { Ref, SecretRef } from "@intentic/graph";
 import { generated, makeRef } from "@intentic/graph";
 import type { AppIntent, BackingIntent, HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { bindingEnv, resolveBinding } from "./backing.js";
 import {
     adminUsername,
     ciId,
@@ -16,6 +15,7 @@ import {
     registryAuthority,
     repoId,
 } from "../lib/ids.js";
+import { bindingEnv, resolveBinding } from "./backing.js";
 import type { PlatformRefs } from "./platform.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";

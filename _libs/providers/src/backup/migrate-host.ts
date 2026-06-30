@@ -1,5 +1,5 @@
-import { REPO_VOLUME } from "./backup.js";
 import type { SshSession } from "../core/ssh.js";
+import { REPO_VOLUME } from "./backup.js";
 
 // Cross-machine host migration: the live old host still runs the control plane, but a NAT'd local host opens
 // no inbound ports, so the new host cannot pull from it directly. These helpers therefore relay everything

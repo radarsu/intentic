@@ -1,13 +1,13 @@
 import type { DesiredStateGraph } from "@intentic/graph";
 import { linearize, refKey } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resources";
+import { httpProbe, waitReady } from "../readiness.js";
+import { resolveInputs } from "../resolve-inputs.js";
+import { createStore } from "../store.js";
+import type { Action, ApplyOutcome, EngineConfig, Step } from "../types.js";
 import { collectOrphans } from "./orphans.js";
 import { validateOutputs } from "./outputs-check.js";
-import { httpProbe, waitReady } from "./readiness.js";
 import { makeContext, requireProvider } from "./reconcile.js";
-import { resolveInputs } from "./resolve-inputs.js";
-import { createStore } from "./store.js";
-import type { Action, ApplyOutcome, EngineConfig, Step } from "./types.js";
 
 // Converge: walk the graph in dependency order, reconcile each node (create/update/noop), record its
 // outputs for downstream refs, then gate on readiness. Strictly sequential — a dependent must observe

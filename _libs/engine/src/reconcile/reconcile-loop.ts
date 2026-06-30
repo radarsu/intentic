@@ -1,7 +1,7 @@
 import type { DesiredStateGraph } from "@intentic/graph";
+import type { ApplyOutcome, EngineConfig } from "../types.js";
 import { apply } from "./apply.js";
 import { plan } from "./plan.js";
-import type { ApplyOutcome, EngineConfig } from "./types.js";
 
 export interface ConvergeResult {
     readonly converged: boolean;

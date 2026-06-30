@@ -1,7 +1,7 @@
 import { refKey } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resources";
-import type { Provider, ProviderContext, Providers } from "./provider.js";
-import type { OutputStore } from "./store.js";
+import type { Provider, ProviderContext, Providers } from "../provider.js";
+import type { OutputStore } from "../store.js";
 
 export const requireProvider = (providers: Providers, type: ResourceType, id: string): Provider => {
     const provider = providers[type];

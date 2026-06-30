@@ -1,8 +1,8 @@
 import { compile, toNodeMap } from "@intentic/graph";
 import { expect, test } from "vitest";
 
-import type { Provider, Providers } from "./provider.js";
-import { createFakeProviders } from "./providers/fake.js";
+import type { Provider, Providers } from "../provider.js";
+import { createFakeProviders } from "../providers/fake.js";
 import { reconcile } from "./reconcile-loop.js";
 
 const graph = compile(toNodeMap([{ id: "host", type: "host", inputs: { address: "1.2.3.4" }, explicitDependsOn: [] }]));

@@ -1,9 +1,9 @@
 import { makeRef } from "@intentic/graph";
 import type { HostInput, IntentSet } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { resolveAppGitHub } from "../resolvers/app-github.js";
 import { tunnelId, tunnelName } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { resolveAppGitHub } from "../resolvers/app-github.js";
 import type { IngressPair } from "../resolvers/route.js";
 import { resolveService } from "../resolvers/service.js";
 

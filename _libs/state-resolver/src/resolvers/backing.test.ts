@@ -2,9 +2,9 @@ import { env } from "@intentic/graph";
 import type { CloudflareIntent, HostIntent, IntentSet } from "@intentic/need-resolver";
 import { needKey, resolveNeeds } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
-import { forgejoCatalog } from "../lib/catalog.js";
 import type { Assignment } from "../emit/emit.js";
 import { emit } from "../emit/emit.js";
+import { forgejoCatalog } from "../lib/catalog.js";
 
 const host: HostIntent = { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } };
 const cloudflare: CloudflareIntent = { id: "cf", input: { apiToken: env("CLOUDFLARE_API_TOKEN") } };

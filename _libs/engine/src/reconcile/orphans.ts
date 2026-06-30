@@ -1,7 +1,7 @@
 import type { DesiredStateGraph } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resources";
-import type { ProviderContext, Providers } from "./provider.js";
-import type { EngineEvent, Orphan } from "./types.js";
+import type { ProviderContext, Providers } from "../provider.js";
+import type { EngineEvent, Orphan } from "../types.js";
 
 // Converge-forward: stamped resources whose id is absent from the desired graph are reported (as an
 // event), never deleted. Requires a provider to expose `list`; providers without it are skipped.

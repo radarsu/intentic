@@ -2,10 +2,10 @@ import type { DesiredStateGraph } from "@intentic/graph";
 import { linearize, refKey } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resources";
 import { OUTPUTS } from "@intentic/resources";
+import { resolveInputs } from "../resolve-inputs.js";
+import { createStore, type OutputStore, PENDING } from "../store.js";
+import type { EngineConfig, PrunedResource, PruneOutcome } from "../types.js";
 import { makeContext, requireProvider } from "./reconcile.js";
-import { resolveInputs } from "./resolve-inputs.js";
-import { createStore, type OutputStore, PENDING } from "./store.js";
-import type { EngineConfig, PrunedResource, PruneOutcome } from "./types.js";
 
 // A read pass over the CURRENT (kept) graph that seeds `store` with each kept node's live outputs (PENDING
 // for any not-yet-created node), mirroring plan.ts's seeding. A removed node's inputs reference kept platform

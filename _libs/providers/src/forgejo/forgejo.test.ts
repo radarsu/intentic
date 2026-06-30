@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { createForgejoProvider } from "./forgejo.js";
 import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
+import { createForgejoProvider } from "./forgejo.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 

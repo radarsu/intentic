@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
-
-import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
 import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
+import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
 import { createTunnelProvider } from "./tunnel.js";
 
 const NOT_USED = async (): Promise<never> => {

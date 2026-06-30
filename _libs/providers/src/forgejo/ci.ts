@@ -1,8 +1,8 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
+import { parseInputs } from "../core/inputs.js";
 import type { ForgejoApi } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";
-import { parseInputs } from "../core/inputs.js";
 
 const ciSchema = z.object({
     // The PUBLIC git url: commitFile + setRepoSecret go through the public route, like repo/forgejo-notify.

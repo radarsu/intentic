@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { createSignozProvider } from "./signoz.js";
 import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
+import { createSignozProvider } from "./signoz.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 

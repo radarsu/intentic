@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { makeContext } from "../reconcile.js";
+import { makeContext } from "../reconcile/reconcile.js";
 import { createStore } from "../store.js";
 import { createFakeProviders } from "./fake.js";
 

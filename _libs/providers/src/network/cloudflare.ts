@@ -1,8 +1,8 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
+import { parseInputs } from "../core/inputs.js";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
-import { parseInputs } from "../core/inputs.js";
 
 const cloudflareSchema = z.object({ apiToken: z.string(), zone: z.string() });
 const parse = (inputs: ResolvedInputs): z.infer<typeof cloudflareSchema> => parseInputs(cloudflareSchema, inputs, "cloudflare");

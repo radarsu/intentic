@@ -1,10 +1,9 @@
 import { env, linearize } from "@intentic/graph";
 import { defineStack } from "@intentic/sdk";
 import { expect, test } from "vitest";
-
+import { createFakeProviders } from "../providers/fake.js";
 import { apply } from "./apply.js";
 import { plan } from "./plan.js";
-import { createFakeProviders } from "./providers/fake.js";
 
 // The full secret set the example declaration references. The host SSH key and Cloudflare API token are
 // secrets; the host address/user are authored literals and the Cloudflare zone/account are discovered, so

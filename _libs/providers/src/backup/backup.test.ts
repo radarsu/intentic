@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { createBackupProvider } from "./backup.js";
 import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
+import { createBackupProvider } from "./backup.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 

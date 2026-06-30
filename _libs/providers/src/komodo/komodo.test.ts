@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { createKomodoProvider } from "./komodo.js";
 import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
+import { createKomodoProvider } from "./komodo.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 

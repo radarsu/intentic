@@ -1,9 +1,9 @@
 import type { DesiredStateGraph, Move, ResourceNode } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resources";
+import { resolveInputs } from "../resolve-inputs.js";
+import { createStore } from "../store.js";
+import type { EngineConfig } from "../types.js";
 import { makeContext, requireProvider } from "./reconcile.js";
-import { resolveInputs } from "./resolve-inputs.js";
-import { createStore } from "./store.js";
-import type { EngineConfig } from "./types.js";
 
 // Consume the graph's `moved` renames BEFORE reconcile: for each {from,to}, re-stamp the live resource from the
 // old id to the new one so the subsequent reconcile sees it as already-owned-and-current (a noop) instead of

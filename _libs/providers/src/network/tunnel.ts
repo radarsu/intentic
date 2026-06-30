@@ -1,10 +1,10 @@
 import type { Provider, ProviderContext, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
-import { cloudflareApi } from "./cloudflare-api.js";
 import { parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
 import type { SshExecutor, SshSession } from "../core/ssh.js";
 import { sshExecutor } from "../core/ssh.js";
+import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
+import { cloudflareApi } from "./cloudflare-api.js";
 
 const tunnelSchema = sshSchema.extend({
     name: z.string(),

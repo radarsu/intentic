@@ -2,11 +2,11 @@ import type { DesiredStateGraph } from "@intentic/graph";
 import { linearize, refKey } from "@intentic/graph";
 import type { ResourceType } from "@intentic/resources";
 import { OUTPUTS } from "@intentic/resources";
+import { resolveInputs } from "../resolve-inputs.js";
+import { createStore, PENDING } from "../store.js";
+import type { EngineConfig, PlanOutcome, Step } from "../types.js";
 import { collectOrphans } from "./orphans.js";
 import { makeContext, requireProvider } from "./reconcile.js";
-import { resolveInputs } from "./resolve-inputs.js";
-import { createStore, PENDING } from "./store.js";
-import type { EngineConfig, PlanOutcome, Step } from "./types.js";
 
 // Dry run: read actual state and decide create/update/noop per node WITHOUT mutating. Existing resources
 // seed the store from their real observed outputs; pending creates seed PENDING, so a dependent's lenient

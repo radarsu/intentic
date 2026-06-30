@@ -1,8 +1,8 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
+import { parseInputs } from "../core/inputs.js";
 import type { GitHubApi } from "./github-api.js";
 import { githubApi } from "./github-api.js";
-import { parseInputs } from "../core/inputs.js";
 
 const githubSchema = z.object({
     token: z.string(),

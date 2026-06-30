@@ -1,8 +1,8 @@
 import type { DesiredStateGraph, Move } from "@intentic/graph";
 import { describe, expect, it } from "vitest";
+import type { Provider } from "../provider.js";
+import type { EngineConfig } from "../types.js";
 import { applyMoves, rewriteGraphForMoves } from "./moves.js";
-import type { Provider } from "./provider.js";
-import type { EngineConfig } from "./types.js";
 
 // A node of an arbitrary stamp-keyed type, with no secret inputs so lenient resolution never throws.
 const node = (id: string, dependsOn: string[] = []) => ({ id, type: "postgres", inputs: {}, dependsOn });

@@ -1,11 +1,11 @@
 import { compile, toNodeMap } from "@intentic/graph";
 import { expect, test } from "vitest";
+import type { Provider, Providers } from "../provider.js";
+import { createFakeProviders, type FakeWorld } from "../providers/fake.js";
+import type { EngineEvent } from "../types.js";
 import { apply } from "./apply.js";
-import type { Provider, Providers } from "./provider.js";
-import { createFakeProviders, type FakeWorld } from "./providers/fake.js";
 import { prune } from "./prune.js";
 import { reconcile } from "./reconcile-loop.js";
-import type { EngineEvent } from "./types.js";
 
 const host = { id: "host", type: "host" as const, inputs: { address: "1.2.3.4" }, explicitDependsOn: [] };
 const graph = compile(toNodeMap([host]));
