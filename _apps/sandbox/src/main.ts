@@ -38,13 +38,14 @@ if (devCommand !== undefined && devCommand !== "" && devPort !== undefined) {
     devServer.start({ command: devCommand.split(" "), cwd: workspace.repos.app, port: Number(devPort) });
 }
 
-// When SELF_HOST_USER (+ HOST_SSH_KEY) is set, this sandbox runs on a host wired as a deploy target — expose
-// it so the `self` inventory host gets registered. address/port are fixed: the sandbox reaches the host it
-// runs on at host.docker.internal:22 (connect.sh / the provider add the host-gateway mapping).
+// When SELF_HOST_USER (+ HOST_SSH_KEY) is set, this sandbox runs with a wired deploy target — expose it so the
+// `self` inventory host gets registered. SELF_HOST_ADDRESS is where the sandbox SSHes to deploy: the default
+// host.docker.internal is the host the sandbox runs on (connect.sh / the provider add the host-gateway mapping);
+// connect.ps1 sets it to a sibling Docker-in-Docker container's name (Windows can't be a native SSH+Docker target).
 const selfHostUser = process.env["SELF_HOST_USER"];
 const selfHost =
     selfHostUser !== undefined && selfHostUser !== "" && (process.env["HOST_SSH_KEY"] ?? "") !== ""
-        ? { user: selfHostUser, address: "host.docker.internal", port: 22 }
+        ? { user: selfHostUser, address: process.env["SELF_HOST_ADDRESS"] ?? "host.docker.internal", port: 22 }
         : undefined;
 
 // The intent-declared internal MCP tools the workspace provider set in this container's env (base64 JSON).

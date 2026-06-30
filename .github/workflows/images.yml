@@ -1,8 +1,8 @@
 name: Images
 
-# Continuous image publishing: build + push the sandbox image to the repo's GHCR on every push to main that
-# touches it (moving `latest` + the commit SHA, for fast iteration). The version-tagged, digest-pinned image
-# that images.ts references is published separately by the release (see .releaserc.json).
+# Continuous image publishing: build + push the sandbox + dind-host images to the repo's GHCR on every push to
+# main that touches them (moving `latest` + the commit SHA, for fast iteration). The version-tagged, digest-pinned
+# image that images.ts references is published separately by the release (see .releaserc.json).
 on:
   push:
     branches: [main]
@@ -10,6 +10,7 @@ on:
       - _apps/sandbox/**
       - _apps/cli/**
       - _libs/**
+      - test/host/**
       - scripts/publish-images.sh
       - pnpm-lock.yaml
   workflow_dispatch:

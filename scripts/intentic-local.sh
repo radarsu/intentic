@@ -29,7 +29,9 @@
 set -euo pipefail
 
 CONTAINER="intentic-host"
-IMAGE="intentic-host:local"
+# The DinD + sshd "host" image: the published dind-host (built from test/host — the same recipe the e2e harness
+# uses, so this stays in lockstep with no embedded copy). Override INTENTIC_HOST_IMAGE to test a locally-built tag.
+IMAGE="${INTENTIC_HOST_IMAGE:-ghcr.io/radarsu/intentic/dind-host:latest}"
 DATA_VOLUME="intentic-host-docker"
 
 SSH_PORT="${SSH_PORT:-2222}"
@@ -47,46 +49,6 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $
 intentic() {
     # shellcheck disable=SC2086
     $INTENTIC_CMD "$@"
-}
-
-# --- The DinD + sshd host image, embedded so this script is fully standalone (no repo, no published image).
-# Identical to the repo's test/host: docker:28-dind gives an isolated daemon so intentic's nested containers
-# (Forgejo, the CI runner, the Komodo compose stack, cloudflared) run exactly as on a real owned box, without
-# touching your own Docker; sshd lets intentic reach it over SSH like real infra. iproute2/openssl back the
-# host (`ip route`) and komodo (`openssl rand`) providers; docker-cli-compose backs `docker compose up`.
-build_image() {
-    local ctx
-    ctx="$(mktemp -d)"
-    # The docker base is pinned (tag + digest) identically to test/host/Dockerfile; keep the two in lockstep.
-    # Renovate can't see this heredoc as a Dockerfile, so a customManager in renovate.json5 maintains this pin.
-    cat >"$ctx/Dockerfile" <<'DOCKERFILE'
-FROM docker:28.5.2-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
-RUN apk add --no-cache openssh openssh-server openssl iproute2 docker-cli-compose \
-    && ssh-keygen -A \
-    && mkdir -p /root/.ssh /run/sshd \
-    && chmod 700 /root/.ssh \
-    && printf 'PermitRootLogin prohibit-password\nPubkeyAuthentication yes\n' >> /etc/ssh/sshd_config
-COPY entrypoint.sh /usr/local/bin/intentic-host-entrypoint.sh
-RUN chmod +x /usr/local/bin/intentic-host-entrypoint.sh
-EXPOSE 22
-ENTRYPOINT ["/usr/local/bin/intentic-host-entrypoint.sh"]
-DOCKERFILE
-    cat >"$ctx/entrypoint.sh" <<'ENTRYPOINT'
-#!/bin/sh
-# Bring up the Docker daemon and sshd together: intentic SSHes in, then drives `docker` over that session.
-set -e
-dockerd-entrypoint.sh dockerd >/var/log/dockerd.log 2>&1 &
-i=0
-while [ "$i" -lt 60 ]; do
-    if docker info >/dev/null 2>&1; then break; fi
-    i=$((i + 1)); sleep 1
-done
-if [ -f /root/.ssh/authorized_keys ]; then chmod 600 /root/.ssh/authorized_keys; fi
-exec /usr/sbin/sshd -D -e
-ENTRYPOINT
-    log "building the DinD host image ($IMAGE) …"
-    docker build -t "$IMAGE" "$ctx" >/dev/null
-    rm -rf "$ctx"
 }
 
 # The localhost intent: the DinD host over SSH on 127.0.0.1:$SSH_PORT, exposed through your Cloudflare account.
@@ -156,7 +118,8 @@ up() {
     fi
     [ -n "$zone" ] || die "a Cloudflare zone (your domain) is required"
 
-    build_image
+    log "pulling the DinD host image ($IMAGE) …"
+    docker pull "$IMAGE" >/dev/null
 
     log "starting the persistent DinD host ($CONTAINER) …"
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true

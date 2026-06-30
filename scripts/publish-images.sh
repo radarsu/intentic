@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
-# Build + push the first-party intentic image (the AI-agent workspace sandbox) to the repo's GHCR
-# (ghcr.io/radarsu/intentic/sandbox). Used by CI — the Images workflow (latest + commit SHA on push to main)
-# and the release (the version, via semantic-release successCmd) — and runnable by hand:
+# Build + push the first-party intentic images to the repo's GHCR (ghcr.io/radarsu/intentic/*):
+#   sandbox    the AI-agent workspace daemon + CLI
+#   dind-host  a Docker-in-Docker + sshd deploy-target "host" — connect.ps1 stands one up on Windows so a
+#              server-less user can deploy locally (the e2e harness + intentic-local.sh use the same recipe)
+# Used by CI — the Images workflow (latest + commit SHA on push to main) and the release (the version, via
+# semantic-release successCmd) — and runnable by hand:
 #   docker login ghcr.io && TAGS=0.1.0 pnpm publish:images
 # TAGS is a space-separated tag list; every listed tag is pushed. The release version's digest is pinned into
-# _libs/state-resolver/src/images.ts (Renovate maintains it). The GHCR package must be made public once so
-# tenant hosts can pull it unauthenticated.
+# _libs/state-resolver/src/images.ts (Renovate maintains it). The GHCR packages must be made public once so
+# tenant hosts can pull them unauthenticated.
 set -euo pipefail
 
 TAGS="${TAGS:?set TAGS (space-separated, e.g. "0.1.0" or "latest sha-abc1234")}"
 REGISTRY="ghcr.io/radarsu/intentic"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
-for app in sandbox; do
-    tag_args=()
+# Build + push one image under every requested tag. The Dockerfile + build context differ per image: the
+# sandbox builds from the monorepo root; the dind-host from its self-contained test/host dir.
+publish() {
+    local image="$1" dockerfile="$2" context="$3"
+    local tag_args=()
     for tag in $TAGS; do
-        tag_args+=(-t "$REGISTRY/$app:$tag")
+        tag_args+=(-t "$REGISTRY/$image:$tag")
     done
-    docker buildx build \
-        -f "$root/_apps/$app/Dockerfile" \
-        "${tag_args[@]}" \
-        --push \
-        "$root"
-done
+    docker buildx build -f "$dockerfile" "${tag_args[@]}" --push "$context"
+}
+
+publish sandbox "$root/_apps/sandbox/Dockerfile" "$root"
+publish dind-host "$root/test/host/Dockerfile" "$root/test/host"

@@ -10,12 +10,12 @@
 # boot the sandbox registers its public URL with the platform's directory, so its setup gate flips to "ready".
 #
 # Usage (the platform's setup screen hands you a copy-paste one-liner):
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.sh | sudo env CLOUDFLARE_API_TOKEN=… RUNNER_TOKEN=… sh
-#   ./connect.sh <PLATFORM_URL> <RUNNER_TOKEN>   (positional; PLATFORM_URL defaults to the central platform)
+#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.sh | sudo env CF_TOKEN=… CONNECT_TOKEN=… sh
+#   ./connect.sh <PLATFORM_URL> <CONNECT_TOKEN>   (positional; PLATFORM_URL defaults to the central platform)
 #
 # Required — only the two values the platform can't bake in:
-#   CLOUDFLARE_API_TOKEN a Cloudflare token (Zone:Read, DNS:Edit, Tunnel:Edit) — intentic's reachability fabric; YOU supply it
-#   RUNNER_TOKEN         the per-user connection token the platform mints + fills into the one-liner
+#   CF_TOKEN       your Cloudflare API token (Zone:Read, DNS:Edit, Tunnel:Edit) — intentic's reachability fabric; passed to the sandbox as CLOUDFLARE_API_TOKEN
+#   CONNECT_TOKEN  the per-user connection token the platform mints + fills into the one-liner
 #
 # Platform statics (defaulted below — overridden only for local dev against a non-prod platform):
 #   PLATFORM_URL         the platform base the sandbox registers back to (default: https://platform.intentic.dev)
@@ -38,18 +38,18 @@ set -eu
 # on your own machine, prepend PLATFORM_URL=http://host.docker.internal:<apiPort> (the sandbox container reaches
 # your host's platform there, not localhost) — this is never shown in the product UI.
 PLATFORM_URL="${PLATFORM_URL:-${1:-https://platform.intentic.dev}}"
-RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
+CONNECT_TOKEN="${CONNECT_TOKEN:-${2:-}}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:latest}"
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
 DEV_COMMAND="${DEV_COMMAND:-pnpm dev}"
 DEV_PORT="${DEV_PORT:-5173}"
 # Infra secrets `intentic apply` reads INSIDE the sandbox; they ride straight into the sandbox container's env
-# and are never sent to the platform. CLOUDFLARE_API_TOKEN is REQUIRED — Cloudflare is intentic's reachability
-# fabric (the tunnel that connects your services, exposes them, AND carries the browser→sandbox traffic); it is
-# validated below before the sandbox starts. HOST_SSH_KEY is optional (auto-generated when SELF_HOST wires this
-# machine as a deploy target).
+# and are never sent to the platform. CF_TOKEN (your Cloudflare API token) is REQUIRED — Cloudflare is intentic's
+# reachability fabric (the tunnel that connects your services, exposes them, AND carries the browser→sandbox
+# traffic); it is validated below and passed to the sandbox as the Cloudflare-standard CLOUDFLARE_API_TOKEN the
+# CLI reads. HOST_SSH_KEY is optional (auto-generated when SELF_HOST wires this machine as a deploy target).
 HOST_SSH_KEY="${HOST_SSH_KEY:-}"
-CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
+CF_TOKEN="${CF_TOKEN:-}"
 # Self-host: wire this machine as a deploy target. DEFAULT ON — the platform flow always makes this machine the
 # first deploy target (the one-liner runs under `sudo`). Opt out of a non-deploy run with `SELF_HOST= ` (empty).
 SELF_HOST="${SELF_HOST-1}"
@@ -57,7 +57,7 @@ SELF_HOST_USER="${SELF_HOST_USER:-}"
 # Browser-direct access: the sandbox is exposed at sandbox-<id>.<zone> via its OWN Cloudflare tunnel and the
 # browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID, the
 # platform's PUBLIC web client id, hardcoded here since it's a static platform value) and binds the owner on first
-# connect (gated by RUNNER_TOKEN). WEB_ORIGIN, when set, scopes the daemon's CORS to the platform web app; left
+# connect (gated by CONNECT_TOKEN). WEB_ORIGIN, when set, scopes the daemon's CORS to the platform web app; left
 # empty the daemon allows any origin (the Google-token audience is the real gate). ZONE picks the zone when the
 # token sees several.
 GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-481795963975-4i51psdmlk3c1lhepn6l17o9ekmdc0uv.apps.googleusercontent.com}"
@@ -155,10 +155,10 @@ if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
     echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
     exit 1
 fi
-# RUNNER_TOKEN is the only per-user value the one-liner carries — the platform mints it and fills it in.
+# CONNECT_TOKEN is the only per-user value the one-liner carries — the platform mints it and fills it in.
 # PLATFORM_URL + GOOGLE_CLIENT_ID default to the platform's static values above, so only this must be present.
-if [ -z "$RUNNER_TOKEN" ]; then
-    echo "error: RUNNER_TOKEN is required (env or positional arg) — copy the one-liner from the platform's setup screen." >&2
+if [ -z "$CONNECT_TOKEN" ]; then
+    echo "error: CONNECT_TOKEN is required (env or positional arg) — copy the one-liner from the platform's setup screen." >&2
     exit 1
 fi
 
@@ -166,14 +166,14 @@ fi
 # token is required and validated up front rather than failing later at `intentic apply`. The token never
 # reaches the platform — it rides into the sandbox below. Verify it against Cloudflare's token-verify endpoint
 # (the same Bearer/api.cloudflare.com auth intentic itself uses). `*: *true` tolerates compact or spaced JSON.
-if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-    echo "error: CLOUDFLARE_API_TOKEN is required — Cloudflare is intentic's reachability fabric (the tunnel that" >&2
+if [ -z "$CF_TOKEN" ]; then
+    echo "error: CF_TOKEN is required — Cloudflare is intentic's reachability fabric (the tunnel that" >&2
     echo "       connects your services and exposes them). Create a token at" >&2
     echo "       https://dash.cloudflare.com/profile/api-tokens with: Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit." >&2
     exit 1
 fi
 echo "intentic: validating Cloudflare API token…"
-cf_verify="$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
+cf_verify="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
 if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf_verify" | grep -q '"status": *"active"'; then
     echo "error: the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its" >&2
     echo "       scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens." >&2
@@ -202,8 +202,8 @@ zone_env=""
 [ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
 # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
 tunnel_out="$(docker run --rm --entrypoint intentic \
-    -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
-    -e CONNECT_TOKEN="$RUNNER_TOKEN" \
+    -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
+    -e CONNECT_TOKEN="$CONNECT_TOKEN" \
     $zone_env \
     "$SANDBOX_IMAGE" sandbox-tunnel \
     --service "http://${CONTAINER}:8787" \
@@ -240,11 +240,11 @@ docker run -d --restart unless-stopped --name "$CONTAINER" \
     -e DEV_COMMAND="$DEV_COMMAND" \
     -e DEV_PORT="$DEV_PORT" \
     -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-    -e CONNECT_TOKEN="$RUNNER_TOKEN" \
+    -e CONNECT_TOKEN="$CONNECT_TOKEN" \
     -e WEB_ORIGIN="$WEB_ORIGIN" \
     -e SANDBOX_PUBLIC_URL="$SANDBOX_PUBLIC_URL" \
     -e PLATFORM_URL="$PLATFORM_URL" \
-    -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+    -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
     -e HOST_SSH_KEY="$HOST_SSH_KEY" \
     -e SELF_HOST_USER="$SELF_HOST_USER" \
     "$SANDBOX_IMAGE" >/dev/null
