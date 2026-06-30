@@ -8,6 +8,7 @@ import { createDevServer } from "./dev-server.js";
 import { registerWithPlatform } from "./register.js";
 import { internalTools } from "./tools.js";
 import { workspacePaths } from "./workspace.js";
+import { zoneFromPublicUrl } from "./zone.js";
 
 // The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
 // the workspace provider (a server); the workspace (the three repos) and agent credentials are injected there,
@@ -20,13 +21,38 @@ const host = process.env["SANDBOX_HOST"] ?? "0.0.0.0";
 const workspace = workspacePaths(root);
 const devServer = createDevServer();
 
+// Self-host deploy target: when SELF_HOST_USER (+ HOST_SSH_KEY) is set, this sandbox runs with a wired deploy
+// target — expose it so the `self` inventory host gets registered. SELF_HOST_ADDRESS is where the sandbox SSHes
+// to deploy: the default host.docker.internal is the host the sandbox runs on (connect.sh / the provider add the
+// host-gateway mapping); connect.ps1 sets it to a sibling Docker-in-Docker container's name (Windows can't be a
+// native SSH+Docker target).
+const selfHostUser = process.env["SELF_HOST_USER"];
+const selfHost =
+    selfHostUser !== undefined && selfHostUser !== "" && (process.env["HOST_SSH_KEY"] ?? "") !== ""
+        ? { user: selfHostUser, address: process.env["SELF_HOST_ADDRESS"] ?? "host.docker.internal", port: 22 }
+        : undefined;
+
+// This sandbox's public URL + the Cloudflare zone it lives under (set by connect.{sh,ps1} after the tunnel is
+// created). The zone (explicit ZONE, else the public URL's host minus its `sandbox-<hash>` label) seeds the
+// scaffolded app's domain below.
+const sandboxPublicUrl = process.env["SANDBOX_PUBLIC_URL"];
+const zone = process.env["ZONE"] ?? zoneFromPublicUrl(sandboxPublicUrl);
+
 // First start with an empty workspace: scaffold the three repos (intent / desired-state / app) so chat,
 // inventory, and source-control have something to read, and the dev server has an app to run. Idempotent —
-// skipped once the repos exist. `intentic apply` (run later via the Provision action) reads the infra secrets
-// set in this container's env (by connect.sh / the workspace provider).
+// skipped once the repos exist. With a self-host target + a known zone, the scaffold targets `self` at app.<zone>
+// so Provision works with no edits; otherwise the generic placeholder-host starter. `intentic apply` (run later
+// via the Provision action) reads the infra secrets set in this container's env (by connect.sh / the provider).
 if (!existsSync(workspace.repos.intent)) {
     process.stdout.write(`intentic sandbox: empty workspace — running intentic init…\n`);
-    const init = spawnSync("intentic", ["init", "--dir", root], { stdio: "inherit" });
+    const initArgs = ["init", "--dir", root];
+    if (selfHost !== undefined) {
+        initArgs.push("--self-host");
+        if (zone !== undefined && zone !== "") {
+            initArgs.push("--zone", zone);
+        }
+    }
+    const init = spawnSync("intentic", initArgs, { stdio: "inherit" });
     if (init.status !== 0) {
         process.stdout.write(`intentic sandbox: intentic init failed (status ${init.status ?? "?"}); the workspace may be incomplete\n`);
     }
@@ -37,16 +63,6 @@ const devPort = process.env["DEV_PORT"];
 if (devCommand !== undefined && devCommand !== "" && devPort !== undefined) {
     devServer.start({ command: devCommand.split(" "), cwd: workspace.repos.app, port: Number(devPort) });
 }
-
-// When SELF_HOST_USER (+ HOST_SSH_KEY) is set, this sandbox runs with a wired deploy target — expose it so the
-// `self` inventory host gets registered. SELF_HOST_ADDRESS is where the sandbox SSHes to deploy: the default
-// host.docker.internal is the host the sandbox runs on (connect.sh / the provider add the host-gateway mapping);
-// connect.ps1 sets it to a sibling Docker-in-Docker container's name (Windows can't be a native SSH+Docker target).
-const selfHostUser = process.env["SELF_HOST_USER"];
-const selfHost =
-    selfHostUser !== undefined && selfHostUser !== "" && (process.env["HOST_SSH_KEY"] ?? "") !== ""
-        ? { user: selfHostUser, address: process.env["SELF_HOST_ADDRESS"] ?? "host.docker.internal", port: 22 }
-        : undefined;
 
 // The intent-declared internal MCP tools the workspace provider set in this container's env (base64 JSON).
 // Constant for this sandbox's life; the daemon merges them with the sandbox's own stored external tools each turn.
@@ -94,7 +110,6 @@ process.stdout.write(`intentic sandbox daemon listening on http://${host}:${port
 // Decentralized path: tell the platform where to reach this sandbox directly (best-effort, off the command
 // path). Needs the platform URL + connection token + this sandbox's public URL, all set in this container's env.
 const platformUrl = process.env["PLATFORM_URL"];
-const sandboxPublicUrl = process.env["SANDBOX_PUBLIC_URL"];
 if (
     platformUrl !== undefined &&
     platformUrl !== "" &&

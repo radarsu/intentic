@@ -31,6 +31,31 @@ export const intent = defineIntent((i) => {
 });
 `;
 
+// Self-host variant: when the sandbox was wired with a local deploy target (connect.{sh,ps1}), scaffold the
+// example app onto `self` — the host the daemon auto-registers in the managed `// <intentic>` block — so
+// Provision works with no edits. `self` is referenced, never declared here (the daemon owns that declaration; a
+// second one would duplicate it). The domain is app.<zone> for the sandbox's Cloudflare zone (falls back to the
+// example placeholder when the zone is unknown). No DB env — the zero-dependency starter app needs none.
+export const selfHostConfig = (zone: string | undefined): string => `import { env } from "@intentic/graph";
+import { defineIntent } from "@intentic/sdk";
+
+export const intent = defineIntent((i) => {
+    const cf = i.have.cloudflare("cf", {
+        apiToken: env("CLOUDFLARE_API_TOKEN"),
+    });
+
+    // \`self\` is your local deploy target (this machine / its Docker-in-Docker host). intentic registers it in
+    // the managed \`// <intentic>\` block at the top of this file — reference it with \`on: self\`, don't redeclare it.
+    i.want.app("my-app", {
+        on: self,
+        expose: cf,
+        environments: {
+            production: { domain: "app.${zone ?? "example.com"}", branch: "main" },
+        },
+    });
+});
+`;
+
 // Keep secret + local-only files out of the PR-managed desired-state repo: the user-supplied `.env`, the
 // intentic-generated `.secrets.json`, and the `.last-applied.json` prune baseline (local snapshot of the
 // last successfully-applied artifact). The matching `.env.example` is not written here — `resolve`
@@ -130,12 +155,15 @@ const starterPackage = (version: string, link: boolean): string => {
 // application code), each its own git repo so the generated target can later become PR-managed and `adopt`
 // can push it. The intent repo is a self-contained TS project against `@intentic/{graph,sdk}` — pinned to the
 // CLI's own version, or linked to local source with `--link`. `appRepo`, when set, clones an existing repo as
-// the app instead of scaffolding a starter.
+// the app instead of scaffolding a starter. `selfHost` scaffolds the example app onto the auto-registered
+// `self` deploy target (domain app.`zone`) so Provision works with no edits; otherwise a placeholder remote host.
 export const scaffold = async (
     dir: string,
     version: string,
     link: boolean,
     appRepo: string | undefined,
+    selfHost: boolean,
+    zone: string | undefined,
 ): Promise<{ readonly intentDir: string; readonly targetDir: string; readonly appDir: string }> => {
     const intentDir = join(dir, INTENT_DIR);
     const targetDir = join(dir, TARGET_DIR);
@@ -144,7 +172,7 @@ export const scaffold = async (
     await mkdir(targetDir, { recursive: true });
     await exec("git", ["init", "-q", intentDir]);
     await exec("git", ["init", "-q", targetDir]);
-    await writeFile(join(intentDir, CONFIG_FILE), STARTER_CONFIG);
+    await writeFile(join(intentDir, CONFIG_FILE), selfHost ? selfHostConfig(zone) : STARTER_CONFIG);
     await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
     await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
     await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);

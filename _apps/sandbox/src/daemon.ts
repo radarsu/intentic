@@ -490,7 +490,9 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
     });
 
     // Idempotent self-host registration the provision flow calls before `resolve` (which reads deploy.config.ts),
-    // so a self-hosted user can provision without first opening the Inventory page.
+    // so a self-hosted user can provision without first opening the Inventory page. The scaffolded `on: self`
+    // (init --self-host) is backed by the `const self = i.have.host("self", …)` this writes into the managed
+    // region — registered on the first inventory read or here before resolve, both ahead of any provision.
     app.post("/inventory/self-host", async (c) => {
         const content = await readInventoryConfig();
         await ensureSelfHost(content, readManagedRegion(content));
