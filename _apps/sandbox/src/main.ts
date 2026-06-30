@@ -1,8 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { serve } from "@hono/node-server";
+import { createAuthorizer, createGoogleVerifier, fileOwnerStore } from "./auth.js";
 import { createDaemon } from "./daemon.js";
 import { createDevServer } from "./dev-server.js";
+import { registerWithPlatform } from "./register.js";
 import { internalTools } from "./tools.js";
 import { workspacePaths } from "./workspace.js";
 
@@ -47,6 +50,46 @@ const selfHost =
 // Constant for this sandbox's life; the daemon merges them with each turn's platform-relayed external tools.
 const tools = internalTools(process.env["INTENTIC_AGENT_TOOLS"]);
 
-const app = createDaemon({ workspace, devServer, ...(selfHost !== undefined ? { selfHost } : {}), ...(tools.length > 0 ? { tools } : {}) });
+// Browser-facing auth (the decentralized path): when a Google web client id is configured, this sandbox is
+// reached directly by the browser, so the daemon verifies each request's Google ID token (audience = this
+// client id) and binds its owner on first use. CONNECT_TOKEN, when set, gates that first bind; WEB_ORIGIN
+// scopes CORS to the platform's web app. Absent ⇒ loopback/runner mode (daemon stays open). See auth.ts.
+const googleClientId = process.env["GOOGLE_CLIENT_ID"];
+const connectToken = process.env["CONNECT_TOKEN"];
+const webOrigin = process.env["WEB_ORIGIN"];
+const auth =
+    googleClientId !== undefined && googleClientId !== ""
+        ? {
+              authorize: createAuthorizer({
+                  verify: createGoogleVerifier(googleClientId),
+                  owner: fileOwnerStore(join(root, ".intentic", "owner.json")),
+                  ...(connectToken !== undefined && connectToken !== "" ? { connectToken } : {}),
+              }).authorize,
+              ...(webOrigin !== undefined && webOrigin !== "" ? { allowOrigin: webOrigin } : {}),
+          }
+        : undefined;
+
+const app = createDaemon({
+    workspace,
+    devServer,
+    ...(selfHost !== undefined ? { selfHost } : {}),
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(auth !== undefined ? { auth } : {}),
+});
 serve({ fetch: app.fetch, port, hostname: host });
 process.stdout.write(`intentic sandbox daemon listening on http://${host}:${port} (workspace ${root})\n`);
+
+// Decentralized path: tell the platform where to reach this sandbox directly (best-effort, off the command
+// path). Needs the platform URL + connection token + this sandbox's public URL, all forwarded by the runner.
+const platformUrl = process.env["PLATFORM_URL"];
+const sandboxPublicUrl = process.env["SANDBOX_PUBLIC_URL"];
+if (
+    platformUrl !== undefined &&
+    platformUrl !== "" &&
+    connectToken !== undefined &&
+    connectToken !== "" &&
+    sandboxPublicUrl !== undefined &&
+    sandboxPublicUrl !== ""
+) {
+    void registerWithPlatform({ platformUrl, connectToken, daemonUrl: sandboxPublicUrl, log: (message) => process.stdout.write(`${message}\n`) });
+}

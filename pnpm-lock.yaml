@@ -34,6 +34,9 @@ catalogs:
     hono:
       specifier: 4.12.27
       version: 4.12.27
+    jose:
+      specifier: 6.2.3
+      version: 6.2.3
     knip:
       specifier: 6.23.0
       version: 6.23.0
@@ -179,6 +182,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.12.27
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.3
       tslib:
         specifier: 'catalog:'
         version: 2.8.1

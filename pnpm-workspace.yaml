@@ -17,6 +17,7 @@ catalog:
   '@types/node': 24.13.2
   '@types/ssh2': 1.15.5
   hono: 4.12.27
+  jose: 6.2.3
   knip: 6.23.0
   semantic-release: 25.0.5
   ssh2: 1.17.0

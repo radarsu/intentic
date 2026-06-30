@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { type AgentEvent, type AgentRequest, runAgent } from "./agent.js";
@@ -63,6 +64,14 @@ export interface DaemonDeps {
         readonly list: (dir: string) => Promise<SessionSummary[]>;
         readonly read: (dir: string, id: string) => Promise<SessionTranscriptMessage[]>;
     };
+    // When set, this sandbox is exposed directly (its own tunnel) and authenticates the browser on every route
+    // except /health: `authorize` verifies the request's bearer Google ID token and enforces sandbox ownership
+    // (see auth.ts), and CORS is emitted so the browser can call it cross-origin. Absent ⇒ the loopback/runner
+    // mode (no auth) — so adding this is non-breaking.
+    readonly auth?: {
+        readonly authorize: (bearer: string, firstBind: string | undefined) => Promise<void>;
+        readonly allowOrigin?: string;
+    };
 }
 
 const COMMIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const;
@@ -118,6 +127,35 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
         (REPO_ROLES as readonly string[]).includes(param) ? workspace.repos[param as RepoRole] : undefined;
 
     const app = new Hono();
+
+    // Browser-facing auth + CORS, only when this sandbox is exposed directly (deps.auth set). cors() answers
+    // OPTIONS preflight itself; the guard then requires a valid owner-matching Google ID token on every route
+    // but /health (liveness). In loopback/runner mode deps.auth is absent and the daemon stays open.
+    if (deps.auth !== undefined) {
+        const authorize = deps.auth.authorize;
+        app.use(
+            "*",
+            cors({
+                origin: deps.auth.allowOrigin ?? "*",
+                allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                allowHeaders: ["authorization", "content-type", "x-intentic-connect"],
+                maxAge: 600,
+            }),
+        );
+        app.use("*", async (c, next) => {
+            if (c.req.path === "/health") {
+                return next();
+            }
+            const header = c.req.header("authorization") ?? "";
+            const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
+            try {
+                await authorize(bearer, c.req.header("x-intentic-connect") ?? undefined);
+            } catch {
+                return c.json({ error: "unauthorized" }, 401);
+            }
+            return next();
+        });
+    }
 
     app.get("/health", (c) => c.json({ ok: true }));
     app.get("/preview", async (c) => c.json(await devServer.status()));

@@ -37,6 +37,15 @@ $PreviewPort  = if ($env:PREVIEW_PORT)  { $env:PREVIEW_PORT }  else { '8088' }
 # (the tunnel that connects services and exposes them); it is validated below. HOST_SSH_KEY is optional.
 $HostSshKey = $env:HOST_SSH_KEY
 $CloudflareApiToken = $env:CLOUDFLARE_API_TOKEN
+# Decentralized access (opt-in): when GOOGLE_CLIENT_ID is set, the sandbox is exposed at sandbox-<id>.<zone>
+# via its own Cloudflare tunnel and the browser talks to it directly (the daemon verifies the user's Google
+# ID token). WEB_ORIGIN scopes the daemon's CORS; ZONE picks the zone when the token sees more than one.
+$GoogleClientId = $env:GOOGLE_CLIENT_ID
+$WebOrigin = $env:WEB_ORIGIN
+$Zone = $env:ZONE
+$CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else { 'cloudflare/cloudflared:2026.6.1' }
+$TunnelToken = ''
+$SandboxPublicUrl = ''
 
 $Container = 'intentic-runner'
 $Network   = 'intentic-workspace'
@@ -72,6 +81,26 @@ if (-not $cfVerify -or -not $cfVerify.success -or $cfVerify.result.status -ne 'a
     exit 1
 }
 
+# Decentralized access (opt-in via GOOGLE_CLIENT_ID): create/refresh this sandbox's own Cloudflare tunnel +
+# DNS via the intentic CLI bundled in the sandbox image (reusing the providers' Cloudflare client), which
+# prints the connector token; cloudflared runs as a sidecar after the runner. Skipped when GOOGLE_CLIENT_ID is
+# unset — the platform then reaches the sandbox via the runner's outbound WSS relay.
+if ($GoogleClientId) {
+    Write-Host 'intentic: creating the sandbox tunnel...'
+    # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
+    $tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CloudflareApiToken", '-e', "CONNECT_TOKEN=$RunnerToken")
+    if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
+    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', 'http://intentic-sandbox-workspace:8787')
+    $tunnelOut = & docker $tunnelArgs
+    $TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
+    $SandboxHostname = ($tunnelOut | Where-Object { $_ -like 'SANDBOX_HOSTNAME=*' } | Select-Object -First 1) -replace '^SANDBOX_HOSTNAME=', ''
+    if (-not $TunnelToken -or -not $SandboxHostname) {
+        Write-Error 'failed to create the sandbox tunnel (see the output above).'
+        exit 1
+    }
+    $SandboxPublicUrl = "https://$SandboxHostname"
+}
+
 # The runner reaches each sandbox by container name on this shared network; create it before the run.
 docker network inspect $Network *> $null
 if ($LASTEXITCODE -ne 0) { docker network create $Network | Out-Null }
@@ -89,12 +118,28 @@ docker run -d --restart unless-stopped --user root --name $Container `
     -e RUNNER_TOKEN=$RunnerToken `
     -e HOST_SSH_KEY=$HostSshKey `
     -e CLOUDFLARE_API_TOKEN=$CloudflareApiToken `
+    -e GOOGLE_CLIENT_ID=$GoogleClientId `
+    -e CONNECT_TOKEN=$RunnerToken `
+    -e WEB_ORIGIN=$WebOrigin `
+    -e SANDBOX_PUBLIC_URL=$SandboxPublicUrl `
     $RunnerImage | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Error 'failed to start the runner container (see the docker output above).'
     exit 1
 }
 
+# Start the sandbox tunnel connector (opt-in): cloudflared on the shared network routes sandbox-<id>.<zone>
+# to the sandbox daemon. It retries until the runner has spawned the sandbox, so ordering is not critical.
+if ($GoogleClientId) {
+    Write-Host 'intentic: starting the sandbox tunnel connector...'
+    docker rm -f intentic-sandbox-tunnel *> $null
+    docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network $Network `
+        $CloudflaredImage tunnel --no-autoupdate run --token $TunnelToken | Out-Null
+}
+
 Write-Host "intentic runner started and dialing $PlatformUrl."
 Write-Host 'Return to the platform — setup will continue automatically once it connects.'
+if ($SandboxPublicUrl) {
+    Write-Host "Your sandbox will be reachable at $SandboxPublicUrl (DNS may take a few seconds to propagate)."
+}
 Write-Host "Logs: docker logs -f $Container   Stop: docker rm -f $Container"

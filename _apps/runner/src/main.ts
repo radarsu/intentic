@@ -38,7 +38,10 @@ if (agentBaseUrl !== undefined && agentBaseUrl !== "") {
 // SELF_HOST_USER rides along when connect.sh wired this machine as a deploy target: the sandbox exposes it via
 // /self-host so the platform registers the `self` inventory host that HOST_SSH_KEY authenticates.
 // INTENTIC_AGENT_TOOLS carries the intent-declared MCP tools (base64 JSON) the sandbox connects the agent to.
-for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN", "SELF_HOST_USER", "INTENTIC_AGENT_TOOLS"]) {
+// GOOGLE_CLIENT_ID/CONNECT_TOKEN/WEB_ORIGIN activate the sandbox's browser-facing auth (the decentralized path,
+// where the browser hits the sandbox's own tunnel directly); SANDBOX_PUBLIC_URL is its public URL, and
+// PLATFORM_URL lets the sandbox register that URL back with the platform's directory.
+for (const key of ["HOST_SSH_KEY", "CLOUDFLARE_API_TOKEN", "SELF_HOST_USER", "INTENTIC_AGENT_TOOLS", "GOOGLE_CLIENT_ID", "CONNECT_TOKEN", "WEB_ORIGIN", "SANDBOX_PUBLIC_URL", "PLATFORM_URL"]) {
     const value = process.env[key];
     if (value !== undefined && value !== "") {
         sandboxEnv[key] = value;

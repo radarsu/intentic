@@ -42,6 +42,16 @@ CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
 # Self-host: wire this machine as a deploy target. Off unless SELF_HOST is set (the platform one-liner sets it).
 SELF_HOST="${SELF_HOST:-}"
 SELF_HOST_USER="${SELF_HOST_USER:-}"
+# Decentralized access (opt-in): when GOOGLE_CLIENT_ID is set, the sandbox is exposed at sandbox-<id>.<zone>
+# via its OWN Cloudflare tunnel and the browser talks to it directly — the daemon verifies the user's Google
+# ID token (audience = this public web client id). WEB_ORIGIN scopes the daemon's CORS to the platform web
+# app; ZONE picks the Cloudflare zone when the token sees more than one. Unset ⇒ legacy runner-relay path.
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
+WEB_ORIGIN="${WEB_ORIGIN:-}"
+ZONE="${ZONE:-}"
+CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.1}"
+TUNNEL_TOKEN=""
+SANDBOX_PUBLIC_URL=""
 
 CONTAINER="intentic-runner"
 NETWORK="intentic-workspace"
@@ -157,6 +167,30 @@ if [ -n "$SELF_HOST" ]; then
     setup_self_host
 fi
 
+# Decentralized access (opt-in via GOOGLE_CLIENT_ID): create/refresh this sandbox's own Cloudflare tunnel +
+# DNS (sandbox-<id>.<zone> → the sandbox daemon) so the browser can reach it directly. The sandbox image
+# carries the intentic CLI, which makes the Cloudflare API calls (reusing the providers' client) and prints
+# the connector token; cloudflared runs as a sidecar after the runner is up. Skipped when GOOGLE_CLIENT_ID is
+# unset — the platform then reaches the sandbox the legacy way (the runner's outbound WSS relay).
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+    echo "intentic: creating the sandbox tunnel…"
+    zone_env=""
+    [ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
+    # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
+    tunnel_out="$(docker run --rm --entrypoint intentic \
+        -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+        -e CONNECT_TOKEN="$RUNNER_TOKEN" \
+        $zone_env \
+        "$SANDBOX_IMAGE" sandbox-tunnel --service "http://intentic-sandbox-workspace:8787")"
+    TUNNEL_TOKEN="$(printf '%s\n' "$tunnel_out" | sed -n 's/^TUNNEL_TOKEN=//p')"
+    SANDBOX_HOSTNAME="$(printf '%s\n' "$tunnel_out" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
+    if [ -z "$TUNNEL_TOKEN" ] || [ -z "$SANDBOX_HOSTNAME" ]; then
+        echo "error: failed to create the sandbox tunnel (see the output above)." >&2
+        exit 1
+    fi
+    SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
+fi
+
 # Pull explicitly (with visible progress) so a slow first-time pull doesn't look like a hang — and so a
 # private/missing image surfaces as a clear error instead of silence.
 echo "intentic: pulling runner image ${RUNNER_IMAGE} (first run can take a minute)…"
@@ -182,8 +216,24 @@ docker run -d --restart unless-stopped --user root --name "$CONTAINER" \
     -e HOST_SSH_KEY="$HOST_SSH_KEY" \
     -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
     -e SELF_HOST_USER="$SELF_HOST_USER" \
+    -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+    -e CONNECT_TOKEN="$RUNNER_TOKEN" \
+    -e WEB_ORIGIN="$WEB_ORIGIN" \
+    -e SANDBOX_PUBLIC_URL="$SANDBOX_PUBLIC_URL" \
     "$RUNNER_IMAGE" >/dev/null
+
+# Start the sandbox tunnel connector (opt-in): cloudflared on the shared network routes sandbox-<id>.<zone>
+# to the sandbox daemon. It retries until the runner has spawned the sandbox, so ordering is not critical.
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+    echo "intentic: starting the sandbox tunnel connector…"
+    docker rm -f intentic-sandbox-tunnel >/dev/null 2>&1 || true
+    docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network "$NETWORK" \
+        "$CLOUDFLARED_IMAGE" tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" >/dev/null
+fi
 
 echo "intentic runner started and dialing ${PLATFORM_URL}."
 echo "Return to the platform — setup will continue automatically once it connects."
+if [ -n "$SANDBOX_PUBLIC_URL" ]; then
+    echo "Your sandbox will be reachable at ${SANDBOX_PUBLIC_URL} (DNS may take a few seconds to propagate)."
+fi
 echo "Logs: docker logs -f ${CONTAINER}   Stop: docker rm -f ${CONTAINER}"
