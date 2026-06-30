@@ -33,8 +33,10 @@
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
 
-# The central platform is a single static domain (never self-hosted), so PLATFORM_URL defaults to it; only local
-# dev against a non-prod platform overrides it. The sandbox registers its public URL at ${PLATFORM_URL}/sandbox/register.
+# The central platform is a single static domain (never self-hosted), so PLATFORM_URL defaults to it. The sandbox
+# registers its public URL at ${PLATFORM_URL}/sandbox/register. LOCAL DEV ONLY: to test against a platform running
+# on your own machine, prepend PLATFORM_URL=http://host.docker.internal:<apiPort> (the sandbox container reaches
+# your host's platform there, not localhost) — this is never shown in the product UI.
 PLATFORM_URL="${PLATFORM_URL:-${1:-https://platform.intentic.dev}}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:latest}"

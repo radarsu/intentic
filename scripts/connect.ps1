@@ -28,8 +28,9 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
 # Prefer explicit params (direct file invocation); fall back to env vars (the `irm | iex` one-liner path).
-# The central platform is a single static domain (never self-hosted), so PlatformUrl defaults to it — only local
-# dev against a non-prod platform overrides it (env or -PlatformUrl).
+# The central platform is a single static domain (never self-hosted), so PlatformUrl defaults to it. LOCAL DEV
+# ONLY: to test against a platform on your own machine, pass -PlatformUrl http://host.docker.internal:<apiPort>
+# (the sandbox container reaches your host's platform there) — never shown in the product UI.
 if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://platform.intentic.dev' } }
 if (-not $RunnerToken) { $RunnerToken = $env:RUNNER_TOKEN }
 $SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:latest' }
