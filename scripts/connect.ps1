@@ -1,15 +1,16 @@
 <#
 .SYNOPSIS
-  intentic connect (Windows) — run the AI-agent workspace runner on THIS PC and dial it back to an
-  intentic platform, so a user without their own server can drive a sandbox from their machine.
+  intentic connect (Windows) — run the AI-agent workspace sandbox on THIS PC and expose it to your
+  browser, so a user without their own server can drive a project from their machine.
 
 .DESCRIPTION
-  The platform mints a per-project runner token and hands you a one-liner. This starts the published
-  runner image as a long-lived container that holds the local docker socket (so it can spawn the
-  project's sandbox) and dials the platform's WSS gateway OUTBOUND with the token — no inbound port
-  needed. Once connected, the platform's setup gate flips to "ready" on its own. Requires Docker
-  Desktop in Linux-containers mode (the runner image is Linux). Same container the server-based
-  i.want.workspace provider runs, minus the Cloudflare preview tunnel (a local PC has no zone).
+  The platform mints a per-project connection token and hands you a one-liner. This creates the
+  sandbox's OWN Cloudflare tunnel (sandbox-<id>.<zone> → the daemon, plus *.preview.<zone> → the app
+  preview), starts the published sandbox image as a long-lived, UNPRIVILEGED container (no Docker
+  socket), and runs a cloudflared sidecar. The browser then talks to the sandbox DIRECTLY over that
+  tunnel — the daemon verifies your Google sign-in, and the platform stays off the command path. On
+  boot the sandbox registers its public URL with the platform's directory, so its setup gate flips to
+  "ready". Requires Docker Desktop in Linux-containers mode (the sandbox image is Linux).
 
 .EXAMPLE
   $env:PLATFORM_URL='wss://platform.example/runner/gateway'; $env:RUNNER_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
@@ -29,17 +30,21 @@ $PSNativeCommandUseErrorActionPreference = $false
 # Prefer explicit params (direct file invocation); fall back to env vars (the `irm | iex` one-liner path).
 if (-not $PlatformUrl) { $PlatformUrl = $env:PLATFORM_URL }
 if (-not $RunnerToken) { $RunnerToken = $env:RUNNER_TOKEN }
-$RunnerImage  = if ($env:RUNNER_IMAGE)  { $env:RUNNER_IMAGE }  else { 'ghcr.io/radarsu/intentic/runner:latest' }
 $SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:latest' }
-$PreviewPort  = if ($env:PREVIEW_PORT)  { $env:PREVIEW_PORT }  else { '8088' }
+# The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
+$DevCommand = if ($env:DEV_COMMAND) { $env:DEV_COMMAND } else { 'pnpm dev' }
+$DevPort    = if ($env:DEV_PORT)    { $env:DEV_PORT }    else { '5173' }
 # Infra secrets `intentic apply` reads inside the sandbox; they ride into the sandbox container's env and are
 # never sent to the platform. CLOUDFLARE_API_TOKEN is REQUIRED — Cloudflare is intentic's reachability fabric
-# (the tunnel that connects services and exposes them); it is validated below. HOST_SSH_KEY is optional.
+# (the tunnel that connects services, exposes them, AND carries browser→sandbox traffic); it is validated
+# below. HOST_SSH_KEY/SELF_HOST_USER are optional (set when this machine is wired as a deploy target).
 $HostSshKey = $env:HOST_SSH_KEY
+$SelfHostUser = $env:SELF_HOST_USER
 $CloudflareApiToken = $env:CLOUDFLARE_API_TOKEN
-# Decentralized access (opt-in): when GOOGLE_CLIENT_ID is set, the sandbox is exposed at sandbox-<id>.<zone>
-# via its own Cloudflare tunnel and the browser talks to it directly (the daemon verifies the user's Google
-# ID token). WEB_ORIGIN scopes the daemon's CORS; ZONE picks the zone when the token sees more than one.
+# Browser-direct access: the sandbox is exposed at sandbox-<id>.<zone> via its OWN Cloudflare tunnel and the
+# browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID,
+# the platform's public web client id) and binds the owner on first connect (gated by RUNNER_TOKEN). WEB_ORIGIN
+# scopes the daemon's CORS; ZONE picks the zone when the token sees more than one.
 $GoogleClientId = $env:GOOGLE_CLIENT_ID
 $WebOrigin = $env:WEB_ORIGIN
 $Zone = $env:ZONE
@@ -47,7 +52,10 @@ $CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else 
 $TunnelToken = ''
 $SandboxPublicUrl = ''
 
-$Container = 'intentic-runner'
+# One sandbox per machine; the name is fixed so the tunnel ingress + cloudflared sidecar resolve it by DNS on
+# the shared network, and the workspace volume persists the cloned repos across re-runs.
+$Container = 'intentic-sandbox-workspace'
+$WorkspaceVolume = 'intentic-workspace-workspace'
 $Network   = 'intentic-workspace'
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -61,6 +69,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 if (-not $PlatformUrl -or -not $RunnerToken) {
     Write-Error 'PLATFORM_URL and RUNNER_TOKEN are required (env vars or -PlatformUrl/-RunnerToken).'
+    exit 1
+}
+# The browser reaches the sandbox over a PUBLIC tunnel, so the daemon must authenticate every request against
+# GOOGLE_CLIENT_ID. Without it the daemon would be open to the internet — refuse to start. The platform's setup
+# one-liner always fills this in.
+if (-not $GoogleClientId) {
+    Write-Error 'GOOGLE_CLIENT_ID is required — it is the platform''s public Google web client id the sandbox verifies your browser sign-in against. Use the one-liner from the platform''s setup screen.'
     exit 1
 }
 # Cloudflare is intentic's reachability fabric (the tunnel that connects services and exposes them), so the
@@ -81,65 +96,63 @@ if (-not $cfVerify -or -not $cfVerify.success -or $cfVerify.result.status -ne 'a
     exit 1
 }
 
-# Decentralized access (opt-in via GOOGLE_CLIENT_ID): create/refresh this sandbox's own Cloudflare tunnel +
-# DNS via the intentic CLI bundled in the sandbox image (reusing the providers' Cloudflare client), which
-# prints the connector token; cloudflared runs as a sidecar after the runner. Skipped when GOOGLE_CLIENT_ID is
-# unset — the platform then reaches the sandbox via the runner's outbound WSS relay.
-if ($GoogleClientId) {
-    Write-Host 'intentic: creating the sandbox tunnel...'
-    # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
-    $tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CloudflareApiToken", '-e', "CONNECT_TOKEN=$RunnerToken")
-    if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
-    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', 'http://intentic-sandbox-workspace:8787')
-    $tunnelOut = & docker $tunnelArgs
-    $TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
-    $SandboxHostname = ($tunnelOut | Where-Object { $_ -like 'SANDBOX_HOSTNAME=*' } | Select-Object -First 1) -replace '^SANDBOX_HOSTNAME=', ''
-    if (-not $TunnelToken -or -not $SandboxHostname) {
-        Write-Error 'failed to create the sandbox tunnel (see the output above).'
-        exit 1
-    }
-    $SandboxPublicUrl = "https://$SandboxHostname"
+# Create/refresh this sandbox's own Cloudflare tunnel + DNS via the intentic CLI bundled in the sandbox image
+# (reusing the providers' Cloudflare client), which prints the connector token: sandbox-<id>.<zone> → the
+# daemon (:8787) and *.preview.<zone> → the app dev server (:$DevPort). cloudflared runs as a sidecar below.
+Write-Host 'intentic: creating the sandbox tunnel...'
+# --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
+$tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CloudflareApiToken", '-e', "CONNECT_TOKEN=$RunnerToken")
+if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
+$tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${Container}:8787", '--preview-service', "http://${Container}:$DevPort")
+$tunnelOut = & docker $tunnelArgs
+$TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
+$SandboxHostname = ($tunnelOut | Where-Object { $_ -like 'SANDBOX_HOSTNAME=*' } | Select-Object -First 1) -replace '^SANDBOX_HOSTNAME=', ''
+if (-not $TunnelToken -or -not $SandboxHostname) {
+    Write-Error 'failed to create the sandbox tunnel (see the output above).'
+    exit 1
 }
+$SandboxPublicUrl = "https://$SandboxHostname"
 
-# The runner reaches each sandbox by container name on this shared network; create it before the run.
+# cloudflared (the sidecar below) reaches the sandbox by container name on this shared network; create it first.
 docker network inspect $Network *> $null
 if ($LASTEXITCODE -ne 0) { docker network create $Network | Out-Null }
 docker rm -f $Container *> $null
 
-# --user root: the runner manages sandboxes through the mounted docker socket. host.docker.internal is how a
-# self-hosted platform on this machine is reached; Docker Desktop resolves it without --add-host.
-docker run -d --restart unless-stopped --user root --name $Container `
+# Runs UNPRIVILEGED: no --user root and no Docker-socket mount — the sandbox no longer manages other
+# containers, it IS the workspace. --add-host lets it reach the host it runs on at host.docker.internal (SSH
+# self-host deploys target it). The workspace volume persists the cloned repos across re-runs. The daemon binds
+# 0.0.0.0:8787 on the private network; only the Cloudflare tunnel exposes it (no host port is published).
+docker run -d --restart unless-stopped --name $Container `
     --network $Network `
-    -p "${PreviewPort}:${PreviewPort}" `
-    -v /var/run/docker.sock:/var/run/docker.sock `
-    -e PREVIEW_PORT=$PreviewPort `
-    -e SANDBOX_IMAGE=$SandboxImage `
-    -e PLATFORM_URL=$PlatformUrl `
-    -e RUNNER_TOKEN=$RunnerToken `
-    -e HOST_SSH_KEY=$HostSshKey `
-    -e CLOUDFLARE_API_TOKEN=$CloudflareApiToken `
+    --add-host host.docker.internal:host-gateway `
+    -v "${WorkspaceVolume}:/work" `
+    -e WORKSPACE_ROOT=/work `
+    -e SANDBOX_HOST=0.0.0.0 `
+    -e SANDBOX_PORT=8787 `
+    -e "DEV_COMMAND=$DevCommand" `
+    -e DEV_PORT=$DevPort `
     -e GOOGLE_CLIENT_ID=$GoogleClientId `
     -e CONNECT_TOKEN=$RunnerToken `
     -e WEB_ORIGIN=$WebOrigin `
     -e SANDBOX_PUBLIC_URL=$SandboxPublicUrl `
-    $RunnerImage | Out-Null
+    -e PLATFORM_URL=$PlatformUrl `
+    -e CLOUDFLARE_API_TOKEN=$CloudflareApiToken `
+    -e HOST_SSH_KEY=$HostSshKey `
+    -e SELF_HOST_USER=$SelfHostUser `
+    $SandboxImage | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    Write-Error 'failed to start the runner container (see the docker output above).'
+    Write-Error 'failed to start the sandbox container (see the docker output above).'
     exit 1
 }
 
-# Start the sandbox tunnel connector (opt-in): cloudflared on the shared network routes sandbox-<id>.<zone>
-# to the sandbox daemon. It retries until the runner has spawned the sandbox, so ordering is not critical.
-if ($GoogleClientId) {
-    Write-Host 'intentic: starting the sandbox tunnel connector...'
-    docker rm -f intentic-sandbox-tunnel *> $null
-    docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network $Network `
-        $CloudflaredImage tunnel --no-autoupdate run --token $TunnelToken | Out-Null
-}
+# Start the tunnel connector: cloudflared on the shared network routes sandbox-<id>.<zone> → the daemon and
+# *.preview.<zone> → the app preview. It retries until the sandbox is up, so ordering is not critical.
+Write-Host 'intentic: starting the sandbox tunnel connector...'
+docker rm -f intentic-sandbox-tunnel *> $null
+docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network $Network `
+    $CloudflaredImage tunnel --no-autoupdate run --token $TunnelToken | Out-Null
 
-Write-Host "intentic runner started and dialing $PlatformUrl."
+Write-Host "intentic sandbox started and registering with $PlatformUrl."
+Write-Host "Your sandbox will be reachable at $SandboxPublicUrl (DNS may take a few seconds to propagate)."
 Write-Host 'Return to the platform — setup will continue automatically once it connects.'
-if ($SandboxPublicUrl) {
-    Write-Host "Your sandbox will be reachable at $SandboxPublicUrl (DNS may take a few seconds to propagate)."
-}
-Write-Host "Logs: docker logs -f $Container   Stop: docker rm -f $Container"
+Write-Host "Logs: docker logs -f $Container   Stop: docker rm -f $Container intentic-sandbox-tunnel"

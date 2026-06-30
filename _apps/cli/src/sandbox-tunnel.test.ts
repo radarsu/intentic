@@ -44,6 +44,28 @@ describe("createSandboxTunnel", () => {
         expect(createDnsRecord).toHaveBeenCalledWith(expect.objectContaining({ name: hostname, content: "tunnel-1.cfargotunnel.com" }));
     });
 
+    test("with previewService, also routes the *.preview wildcard and creates its DNS record", async () => {
+        const putTunnelIngress = vi.fn(async () => {});
+        const createDnsRecord = vi.fn(async () => {});
+        const api = fakeApi({
+            listZones: async () => [{ id: "zone-1", name: "example.com", accountId: "acct-1" }],
+            putTunnelIngress,
+            createDnsRecord,
+        });
+        const hostname = `sandbox-${idOf("conn")}.example.com`;
+        await createSandboxTunnel({ apiToken: "t", connectToken: "conn", service: "http://sb:8787", previewService: "http://sb:5173", log: noop, api });
+        expect(putTunnelIngress).toHaveBeenCalledWith(
+            expect.objectContaining({
+                ingress: [
+                    { hostname, service: "http://sb:8787" },
+                    { hostname: "*.preview.example.com", service: "http://sb:5173" },
+                    { service: "http_status:404" },
+                ],
+            }),
+        );
+        expect(createDnsRecord).toHaveBeenCalledWith(expect.objectContaining({ name: "*.preview.example.com" }));
+    });
+
     test("uses the zone override (and never lists zones) when one is given", async () => {
         const getZone = vi.fn(async () => ({ id: "z", accountId: "a" }));
         const api = fakeApi({

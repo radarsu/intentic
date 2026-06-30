@@ -34,32 +34,45 @@ const resolveZone = async (api: CloudflareApi, apiToken: string, override: strin
 // sandbox daemon at `sandbox-<id>.<zone>`, and return the connector token connect.sh runs cloudflared with.
 // `<id>` is a stable, unguessable digest of the connection token, so re-runs reuse the same tunnel/hostname.
 // Reuses the providers' Cloudflare client — the same REST surface `intentic apply` uses for platform tunnels.
+// Upsert a proxied CNAME `name` → `cname` (idempotent), stamped so it is attributable.
+const upsertCname = async (api: CloudflareApi, apiToken: string, zoneId: string, name: string, cname: string): Promise<void> => {
+    const comment = "intentic sandbox tunnel";
+    const record = await api.findDnsRecord({ apiToken, zoneId, name });
+    if (record === undefined) {
+        await api.createDnsRecord({ apiToken, zoneId, name, content: cname, comment });
+    } else {
+        await api.updateDnsRecord({ apiToken, zoneId, recordId: record.id, name, content: cname, comment });
+    }
+};
+
 export const createSandboxTunnel = async (args: {
     readonly apiToken: string;
     readonly connectToken: string;
     readonly service: string;
+    // When set, also route the app preview wildcard `*.preview.<zone>` here (the runner's preview proxy is gone).
+    readonly previewService?: string;
     readonly zone?: string;
     readonly log: (message: string) => void;
     readonly api?: CloudflareApi;
 }): Promise<SandboxTunnelResult> => {
-    const { apiToken, connectToken, service, log } = args;
+    const { apiToken, connectToken, service, previewService, log } = args;
     const api = args.api ?? cloudflareApi;
     const zone = await resolveZone(api, apiToken, args.zone);
     const id = createHash("sha256").update(connectToken).digest("hex").slice(0, 12);
     const name = `sandbox-${id}`;
     const hostname = `${name}.${zone.name}`;
+    const previewHostname = `*.preview.${zone.name}`;
+    const withPreview = previewService !== undefined && previewService !== "";
     log(`resolving tunnel "${name}" on zone "${zone.name}"…`);
     const existing = await api.findTunnel({ accountId: zone.accountId, apiToken, name });
     const tunnel = existing ?? (await api.createTunnel({ accountId: zone.accountId, apiToken, name }));
     const token = await api.getTunnelToken({ accountId: zone.accountId, apiToken, tunnelId: tunnel.id });
-    await api.putTunnelIngress({ accountId: zone.accountId, apiToken, tunnelId: tunnel.id, ingress: [{ hostname, service }, CATCH_ALL] });
+    const ingress = [{ hostname, service }, ...(withPreview ? [{ hostname: previewHostname, service: previewService }] : []), CATCH_ALL];
+    await api.putTunnelIngress({ accountId: zone.accountId, apiToken, tunnelId: tunnel.id, ingress });
     const cname = `${tunnel.id}.cfargotunnel.com`;
-    const comment = "intentic sandbox tunnel";
-    const record = await api.findDnsRecord({ apiToken, zoneId: zone.id, name: hostname });
-    if (record === undefined) {
-        await api.createDnsRecord({ apiToken, zoneId: zone.id, name: hostname, content: cname, comment });
-    } else {
-        await api.updateDnsRecord({ apiToken, zoneId: zone.id, recordId: record.id, name: hostname, content: cname, comment });
+    await upsertCname(api, apiToken, zone.id, hostname, cname);
+    if (withPreview) {
+        await upsertCname(api, apiToken, zone.id, previewHostname, cname);
     }
     log(`tunnel "${name}" → ${hostname} ready`);
     return { token, hostname };

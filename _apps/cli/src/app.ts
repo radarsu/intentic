@@ -534,7 +534,7 @@ const deploymentsCommand = buildCommand<{ artifact?: string }>({
 // per-sandbox Cloudflare tunnel + DNS that exposes the daemon at sandbox-<id>.<zone>, reusing the providers'
 // Cloudflare client. Prints `TUNNEL_TOKEN=…` / `SANDBOX_HOSTNAME=…` on stdout (progress on stderr) so the
 // bootstrap can capture them and run cloudflared. Run inside the sandbox image (which carries this CLI).
-const sandboxTunnel = buildCommand<{ service: string; zone?: string }>({
+const sandboxTunnel = buildCommand<{ service: string; previewService?: string; zone?: string }>({
     docs: { brief: "Create/refresh the per-sandbox Cloudflare tunnel + DNS and print its connector token (used by connect.sh)" },
     parameters: {
         flags: {
@@ -542,6 +542,12 @@ const sandboxTunnel = buildCommand<{ service: string; zone?: string }>({
                 kind: "parsed",
                 parse: String,
                 brief: "Internal service URL the tunnel routes to (e.g. http://intentic-sandbox-workspace:8787)",
+            },
+            previewService: {
+                kind: "parsed",
+                parse: String,
+                optional: true,
+                brief: "Dev-server URL to route the *.preview.<zone> wildcard to (e.g. http://intentic-sandbox-workspace:5173)",
             },
             zone: {
                 kind: "parsed",
@@ -551,7 +557,7 @@ const sandboxTunnel = buildCommand<{ service: string; zone?: string }>({
             },
         },
     },
-    async func(this: CommandContext, flags: { service: string; zone?: string }) {
+    async func(this: CommandContext, flags: { service: string; previewService?: string; zone?: string }) {
         const apiToken = process.env["CLOUDFLARE_API_TOKEN"];
         const connectToken = process.env["CONNECT_TOKEN"];
         if (apiToken === undefined || apiToken === "") {
@@ -565,6 +571,7 @@ const sandboxTunnel = buildCommand<{ service: string; zone?: string }>({
             apiToken,
             connectToken,
             service: flags.service,
+            ...(flags.previewService !== undefined && flags.previewService !== "" ? { previewService: flags.previewService } : {}),
             ...(zone !== undefined && zone !== "" ? { zone } : {}),
             log: (message) => this.process.stderr.write(`${message}\n`),
         });

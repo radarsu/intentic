@@ -91,5 +91,8 @@ if (
     sandboxPublicUrl !== undefined &&
     sandboxPublicUrl !== ""
 ) {
-    void registerWithPlatform({ platformUrl, connectToken, daemonUrl: sandboxPublicUrl, log: (message) => process.stdout.write(`${message}\n`) });
+    const registration = { platformUrl, connectToken, daemonUrl: sandboxPublicUrl, log: (message: string) => process.stdout.write(`${message}\n`) };
+    void registerWithPlatform(registration);
+    // Heartbeat: keep the platform's lastSeenAt fresh so its setup gate can tell `ready` (alive) from `connecting`.
+    setInterval(() => void registerWithPlatform(registration), 60_000);
 }
