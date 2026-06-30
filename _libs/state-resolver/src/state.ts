@@ -2,9 +2,9 @@ import type { DesiredStateGraph } from "@intentic/graph";
 import { compile, toNodeMap } from "@intentic/graph";
 import type { IntentSet } from "@intentic/need-resolver";
 import { needKey, resolveNeeds } from "@intentic/need-resolver";
-import type { Catalog } from "./catalog.js";
-import { catalogFor } from "./catalog.js";
-import { emit } from "./emit.js";
+import type { Catalog } from "./lib/catalog.js";
+import { catalogFor } from "./lib/catalog.js";
+import { emit } from "./emit/emit.js";
 
 // The state resolver: intent → needs → desired state. It derives the needs, assigns each the catalog option
 // that fills its capability, and compiles the emitted nodes into one desired-state graph. The catalog is

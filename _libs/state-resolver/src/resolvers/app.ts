@@ -15,7 +15,7 @@ import {
     orgName,
     registryAuthority,
     repoId,
-} from "./ids.js";
+} from "../lib/ids.js";
 import type { PlatformRefs } from "./platform.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";

@@ -3,8 +3,8 @@ import type { BackupInput, HostInput } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
 
 import { resolveBackup } from "./backup.js";
-import { backupId, forgejoId, komodoId } from "./ids.js";
-import { IMAGES } from "./images.js";
+import { backupId, forgejoId, komodoId } from "../lib/ids.js";
+import { IMAGES } from "../lib/images.js";
 
 const host: HostInput = { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") };
 const base: BackupInput = { repo: "s3:s3.example.com/bucket", password: env("RESTIC_PASSWORD") };

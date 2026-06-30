@@ -2,7 +2,7 @@ import type { SecretRef } from "@intentic/graph";
 import { makeRef } from "@intentic/graph";
 import type { AppIntent } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { deploymentId, deploymentPort, ghCiId, repoId } from "./ids.js";
+import { deploymentId, deploymentPort, ghCiId, repoId } from "../lib/ids.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 

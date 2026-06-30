@@ -1,11 +1,11 @@
 import { makeRef } from "@intentic/graph";
 import type { HostInput, IntentSet } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { resolveAppGitHub } from "./app-github.js";
-import { tunnelId, tunnelName } from "./ids.js";
-import { IMAGES } from "./images.js";
-import type { IngressPair } from "./route.js";
-import { resolveService } from "./service.js";
+import { resolveAppGitHub } from "../resolvers/app-github.js";
+import { tunnelId, tunnelName } from "../lib/ids.js";
+import { IMAGES } from "../lib/images.js";
+import type { IngressPair } from "../resolvers/route.js";
+import { resolveService } from "../resolvers/service.js";
 
 // Extract the SSH connection block from a HostInput.
 const sshOf = (input: HostInput): Record<string, unknown> => ({

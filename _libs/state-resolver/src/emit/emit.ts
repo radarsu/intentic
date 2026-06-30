@@ -2,17 +2,17 @@ import { generated, makeRef } from "@intentic/graph";
 import type { BackupInput, HostInput, IntentSet } from "@intentic/need-resolver";
 import { controlPlaneHostId } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { resolveApp } from "./app.js";
-import { resolveBacking } from "./backing.js";
-import { defaultBackupInput, resolveBackup } from "./backup.js";
+import { resolveApp } from "../resolvers/app.js";
+import { resolveBacking } from "../resolvers/backing.js";
+import { defaultBackupInput, resolveBackup } from "../resolvers/backup.js";
 import { emitGitHub } from "./emit-github.js";
-import { resolveIdentities } from "./identity.js";
-import { adminUsername, tunnelId, tunnelName } from "./ids.js";
-import { IMAGES } from "./images.js";
-import { resolvePlatform } from "./platform.js";
-import type { IngressPair } from "./route.js";
-import { resolveService } from "./service.js";
-import { resolveWorkspace } from "./workspace.js";
+import { resolveIdentities } from "../resolvers/identity.js";
+import { adminUsername, tunnelId, tunnelName } from "../lib/ids.js";
+import { IMAGES } from "../lib/images.js";
+import { resolvePlatform } from "../resolvers/platform.js";
+import type { IngressPair } from "../resolvers/route.js";
+import { resolveService } from "../resolvers/service.js";
+import { resolveWorkspace } from "../resolvers/workspace.js";
 
 // One concrete choice of option per need: `${capability}:${scope}` -> option id. The state resolver
 // builds this from the catalog; emit turns it into the support stack it describes.

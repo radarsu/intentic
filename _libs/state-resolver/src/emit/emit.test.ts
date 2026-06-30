@@ -3,11 +3,11 @@ import type { CloudflareIntent, HostIntent, IntentSet } from "@intentic/need-res
 import { needKey, resolveNeeds } from "@intentic/need-resolver";
 import { expect, test } from "vitest";
 
-import { DEFAULT_BACKUP_REPO } from "./backup.js";
-import { forgejoCatalog } from "./catalog.js";
+import { DEFAULT_BACKUP_REPO } from "../resolvers/backup.js";
+import { forgejoCatalog } from "../lib/catalog.js";
 import type { Assignment } from "./emit.js";
 import { emit } from "./emit.js";
-import { IMAGES } from "./images.js";
+import { IMAGES } from "../lib/images.js";
 
 // The authored inventory every test intent wires its apps to (on: "host", expose: "cf").
 const host: HostIntent = { id: "host", input: { address: "203.0.113.10", user: "deploy", sshKey: env("HOST_SSH_KEY") } };

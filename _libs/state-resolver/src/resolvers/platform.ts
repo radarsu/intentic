@@ -2,8 +2,8 @@ import type { SecretRef } from "@intentic/graph";
 import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { adminUsername, deployDomain, forgejoId, gitDomain, komodoId, registryAuthority, runnerId } from "./ids.js";
-import { IMAGES } from "./images.js";
+import { adminUsername, deployDomain, forgejoId, gitDomain, komodoId, registryAuthority, runnerId } from "../lib/ids.js";
+import { IMAGES } from "../lib/images.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 

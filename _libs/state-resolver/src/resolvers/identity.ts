@@ -1,7 +1,7 @@
 import { generated, makeRef } from "@intentic/graph";
 import type { ForgejoRole, IntentSet, KomodoRole } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { adminUsername, deploymentId, forgejoOrgId, forgejoTeamId, forgejoUserId, komodoUserId, orgName, repoId, userPasswordKey } from "./ids.js";
+import { adminUsername, deploymentId, forgejoOrgId, forgejoTeamId, forgejoUserId, komodoUserId, orgName, repoId, userPasswordKey } from "../lib/ids.js";
 import type { PlatformRefs } from "./platform.js";
 
 // The people + teams resolver: a Forgejo git account and a Komodo UI user per declared user, and a Forgejo

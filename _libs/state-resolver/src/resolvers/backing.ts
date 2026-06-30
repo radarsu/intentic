@@ -2,8 +2,8 @@ import type { Ref, SecretRef } from "@intentic/graph";
 import { generated, makeRef } from "@intentic/graph";
 import type { BackingCapability, BackingIntent, HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode, ResourceType } from "@intentic/resources";
-import { appSlug, backingPort, bindingId, bucketName, cacheUser, dbName, secretKey } from "./ids.js";
-import { IMAGES } from "./images.js";
+import { appSlug, backingPort, bindingId, bucketName, cacheUser, dbName, secretKey } from "../lib/ids.js";
+import { IMAGES } from "../lib/images.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute, routeId } from "./route.js";
 

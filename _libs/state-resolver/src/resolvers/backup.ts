@@ -1,8 +1,8 @@
 import { generated } from "@intentic/graph";
 import type { BackupInput, HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
-import { backupId, forgejoId, komodoId } from "./ids.js";
-import { IMAGES } from "./images.js";
+import { backupId, forgejoId, komodoId } from "../lib/ids.js";
+import { IMAGES } from "../lib/images.js";
 
 // The default backup destination when the operator declares no i.have.backup(): a restic repo on a managed
 // on-host volume (the backup/restore providers mount intentic-restic-repo at this path, recognised as a
