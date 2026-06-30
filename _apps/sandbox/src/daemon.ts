@@ -220,6 +220,14 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
                 await stream.writeSSE({ data: JSON.stringify({ kind: "done" } satisfies AgentEvent) });
                 return;
             }
+            // No stored account and no container-env fallback ⇒ the CLI would just exit unauthenticated. Surface
+            // an actionable message instead of an opaque subprocess failure.
+            if (oauthToken === undefined && !process.env["CLAUDE_CODE_OAUTH_TOKEN"] && !process.env["ANTHROPIC_API_KEY"]) {
+                const message = "No Claude account connected — connect it in Setup before chatting.";
+                await stream.writeSSE({ data: JSON.stringify({ kind: "error", message } satisfies AgentEvent) });
+                await stream.writeSSE({ data: JSON.stringify({ kind: "done" } satisfies AgentEvent) });
+                return;
+            }
             // Internal (intent-declared, from env) tools first, then external (the sandbox's own store) — a
             // same-named external tool overrides, matching mcpServersOf's last-wins merge.
             const tools: AgentTool[] = [...(deps.tools ?? []), ...(await externalTools.list())];

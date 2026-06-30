@@ -132,13 +132,32 @@ const formatAnswers = (questions: AskQuestion[], response: QuestionResponse): st
     return `The user answered:\n${lines.join("\n")}`;
 };
 
+// Cap the stderr tail folded into an error message so a chatty failure can't flood the UI.
+const STDERR_TAIL = 2000;
+
+// Fold the Claude Code subprocess's stderr tail into the surfaced error, so a bare "exited with code 1"
+// becomes the actual reason. Without this the SDK's terminal error is opaque (this is how the
+// root/`--dangerously-skip-permissions` failure was found).
+const errorMessage = (error: unknown, stderr: string): string => {
+    const base = error instanceof Error ? error.message : "agent failed";
+    const detail = stderr.trim().slice(-STDERR_TAIL);
+    return detail ? `${base}: ${detail}` : base;
+};
+
 // Base SDK options shared by both paths.
 const baseOptions = (request: AgentRequest, abortController: AbortController, permissionMode: PermissionMode): Options => ({
     cwd: request.cwd,
     includePartialMessages: true,
     permissionMode,
     abortController,
-    ...(request.oauthToken !== undefined ? { env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: request.oauthToken } } : {}),
+    env: {
+        ...process.env,
+        // We run with --dangerously-skip-permissions (bypassPermissions) because the container IS the
+        // isolation boundary. Claude Code refuses that flag under root (the sandbox runs as root) unless
+        // IS_SANDBOX marks the environment as already-sandboxed — which this container is.
+        IS_SANDBOX: "1",
+        ...(request.oauthToken !== undefined ? { CLAUDE_CODE_OAUTH_TOKEN: request.oauthToken } : {}),
+    },
     ...(request.model !== undefined ? { model: request.model } : {}),
     ...(request.sessionId !== undefined ? { resume: request.sessionId } : {}),
     ...(request.effort !== undefined ? { effort: request.effort as EffortLevel } : {}),
@@ -163,15 +182,19 @@ export async function* runAgent(request: AgentRequest, queryFn: QueryFn = defaul
     // Default autonomous posture: full tools, no prompting. The container's isolation makes this safe.
     const permissionMode: PermissionMode = request.permissionMode ?? "bypassPermissions";
     const mcpServers = mcpServersOf(request.tools ?? []);
+    let stderr = "";
     const options: Options = {
         ...baseOptions(request, abortController, permissionMode),
         allowDangerouslySkipPermissions: permissionMode === "bypassPermissions",
+        stderr: (data) => {
+            stderr += data;
+        },
         ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
     };
     try {
         yield* streamSdk(queryFn, request.prompt, options);
     } catch (error) {
-        yield { kind: "error", message: error instanceof Error ? error.message : "agent failed" };
+        yield { kind: "error", message: errorMessage(error, stderr) };
     }
     yield { kind: "done" };
 }
@@ -221,8 +244,12 @@ async function* runPlanTurn(request: AgentRequest, queryFn: QueryFn, abortContro
         ],
     });
 
+    let stderr = "";
     const options: Options = {
         ...baseOptions(request, abortController, "plan"),
+        stderr: (data) => {
+            stderr += data;
+        },
         // The `ui` server backs AskUserQuestion; the agent's remote MCP tools are merged in alongside it so
         // the model can also consult them while planning (a same-named tool would override `ui`, but `ui` is
         // reserved). canUseTool auto-allows every tool after approval, so the remote tools need no extra gate.
@@ -252,7 +279,7 @@ async function* runPlanTurn(request: AgentRequest, queryFn: QueryFn, abortContro
                 push(event);
             }
         } catch (error) {
-            push({ kind: "error", message: error instanceof Error ? error.message : "agent failed" });
+            push({ kind: "error", message: errorMessage(error, stderr) });
         } finally {
             finished = true;
             wake();

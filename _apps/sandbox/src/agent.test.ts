@@ -45,19 +45,22 @@ test("a turn surfaces session, text deltas, tool actions, and a terminal done", 
     ]);
 });
 
-test("the per-turn oauth token is injected into the SDK options env, and stays absent when not given", async () => {
+test("the SDK env always marks the sandbox and carries the per-turn oauth token only when given", async () => {
     let captured: Options | undefined;
     const capture: QueryFn = async function* (args) {
         captured = args.options;
         yield { type: "result", subtype: "success" } as SDKMessage;
     };
 
+    // IS_SANDBOX is always set so the CLI accepts --dangerously-skip-permissions under root.
     await collect({ ...request, oauthToken: "tok-xyz" }, capture);
+    expect(captured?.env?.["IS_SANDBOX"]).toBe("1");
     expect(captured?.env?.["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("tok-xyz");
 
     captured = undefined;
     await collect(request, capture);
-    expect(captured?.env).toBeUndefined();
+    expect(captured?.env?.["IS_SANDBOX"]).toBe("1");
+    expect(captured?.env?.["CLAUDE_CODE_OAUTH_TOKEN"]).toBeUndefined();
 });
 
 test("the autonomous turn registers the request's tools as remote http MCP servers", async () => {

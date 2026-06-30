@@ -33,6 +33,9 @@ const fakeDevServer = (status: Awaited<ReturnType<DevServer["status"]>>): DevSer
 const deps = (overrides: Partial<DaemonDeps> = {}): DaemonDeps => ({
     workspace: workspacePaths("/work"),
     devServer: fakeDevServer({ running: true, port: 5173, healthy: true }),
+    // A connected account by default, so the /agent guard (no token + no env creds) doesn't short-circuit
+    // turns under test. Tests that exercise the disconnected path override this.
+    claudeStore: { read: async () => ({ accessToken: "tok-xyz" }), write: async () => {}, clear: async () => {} },
     ...overrides,
 });
 
@@ -165,7 +168,9 @@ test("POST /workspace/tools rejects an invalid tool name and a bad URL", async (
     expect(badUrl.status).toBe(400);
 });
 
-test("POST /agent omits the oauth token when no account is connected (SDK falls back to container env)", async () => {
+test("POST /agent surfaces a connect-your-account error (not an opaque CLI failure) when no account and no env creds", async () => {
+    delete process.env["CLAUDE_CODE_OAUTH_TOKEN"];
+    delete process.env["ANTHROPIC_API_KEY"];
     let seen: AgentRequest | undefined;
     const app = createDaemon(
         deps({
@@ -176,12 +181,16 @@ test("POST /agent omits the oauth token when no account is connected (SDK falls 
             },
         }),
     );
-    await app.request("/agent", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: "do it" }),
-    });
-    expect(seen?.oauthToken).toBeUndefined();
+    const body = await (
+        await app.request("/agent", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ prompt: "do it" }),
+        })
+    ).text();
+    // The turn never reaches the agent — the user gets an actionable message instead of exit-code-1.
+    expect(seen).toBeUndefined();
+    expect(body).toContain("No Claude account connected");
 });
 
 test("Claude OAuth: exchange stores the account, status reports it, disconnect clears it", async () => {
