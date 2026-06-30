@@ -32,6 +32,9 @@ export interface DaemonDeps {
     readonly devServer: DevServer;
     // Present only when the runner forwarded SELF_HOST_USER (+ HOST_SSH_KEY) into this sandbox.
     readonly selfHost?: SelfHost;
+    // This sandbox's own identity (container name + image), from SANDBOX_NAME/SANDBOX_IMAGE env — surfaced on the
+    // platform's Connections card, read by the browser DIRECTLY via /info. Absent in loopback/test mode.
+    readonly info?: { readonly name: string; readonly image: string };
     // The intent-declared internal MCP tools the runner forwarded (INTENTIC_AGENT_TOOLS). Constant for the
     // sandbox's life; merged with the sandbox's stored external tools before each agent turn. main.ts decodes them.
     readonly tools?: readonly AgentTool[];
@@ -164,6 +167,10 @@ export const createDaemon = (deps: DaemonDeps): Hono => {
     // The host this sandbox runs on, when wired as a deploy target by connect.sh. The platform mirrors it into
     // the inventory as i.have.host("self", …). null when this sandbox was not started in self-host mode.
     app.get("/self-host", (c) => c.json({ selfHost: deps.selfHost ?? null }));
+
+    // This sandbox's own identity (container name + image), for the platform's Connections + account panel. The
+    // browser reads it DIRECTLY (auth-gated like every route); the platform holds nothing. {} when unset.
+    app.get("/info", (c) => c.json(deps.info ?? {}));
 
     app.post("/agent", async (c) => {
         const parsed = agentBody.safeParse(await c.req.json().catch(() => undefined));

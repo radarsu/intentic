@@ -129,6 +129,8 @@ docker run -d --restart unless-stopped --name $Container `
     -e WORKSPACE_ROOT=/work `
     -e SANDBOX_HOST=0.0.0.0 `
     -e SANDBOX_PORT=8787 `
+    -e SANDBOX_NAME=$Container `
+    -e SANDBOX_IMAGE=$SandboxImage `
     -e "DEV_COMMAND=$DevCommand" `
     -e DEV_PORT=$DevPort `
     -e GOOGLE_CLIENT_ID=$GoogleClientId `

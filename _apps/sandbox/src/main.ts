@@ -69,12 +69,22 @@ const auth =
           }
         : undefined;
 
+// This sandbox's identity for the platform's Connections card (container name + image), forwarded by connect.sh
+// / the provider. Both must be set to surface anything; absent ⇒ /info returns {} (loopback/test mode).
+const sandboxName = process.env["SANDBOX_NAME"];
+const sandboxImage = process.env["SANDBOX_IMAGE"];
+const info =
+    sandboxName !== undefined && sandboxName !== "" && sandboxImage !== undefined && sandboxImage !== ""
+        ? { name: sandboxName, image: sandboxImage }
+        : undefined;
+
 const app = createDaemon({
     workspace,
     devServer,
     ...(selfHost !== undefined ? { selfHost } : {}),
     ...(tools.length > 0 ? { tools } : {}),
     ...(auth !== undefined ? { auth } : {}),
+    ...(info !== undefined ? { info } : {}),
 });
 serve({ fetch: app.fetch, port, hostname: host });
 process.stdout.write(`intentic sandbox daemon listening on http://${host}:${port} (workspace ${root})\n`);
