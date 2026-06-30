@@ -13,10 +13,10 @@
   "ready". Requires Docker Desktop in Linux-containers mode (the sandbox image is Linux).
 
 .EXAMPLE
-  $env:PLATFORM_URL='https://platform.example'; $env:RUNNER_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
+  $env:CLOUDFLARE_API_TOKEN='<cf>'; $env:RUNNER_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
 
 .EXAMPLE
-  ./connect.ps1 -PlatformUrl https://platform.example -RunnerToken <token>
+  ./connect.ps1 -RunnerToken <token>   # -PlatformUrl defaults to the central platform
 #>
 param(
     [string]$PlatformUrl,
@@ -28,7 +28,9 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
 # Prefer explicit params (direct file invocation); fall back to env vars (the `irm | iex` one-liner path).
-if (-not $PlatformUrl) { $PlatformUrl = $env:PLATFORM_URL }
+# The central platform is a single static domain (never self-hosted), so PlatformUrl defaults to it — only local
+# dev against a non-prod platform overrides it (env or -PlatformUrl).
+if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://platform.intentic.dev' } }
 if (-not $RunnerToken) { $RunnerToken = $env:RUNNER_TOKEN }
 $SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:latest' }
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
@@ -42,10 +44,10 @@ $HostSshKey = $env:HOST_SSH_KEY
 $SelfHostUser = $env:SELF_HOST_USER
 $CloudflareApiToken = $env:CLOUDFLARE_API_TOKEN
 # Browser-direct access: the sandbox is exposed at sandbox-<id>.<zone> via its OWN Cloudflare tunnel and the
-# browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID,
-# the platform's public web client id) and binds the owner on first connect (gated by RUNNER_TOKEN). WEB_ORIGIN
-# scopes the daemon's CORS; ZONE picks the zone when the token sees more than one.
-$GoogleClientId = $env:GOOGLE_CLIENT_ID
+# browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID, the
+# platform's PUBLIC web client id, hardcoded here since it's a static platform value; env can override). WEB_ORIGIN,
+# when set, scopes the daemon's CORS (else open — the Google-token audience is the real gate); ZONE picks the zone.
+$GoogleClientId = if ($env:GOOGLE_CLIENT_ID) { $env:GOOGLE_CLIENT_ID } else { '481795963975-4i51psdmlk3c1lhepn6l17o9ekmdc0uv.apps.googleusercontent.com' }
 $WebOrigin = $env:WEB_ORIGIN
 $Zone = $env:ZONE
 $CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else { 'cloudflare/cloudflared:2026.6.1' }
@@ -67,15 +69,10 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error 'the docker daemon is not running. Start Docker Desktop, then re-run.'
     exit 1
 }
-if (-not $PlatformUrl -or -not $RunnerToken) {
-    Write-Error 'PLATFORM_URL and RUNNER_TOKEN are required (env vars or -PlatformUrl/-RunnerToken).'
-    exit 1
-}
-# The browser reaches the sandbox over a PUBLIC tunnel, so the daemon must authenticate every request against
-# GOOGLE_CLIENT_ID. Without it the daemon would be open to the internet — refuse to start. The platform's setup
-# one-liner always fills this in.
-if (-not $GoogleClientId) {
-    Write-Error 'GOOGLE_CLIENT_ID is required — it is the platform''s public Google web client id the sandbox verifies your browser sign-in against. Use the one-liner from the platform''s setup screen.'
+# RUNNER_TOKEN is the only per-user value the one-liner carries; PLATFORM_URL + GOOGLE_CLIENT_ID default to the
+# platform's static values above, so only this must be present.
+if (-not $RunnerToken) {
+    Write-Error 'RUNNER_TOKEN is required (env var or -RunnerToken) — copy the one-liner from the platform''s setup screen.'
     exit 1
 }
 # Cloudflare is intentic's reachability fabric (the tunnel that connects services and exposes them), so the

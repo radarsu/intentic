@@ -9,31 +9,33 @@
 # your Google sign-in, and the platform stays off the command path (it never reaches into your machine). On
 # boot the sandbox registers its public URL with the platform's directory, so its setup gate flips to "ready".
 #
-# Usage (env or positional args):
-#   PLATFORM_URL=https://platform.example RUNNER_TOKEN=<token> ./connect.sh
-#   ./connect.sh <PLATFORM_URL> <RUNNER_TOKEN>
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.sh | PLATFORM_URL=… RUNNER_TOKEN=… sh
+# Usage (the platform's setup screen hands you a copy-paste one-liner):
+#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.sh | sudo env CLOUDFLARE_API_TOKEN=… RUNNER_TOKEN=… sh
+#   ./connect.sh <PLATFORM_URL> <RUNNER_TOKEN>   (positional; PLATFORM_URL defaults to the central platform)
 #
-# Required (env or positional — the platform's setup screen fills these into the one-liner):
-#   PLATFORM_URL         the platform base the sandbox registers back to, e.g. https://platform.example
-#   RUNNER_TOKEN         the per-project connection token the platform's setup screen shows you
-#   CLOUDFLARE_API_TOKEN a Cloudflare token (Zone:Read, DNS:Edit, Tunnel:Edit) — intentic's reachability fabric
-#   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id; the daemon verifies your browser sign-in against it
+# Required — only the two values the platform can't bake in:
+#   CLOUDFLARE_API_TOKEN a Cloudflare token (Zone:Read, DNS:Edit, Tunnel:Edit) — intentic's reachability fabric; YOU supply it
+#   RUNNER_TOKEN         the per-user connection token the platform mints + fills into the one-liner
+#
+# Platform statics (defaulted below — overridden only for local dev against a non-prod platform):
+#   PLATFORM_URL         the platform base the sandbox registers back to (default: https://platform.intentic.dev)
+#   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id the daemon verifies sign-in against (default: hardcoded below)
 #
 # Optional env:
 #   SANDBOX_IMAGE   sandbox image to run (default: ghcr.io/radarsu/intentic/sandbox:0.1.0)
 #   DEV_COMMAND     the app's dev/watch command inside the sandbox (default: pnpm dev)
 #   DEV_PORT        the app's dev-server port, exposed at *.preview.<zone> (default: 5173)
-#   WEB_ORIGIN      the platform web app's origin; scopes the daemon's CORS (set by the one-liner)
+#   WEB_ORIGIN      scopes the daemon's CORS to the platform web app (default: open — the Google-token audience is the real gate)
 #   ZONE            the Cloudflare zone to use when the token sees more than one
-#   SELF_HOST       when set (the platform's curl one-liner sets SELF_HOST=1), wire THIS machine as a deploy
-#                   target: a dedicated service user in the docker group + a generated SSH key the sandbox uses
-#                   to reach the host back at host.docker.internal. Needs root (server, Linux only).
+#   SELF_HOST       wire THIS machine as a deploy target (service user + SSH key). DEFAULT ON — the platform flow
+#                   always self-hosts (needs root, hence `sudo`). Opt out of a non-deploy run with `SELF_HOST= `.
 #   SELF_HOST_USER  the service user to create/use for self-host (default: intentic).
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
 
-PLATFORM_URL="${PLATFORM_URL:-${1:-}}"
+# The central platform is a single static domain (never self-hosted), so PLATFORM_URL defaults to it; only local
+# dev against a non-prod platform overrides it. The sandbox registers its public URL at ${PLATFORM_URL}/sandbox/register.
+PLATFORM_URL="${PLATFORM_URL:-${1:-https://platform.intentic.dev}}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-${2:-}}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:0.1.0}"
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
@@ -46,14 +48,17 @@ DEV_PORT="${DEV_PORT:-5173}"
 # machine as a deploy target).
 HOST_SSH_KEY="${HOST_SSH_KEY:-}"
 CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
-# Self-host: wire this machine as a deploy target. Off unless SELF_HOST is set (the platform one-liner sets it).
-SELF_HOST="${SELF_HOST:-}"
+# Self-host: wire this machine as a deploy target. DEFAULT ON — the platform flow always makes this machine the
+# first deploy target (the one-liner runs under `sudo`). Opt out of a non-deploy run with `SELF_HOST= ` (empty).
+SELF_HOST="${SELF_HOST-1}"
 SELF_HOST_USER="${SELF_HOST_USER:-}"
 # Browser-direct access: the sandbox is exposed at sandbox-<id>.<zone> via its OWN Cloudflare tunnel and the
-# browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID,
-# the platform's public web client id) and binds the owner on first connect (gated by RUNNER_TOKEN). WEB_ORIGIN
-# scopes the daemon's CORS to the platform web app; ZONE picks the Cloudflare zone when the token sees several.
-GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
+# browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID, the
+# platform's PUBLIC web client id, hardcoded here since it's a static platform value) and binds the owner on first
+# connect (gated by RUNNER_TOKEN). WEB_ORIGIN, when set, scopes the daemon's CORS to the platform web app; left
+# empty the daemon allows any origin (the Google-token audience is the real gate). ZONE picks the zone when the
+# token sees several.
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-481795963975-4i51psdmlk3c1lhepn6l17o9ekmdc0uv.apps.googleusercontent.com}"
 WEB_ORIGIN="${WEB_ORIGIN:-}"
 ZONE="${ZONE:-}"
 CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.1}"
@@ -148,16 +153,10 @@ if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
     echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
     exit 1
 fi
-if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
-    echo "error: PLATFORM_URL and RUNNER_TOKEN are required (env or positional args)." >&2
-    exit 1
-fi
-# The browser reaches the sandbox over a PUBLIC tunnel, so the daemon must authenticate every request: it
-# verifies the caller's Google ID token against GOOGLE_CLIENT_ID. Without it the daemon would be open to the
-# internet — refuse to start. The platform's setup one-liner always fills this in.
-if [ -z "$GOOGLE_CLIENT_ID" ]; then
-    echo "error: GOOGLE_CLIENT_ID is required — it is the platform's public Google web client id the sandbox" >&2
-    echo "       verifies your browser sign-in against. Use the one-liner from the platform's setup screen." >&2
+# RUNNER_TOKEN is the only per-user value the one-liner carries — the platform mints it and fills it in.
+# PLATFORM_URL + GOOGLE_CLIENT_ID default to the platform's static values above, so only this must be present.
+if [ -z "$RUNNER_TOKEN" ]; then
+    echo "error: RUNNER_TOKEN is required (env or positional arg) — copy the one-liner from the platform's setup screen." >&2
     exit 1
 fi
 
