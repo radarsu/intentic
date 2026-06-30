@@ -67,8 +67,10 @@ export const IMAGES = Object.freeze({
     garage: "dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690",
     // The first-party intentic image built from _apps/sandbox (the AI-agent workspace), published to the repo's
     // GHCR by scripts/publish-images.sh — continuously on push to main (latest + commit SHA) and version-tagged
-    // on release. The GHCR package must be public so tenant hosts can pull it. (sandbox is tag-only until its
-    // first nested publish — pin its digest then and drop the FIRST_PARTY exemption in images.test.ts.)
+    // on release. The GHCR package must be public so tenant hosts can pull it. Pin a RELEASE version (tag +
+    // digest): its bundled CLI + @intentic/* are published to npm at that version, so `intentic init` resolves.
+    // Never :latest or a hand-tagged build — those carry internal version 0.0.0 (unpublished), so init's
+    // `pnpm install` of ~0.0.0 deps fails and resolve can't find @intentic/graph.
     // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
-    sandbox: "ghcr.io/radarsu/intentic/sandbox:0.1.0",
+    sandbox: "ghcr.io/radarsu/intentic/sandbox:1.32.0@sha256:434dda985897f3efd8246b045dbd6cc9af1c679ee7faf55e1f4c51db303df7c8",
 } as const);

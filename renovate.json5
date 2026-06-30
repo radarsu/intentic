@@ -15,6 +15,16 @@
         "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)[\\s\\S]*?\"[^\"]*:(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[a-f0-9]+)\"",
       ],
     },
+    {
+      // The pinned sandbox image the connect scripts launch on the user's machine — same `renovate:` hint
+      // convention as images.ts above. The tag+digest lives in connect.sh's SANDBOX_IMAGE default and
+      // connect.ps1's $SandboxImage default (single- or double-quoted), so both bump together each release.
+      customType: "regex",
+      managerFilePatterns: ["/scripts/connect\\.(sh|ps1)$/"],
+      matchStrings: [
+        "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)[\\s\\S]*?[\"'][^\"']*:(?<currentValue>[^\"'@]+)@(?<currentDigest>sha256:[a-f0-9]+)",
+      ],
+    },
   ],
   packageRules: [
     {

@@ -35,7 +35,10 @@ $PSNativeCommandUseErrorActionPreference = $false
 # (the sandbox container reaches your host's platform there) — never shown in the product UI.
 if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://platform.intentic.dev' } }
 if (-not $ConnectToken) { $ConnectToken = $env:CONNECT_TOKEN }
-$SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:latest' }
+# A version-pinned RELEASE image, never :latest — see connect.sh for why (the :latest/hand-tagged builds carry
+# internal version 0.0.0, whose @intentic/* deps are unpublished, so `intentic init` can't resolve them).
+# renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
+$SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:1.32.0@sha256:434dda985897f3efd8246b045dbd6cc9af1c679ee7faf55e1f4c51db303df7c8' }
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
 $DevCommand = if ($env:DEV_COMMAND) { $env:DEV_COMMAND } else { 'pnpm dev' }
 $DevPort    = if ($env:DEV_PORT)    { $env:DEV_PORT }    else { '5173' }
