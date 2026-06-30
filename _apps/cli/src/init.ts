@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -168,16 +168,29 @@ export const scaffold = async (
     const intentDir = join(dir, INTENT_DIR);
     const targetDir = join(dir, TARGET_DIR);
     const appDir = join(dir, APP_DIR);
-    await mkdir(intentDir, { recursive: true });
-    await mkdir(targetDir, { recursive: true });
-    await exec("git", ["init", "-q", intentDir]);
-    await exec("git", ["init", "-q", targetDir]);
-    await writeFile(join(intentDir, CONFIG_FILE), selfHost ? selfHostConfig(zone) : STARTER_CONFIG);
-    await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
-    await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
-    await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);
-    await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
-    await exec("pnpm", ["install", "--ignore-workspace"], { cwd: intentDir });
-    await scaffoldApp(appDir, appRepo);
+    try {
+        await mkdir(intentDir, { recursive: true });
+        await mkdir(targetDir, { recursive: true });
+        await exec("git", ["init", "-q", intentDir]);
+        await exec("git", ["init", "-q", targetDir]);
+        await writeFile(join(intentDir, CONFIG_FILE), selfHost ? selfHostConfig(zone) : STARTER_CONFIG);
+        await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
+        await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
+        await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);
+        await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
+        // The app repo is independent of the intent's deps, so scaffold it BEFORE `pnpm install`: a failed install
+        // must not also cost us /work/app (the dev server's cwd — its absence surfaces as a confusing `spawn pnpm
+        // ENOENT`). The install goes last, as the one step that reaches the network and is most likely to fail.
+        await scaffoldApp(appDir, appRepo);
+        await exec("pnpm", ["install", "--ignore-workspace"], { cwd: intentDir });
+    } catch (error) {
+        // All-or-nothing: a partial scaffold leaves /work/intent in place, and the daemon gates init on its
+        // existence (sandbox main.ts), so a half-built workspace would freeze the failure across every restart.
+        // Remove what we created so the next boot re-inits from a clean slate (CLAUDE.md: assume fresh state).
+        await rm(intentDir, { recursive: true, force: true });
+        await rm(targetDir, { recursive: true, force: true });
+        await rm(appDir, { recursive: true, force: true });
+        throw error;
+    }
     return { intentDir, targetDir, appDir };
 };
