@@ -2,7 +2,7 @@ import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { ForgejoApi } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 
 const forgejoOrgSchema = z.object({
     forgejoUrl: z.string(),

@@ -2,7 +2,7 @@ import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { GitHubApi } from "./github-api.js";
 import { githubApi } from "./github-api.js";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 
 const ghRepoSchema = z.object({
     name: z.string(),

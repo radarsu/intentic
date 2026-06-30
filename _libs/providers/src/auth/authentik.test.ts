@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { createAuthentikProvider } from "./authentik.js";
 import type { AuthentikApi, AuthentikClientSpec } from "./authentik-api.js";
 import { createAuthentikClientProvider } from "./authentik-client.js";
-import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
+import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 

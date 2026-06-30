@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseResponse } from "./inputs.js";
+import { parseResponse } from "../core/inputs.js";
 
 // One ingress rule of a Cloudflare Tunnel: a public hostname routed to an internal service URL, or the
 // trailing catch-all (no hostname, service "http_status:404"). The provider owns the catch-all policy.

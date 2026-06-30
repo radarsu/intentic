@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseResponse } from "./inputs.js";
+import { parseResponse } from "../core/inputs.js";
 
 // A thin typed wrapper over the Discord REST API v10 (raw fetch, same pattern as komodo-api.ts /
 // cloudflare-api.ts). Only the operations intentic needs: guild CRUD, channel CRUD, webhook CRUD,

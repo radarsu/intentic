@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
+import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
 import { createWorkspaceProvider } from "./workspace.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });

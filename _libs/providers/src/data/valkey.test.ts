@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
+import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
 import { createValkeyProvider } from "./valkey.js";
 import { createValkeyNamespaceProvider } from "./valkey-namespace.js";
 

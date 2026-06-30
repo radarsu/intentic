@@ -5,8 +5,8 @@ import { expect, test } from "vitest";
 import { createCfRouteProvider } from "./cf-route.js";
 import { createCloudflareProvider } from "./cloudflare.js";
 import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
-import { createHostProvider } from "./host.js";
-import type { SshExecutor, SshResult } from "./ssh.js";
+import { createHostProvider } from "../host/host.js";
+import type { SshExecutor, SshResult } from "../core/ssh.js";
 import { createTunnelProvider } from "./tunnel.js";
 
 // A stateful in-memory Cloudflare account: owns one zone, remembers the tunnel/ingress/DNS records the

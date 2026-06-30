@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 import { createHostProvider } from "./host.js";
-import type { SshExecutor, SshResult, SshSession, SshTarget } from "./ssh.js";
+import type { SshExecutor, SshResult, SshSession, SshTarget } from "../core/ssh.js";
 
 // A Docker-ready host: docker version succeeds, the route command yields the internal ip.
 const dockerReady = (command: string): SshResult =>

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseResponse } from "./inputs.js";
+import { parseResponse } from "../core/inputs.js";
 
 // A Komodo Core resource summary (id + unique name) and the typed Alerter config the CD-notify provider
 // reconciles. Komodo's API is POST /{auth|read|write|execute}/{Operation} with a {type, params} body; it

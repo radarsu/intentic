@@ -2,7 +2,7 @@ import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { DiscordApi, DiscordChannel, DiscordWebhook } from "./discord-api.js";
 import { CHANNEL_TYPE_CATEGORY, CHANNEL_TYPE_TEXT, discordApi } from "./discord-api.js";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 
 const discordSchema = z.object({
     botToken: z.string(),

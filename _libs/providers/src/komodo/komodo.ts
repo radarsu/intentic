@@ -1,9 +1,9 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { guardedUpdate } from "./guarded-update.js";
-import { gitProvider, parseInputs, sshSchema, sshTarget } from "./inputs.js";
-import type { SshSession } from "./ssh.js";
-import { type SshExecutor, sshExecutor } from "./ssh.js";
+import { guardedUpdate } from "../core/guarded-update.js";
+import { gitProvider, parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
+import type { SshSession } from "../core/ssh.js";
+import { type SshExecutor, sshExecutor } from "../core/ssh.js";
 
 const komodoSchema = sshSchema.extend({
     internalIp: z.string(),

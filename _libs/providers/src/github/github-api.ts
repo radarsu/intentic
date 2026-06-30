@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseResponse } from "./inputs.js";
+import { parseResponse } from "../core/inputs.js";
 
 // Thin wrapper over the GitHub REST API. Each function takes a token + the minimum inputs, returns only the
 // fields the providers consume. Like forgejo-api.ts: pure HTTP, no state, injectable for tests.

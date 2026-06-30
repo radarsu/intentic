@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { restoreBackup } from "./backup-restore.js";
-import type { SshExecutor, SshResult, SshSession, SshTarget } from "./ssh.js";
+import type { SshExecutor, SshResult, SshSession, SshTarget } from "../core/ssh.js";
 
 const target: SshTarget = { address: "203.0.113.10", user: "deploy", privateKey: "key", port: 22 };
 

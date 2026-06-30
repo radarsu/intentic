@@ -1,6 +1,6 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 import type { AlerterConfig, KomodoApi, ResourceTarget } from "./komodo-api.js";
 import { komodoApi } from "./komodo-api.js";
 

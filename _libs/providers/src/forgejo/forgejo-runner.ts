@@ -1,8 +1,8 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
-import type { SshExecutor, SshSession } from "./ssh.js";
-import { sshExecutor } from "./ssh.js";
+import { parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
+import type { SshExecutor, SshSession } from "../core/ssh.js";
+import { sshExecutor } from "../core/ssh.js";
 
 // image: the pinned act_runner image; jobImage: the pinned image act_runner runs each `runs-on: docker` job
 // in (carries node for the JS actions; the docker CLI + buildx are bind-mounted from the host below). Both

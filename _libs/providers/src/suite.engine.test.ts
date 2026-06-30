@@ -3,11 +3,11 @@ import { env } from "@intentic/graph";
 import { defineStack } from "@intentic/sdk";
 import { expect, test } from "vitest";
 
-import type { CloudflareApi, IngressRule } from "./cloudflare-api.js";
-import type { ForgejoApi, ForgejoHook, ForgejoRepo } from "./forgejo-api.js";
-import type { AlerterConfig, DeploymentConfig, KomodoApi } from "./komodo-api.js";
+import type { CloudflareApi, IngressRule } from "./network/cloudflare-api.js";
+import type { ForgejoApi, ForgejoHook, ForgejoRepo } from "./forgejo/forgejo-api.js";
+import type { AlerterConfig, DeploymentConfig, KomodoApi } from "./komodo/komodo-api.js";
 import { createProviders } from "./providers.js";
-import type { SshExecutor, SshResult } from "./ssh.js";
+import type { SshExecutor, SshResult } from "./core/ssh.js";
 
 // Parse a compose YAML literal into a service -> image map, mirroring the providers' `{{.Config.Image}}`
 // observation: each `  <service>:` header followed by an `    image: <ref>` line.

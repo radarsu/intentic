@@ -2,7 +2,7 @@ import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { ForgejoApi, ForgejoHook } from "./forgejo-api.js";
 import { forgejoApi } from "./forgejo-api.js";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 
 const forgejoNotifySchema = z.object({
     forgejoUrl: z.string(),

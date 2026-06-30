@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseResponse } from "./inputs.js";
+import { parseResponse } from "../core/inputs.js";
 
 // A Forgejo repo and one of its webhooks. Forgejo's REST surface returns the resource JSON directly (no
 // success envelope); errors arrive with a non-2xx status, and otherwise the body is validated against the

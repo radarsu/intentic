@@ -3,7 +3,7 @@ import { compile, env, toNodeMap } from "@intentic/graph";
 import { expect, test } from "vitest";
 
 import { createHostProvider } from "./host.js";
-import type { SshExecutor } from "./ssh.js";
+import type { SshExecutor } from "../core/ssh.js";
 
 // A reachable, Docker-ready host: docker version succeeds, the route command yields the internal ip.
 const reachable: SshExecutor = {

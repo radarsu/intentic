@@ -2,7 +2,7 @@ import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
 import type { AuthentikApi } from "./authentik-api.js";
 import { authentikApi } from "./authentik-api.js";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 
 // No SSH: this binding talks to Authentik's REST API over HTTP at its public url (like the Komodo deployment
 // provider), so it carries the url + bootstrap token instead of an ssh block.

@@ -1,8 +1,8 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import type { z } from "zod";
-import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
-import type { SshExecutor, SshSession } from "./ssh.js";
-import { sshExecutor } from "./ssh.js";
+import { parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
+import type { SshExecutor, SshSession } from "../core/ssh.js";
+import { sshExecutor } from "../core/ssh.js";
 
 // The host's inputs are exactly the shared SSH-creds block.
 type HostInputs = z.infer<typeof sshSchema>;

@@ -3,7 +3,7 @@ import { formatStamp } from "@intentic/graph";
 import { z } from "zod";
 import type { CloudflareApi } from "./cloudflare-api.js";
 import { cloudflareApi } from "./cloudflare-api.js";
-import { parseInputs } from "./inputs.js";
+import { parseInputs } from "../core/inputs.js";
 
 const cfRouteSchema = z.object({ hostname: z.string(), zoneId: z.string(), apiToken: z.string(), cname: z.string() });
 const parse = (inputs: ResolvedInputs): z.infer<typeof cfRouteSchema> => parseInputs(cfRouteSchema, inputs, "cf-route");

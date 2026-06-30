@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { createPostgresProvider } from "./postgres.js";
 import { createPostgresDatabaseProvider } from "./postgres-database.js";
-import type { SshExecutor, SshResult, SshSession } from "./ssh.js";
+import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
 
 const res = (stdout: string, code = 0): SshResult => ({ stdout, stderr: "", code });
 

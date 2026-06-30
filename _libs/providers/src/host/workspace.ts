@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
-import type { SshExecutor, SshSession } from "./ssh.js";
-import { sshExecutor } from "./ssh.js";
+import { parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
+import type { SshExecutor, SshSession } from "../core/ssh.js";
+import { sshExecutor } from "../core/ssh.js";
 
 // One agent MCP tool, resolved: a remote endpoint reached by URL with a scoped bearer. The engine resolves
 // the token secret before this provider runs, so `token` is the concrete string here.

@@ -1,9 +1,9 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
 import { z } from "zod";
-import { composeDown, composeUp, containerId, containerImage, stateDir, waitReady } from "./backing-ssh.js";
-import { parseInputs, sshSchema, sshTarget } from "./inputs.js";
-import type { SshSession } from "./ssh.js";
-import { type SshExecutor, sshExecutor } from "./ssh.js";
+import { composeDown, composeUp, containerId, containerImage, stateDir, waitReady } from "../core/backing-ssh.js";
+import { parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
+import type { SshSession } from "../core/ssh.js";
+import { type SshExecutor, sshExecutor } from "../core/ssh.js";
 
 const KIND = "garage";
 const READY_TIMEOUT_MS = 120_000;

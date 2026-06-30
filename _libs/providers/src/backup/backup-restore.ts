@@ -1,6 +1,6 @@
 import { isLocalRepo, REPO_VOLUME } from "./backup.js";
-import type { SshExecutor, SshSession, SshTarget } from "./ssh.js";
-import { sshExecutor } from "./ssh.js";
+import type { SshExecutor, SshSession, SshTarget } from "../core/ssh.js";
+import { sshExecutor } from "../core/ssh.js";
 
 // Which part of the control plane to restore. Forgejo and Komodo recover independently; `all` also restores
 // the host-side /opt/intentic state (tokens + secrets) so the recovered databases and their credentials stay

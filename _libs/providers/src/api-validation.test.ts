@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { cloudflareApi } from "./cloudflare-api.js";
-import { forgejoApi } from "./forgejo-api.js";
-import { komodoApi } from "./komodo-api.js";
+import { cloudflareApi } from "./network/cloudflare-api.js";
+import { forgejoApi } from "./forgejo/forgejo-api.js";
+import { komodoApi } from "./komodo/komodo-api.js";
 
 // Stub global fetch with a single canned response so the default adapters' response validation can be
 // exercised without the network. The adapters only use response.ok/status/json()/text().

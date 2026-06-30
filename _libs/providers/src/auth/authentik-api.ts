@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseResponse } from "./inputs.js";
+import { parseResponse } from "../core/inputs.js";
 
 // The slice of Authentik's REST API the per-app OIDC client binding uses, injected so the provider is
 // unit-testable with a fake; the default `authentikApi` below talks to an Authentik server over native fetch
