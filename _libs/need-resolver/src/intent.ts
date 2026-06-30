@@ -112,18 +112,15 @@ export interface ServiceIntent extends ServiceInput {
     readonly expose: string;
 }
 
-// The per-host AI-agent workspace runner the author wants: a container that manages the project's dev
-// sandbox and fronts live previews. Its public route is the wildcard `*.preview.<zone>` derived from the
-// discovered zone, so no domain is authored. Like AppIntent, `on`/`expose` are resource-id strings.
+// The per-host AI-agent workspace the author wants: a sandbox container that holds the project's dev workspace
+// and fronts its live preview. Its public route is the wildcard `*.preview.<zone>` derived from the discovered
+// zone, so no domain is authored. Like AppIntent, `on`/`expose` are resource-id strings.
 export interface WorkspaceIntent {
     readonly id: string;
     readonly on: string;
     readonly expose: string;
-    // When set, the runner dials this platform WSS gateway (authenticating with the RUNNER_TOKEN env secret)
-    // so the control plane can drive its sandboxes. Absent ⇒ the runner only serves previews.
-    readonly platformUrl?: string;
-    // When set, the runner exports it as ANTHROPIC_BASE_URL into each sandbox so the agent uses a custom
-    // (e.g. local) Anthropic-compatible endpoint. Absent ⇒ the agent talks to Anthropic's cloud.
+    // When set, the sandbox reads it as ANTHROPIC_BASE_URL so the agent uses a custom (e.g. local)
+    // Anthropic-compatible endpoint. Absent ⇒ the agent talks to Anthropic's cloud.
     readonly agentBaseUrl?: string;
     // The ids of services (i.want.service) exposed to the in-sandbox agent as MCP tools. The resolver wires
     // each one's MCP endpoint URL + a generated scoped token into the workspace node. Absent ⇒ no tools.

@@ -13,33 +13,34 @@ const workspaceSchema = sshSchema.extend({
     internalIp: z.string(),
     domain: z.string(),
     zone: z.string(),
-    previewPort: z.coerce.number(),
+    devPort: z.coerce.number(),
+    daemonPort: z.coerce.number(),
+    devCommand: z.string(),
     network: z.string(),
     image: z.string(),
-    sandboxImage: z.string(),
-    // Set together (control-plane opt-in): the runner dials platformUrl with runnerToken. Absent ⇒ preview-only.
-    platformUrl: z.string().optional(),
-    runnerToken: z.string().optional(),
-    // Anthropic-compatible base URL the runner exports as ANTHROPIC_BASE_URL into each sandbox; absent ⇒ cloud.
+    // Anthropic-compatible base URL the sandbox reads as ANTHROPIC_BASE_URL for the agent; absent ⇒ cloud.
     agentBaseUrl: z.string().optional(),
-    // The agent's MCP tools (intent-declared internal services); forwarded into each sandbox as the agent's
+    // The agent's MCP tools (intent-declared internal services), forwarded into the sandbox as the agent's
     // remote MCP servers. Absent ⇒ no tools.
     tools: z.array(toolSchema).optional(),
 });
 type WorkspaceInputs = z.infer<typeof workspaceSchema>;
 const parse = (inputs: ResolvedInputs): WorkspaceInputs => parseInputs(workspaceSchema, inputs, "workspace");
 
-const CONTAINER = "intentic-runner";
+// One sandbox per host (like the platform's Forgejo/Komodo) — a fixed name + workspace volume, matching the
+// connect.sh local flow so the two bootstraps stay in lockstep.
+const CONTAINER = "intentic-sandbox-workspace";
+const WORKSPACE_VOLUME = "intentic-workspace-workspace";
 
 // A stable digest of the resolved tools, stamped as a container label so a tools change (not just an image
 // bump) triggers a recreate. Empty when no tools are wired.
 const toolsDigest = (tools: WorkspaceInputs["tools"]): string =>
     tools === undefined || tools.length === 0 ? "" : createHash("sha256").update(JSON.stringify(tools)).digest("hex").slice(0, 16);
 
-const internalUrl = (parsed: WorkspaceInputs): string => `http://${parsed.internalIp}:${parsed.previewPort}`;
+const internalUrl = (parsed: WorkspaceInputs): string => `http://${parsed.internalIp}:${parsed.daemonPort}`;
 const outputsFor = (parsed: WorkspaceInputs): Record<string, unknown> => ({
     internalUrl: internalUrl(parsed),
-    healthUrl: `${internalUrl(parsed)}/healthz`,
+    healthUrl: `${internalUrl(parsed)}/health`,
     previewBase: `preview.${parsed.zone}`,
 });
 
@@ -53,17 +54,19 @@ const runningImage = async (session: SshSession): Promise<string> => {
     return result.stdout.trim();
 };
 
-// The tools digest stamped on the running container (empty when the label is absent — e.g. a pre-tools runner).
+// The tools digest stamped on the running container (empty when the label is absent).
 const runningToolsDigest = async (session: SshSession): Promise<string> => {
     const result = await session.exec(`docker inspect --format '{{index .Config.Labels "intentic.tools"}}' ${CONTAINER} 2>/dev/null || true`);
     return result.stdout.trim();
 };
 
-// The per-host AI-agent workspace runner: one long-lived container that manages this host's project sandboxes
-// (it holds the docker socket) and fronts previews on `previewPort` (the wildcard tunnel route points here).
-// read returns the resource only when the container runs the desired image; apply is idempotent — it ensures
-// the shared sandbox network exists, then (re)creates the runner with the socket mount + published port.
-export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecutor): Provider => ({
+// The per-host AI-agent workspace: one long-lived SANDBOX container (the workspace IS the sandbox now — no
+// runner, no docker socket). It serves its dev server on `devPort`, which the host's wildcard `*.preview.<zone>`
+// tunnel route points at; the daemon on `daemonPort` is host-internal (preview-only — connect.sh is the
+// browser-direct path). read returns the resource only when the container runs the desired image; apply is
+// idempotent — it ensures the shared network exists, then (re)creates the sandbox unprivileged with the
+// workspace volume and both ports bound to the host's internal ip (so only the tunnel reaches them).
+export const createWorkspaceProvider = (executor: SshExecutor = sshExecutor): Provider => ({
     read: async (inputs, ctx) => {
         const parsed = parse(inputs);
         let session: SshSession;
@@ -82,14 +85,14 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
             await session.dispose();
         }
     },
-    // Recreate on a runner-image bump or an agent-tools change (the container is stateless — it reconstructs
-    // sandboxes on demand, and each new sandbox picks up the forwarded tools).
+    // Recreate on a sandbox-image bump or an agent-tools change (the container is stateless aside from the
+    // workspace volume, which persists across recreations).
     diff: (inputs, observed) => {
         const parsed = parse(inputs);
         if (observed.detail?.["image"] !== parsed.image) {
             return {
                 action: "update",
-                reason: `workspace runner image differs (running ${String(observed.detail?.["image"])}, want ${parsed.image})`,
+                reason: `workspace sandbox image differs (running ${String(observed.detail?.["image"])}, want ${parsed.image})`,
             };
         }
         const wantTools = toolsDigest(parsed.tools);
@@ -105,36 +108,33 @@ export const createWorkspaceRunnerProvider = (executor: SshExecutor = sshExecuto
         const parsed = parse(inputs);
         const session = await executor.connect(sshTarget(parsed));
         try {
-            // The runner reaches each sandbox by container name on this shared network; create it before the run.
             await session.exec(`docker network inspect ${parsed.network} >/dev/null 2>&1 || docker network create ${parsed.network}`);
             await session.exec(`docker rm -f ${CONTAINER} 2>/dev/null || true`);
-            // Control-plane env: present only when the workspace opted in (platformUrl set). The token is a
-            // secret, so it rides the env list (the whole command runs over the SSH channel).
-            const channelEnv =
-                parsed.platformUrl !== undefined && parsed.runnerToken !== undefined
-                    ? ` -e PLATFORM_URL=${parsed.platformUrl} -e RUNNER_TOKEN=${parsed.runnerToken}`
-                    : ``;
-            // Forwarded into each sandbox the runner spawns, so the agent talks to a custom Anthropic endpoint.
+            // Forwarded into the sandbox so the agent talks to a custom Anthropic endpoint.
             const agentEnv = parsed.agentBaseUrl !== undefined ? ` -e ANTHROPIC_BASE_URL=${parsed.agentBaseUrl}` : ``;
             // The agent's MCP tools, base64-encoded so the JSON (quotes/braces) rides the docker `-e` cleanly
-            // through the SSH command. The runner forwards it into each sandbox, which decodes + connects.
+            // through the SSH command. The daemon decodes + connects them for each agent turn.
             const digest = toolsDigest(parsed.tools);
             const toolsEnv =
                 parsed.tools !== undefined && parsed.tools.length > 0
                     ? ` -e INTENTIC_AGENT_TOOLS=${Buffer.from(JSON.stringify(parsed.tools)).toString("base64")}`
                     : ``;
             const run = await session.exec(
-                // --user root: the runner manages sandboxes through the mounted docker socket (its default
-                // non-root user gets "permission denied" on /var/run/docker.sock). The preview port is published
-                // so cloudflared (--network host) reaches it at the host-internal ip; the runner is also on the
-                // shared network to resolve sandbox container names. The tools digest label drives recreate-on-change.
-                `docker run -d --restart unless-stopped --user root --name ${CONTAINER} --label intentic.id=${ctx.id} --label intentic.tools=${digest} ` +
-                    `-p ${parsed.previewPort}:${parsed.previewPort} --network ${parsed.network} ` +
-                    `-v /var/run/docker.sock:/var/run/docker.sock ` +
-                    `-e ZONE=${parsed.zone} -e PREVIEW_PORT=${parsed.previewPort} -e SANDBOX_IMAGE=${parsed.sandboxImage}${channelEnv}${agentEnv}${toolsEnv} ${parsed.image}`,
+                // Unprivileged: no --user root, no docker-socket mount (the sandbox no longer manages other
+                // containers, it IS the workspace). Both ports bind the host's INTERNAL ip — cloudflared
+                // (--network host) reaches the dev server there for the wildcard preview route, and the engine
+                // health-probes the daemon, without exposing either on the host's public interface. The tools
+                // digest label drives recreate-on-change. SANDBOX_NAME/SANDBOX_IMAGE feed the daemon's /info.
+                `docker run -d --restart unless-stopped --name ${CONTAINER} --label intentic.id=${ctx.id} --label intentic.tools=${digest} ` +
+                    `--network ${parsed.network} --add-host host.docker.internal:host-gateway ` +
+                    `-p ${parsed.internalIp}:${parsed.devPort}:${parsed.devPort} -p ${parsed.internalIp}:${parsed.daemonPort}:${parsed.daemonPort} ` +
+                    `-v ${WORKSPACE_VOLUME}:/work ` +
+                    `-e WORKSPACE_ROOT=/work -e SANDBOX_HOST=0.0.0.0 -e SANDBOX_PORT=${parsed.daemonPort} ` +
+                    `-e DEV_COMMAND='${parsed.devCommand}' -e DEV_PORT=${parsed.devPort} ` +
+                    `-e SANDBOX_NAME=${CONTAINER} -e SANDBOX_IMAGE=${parsed.image}${agentEnv}${toolsEnv} ${parsed.image}`,
             );
             if (run.code !== 0) {
-                throw new Error(`failed to start workspace runner on host: exited ${run.code}: ${run.stderr.trim()}`);
+                throw new Error(`failed to start workspace sandbox on host: exited ${run.code}: ${run.stderr.trim()}`);
             }
             return outputsFor(parsed);
         } finally {

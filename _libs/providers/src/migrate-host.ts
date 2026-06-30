@@ -20,12 +20,12 @@ export const managedContainers = async (session: SshSession): Promise<string[]> 
     return [...ours.split("\n"), ...komodo.split("\n")].map((name) => name.trim()).filter((name) => name !== "");
 };
 
-// Quiesce the old host before the snapshot + cutover: stop the writers (CI runner, agent workspace) so no new
-// control-plane writes race the snapshot, and remove every Cloudflare tunnel connector so the old host stops
-// serving public traffic the instant we cut over (no split-brain). Forgejo + Komodo stay UP so the snapshot's
-// logical dumps (forgejo dump / pg_dump) are app-consistent. Best-effort — a container may already be gone.
+// Quiesce the old host before the snapshot + cutover: stop the writers (CI runner, agent workspace sandbox) so
+// no new control-plane writes race the snapshot, and remove every Cloudflare tunnel connector so the old host
+// stops serving public traffic the instant we cut over (no split-brain). Forgejo + Komodo stay UP so the
+// snapshot's logical dumps (forgejo dump / pg_dump) are app-consistent. Best-effort — a container may be gone.
 export const quiesceHost = async (session: SshSession): Promise<void> => {
-    await session.exec("docker stop intentic-forgejo-runner intentic-runner 2>/dev/null || true");
+    await session.exec("docker stop intentic-forgejo-runner intentic-sandbox-workspace 2>/dev/null || true");
     await session.exec('ids=$(docker ps -aq -f name=intentic-tunnel-); [ -n "$ids" ] && docker rm -f $ids || true');
 };
 

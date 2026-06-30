@@ -65,14 +65,10 @@ export const IMAGES = Object.freeze({
     // The Garage S3-compatible object store (i.want.objectStorage). Single container; the binding provider
     // mints a per-app bucket + access key via `docker exec … garage`. renovate: datasource=docker depName=dxflrs/garage
     garage: "dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690",
-    // First-party intentic images built from _apps/runner and _apps/sandbox (the AI-agent workspace), published
-    // to the repo's GHCR by scripts/publish-images.sh — continuously on push to main (latest + commit SHA) and
-    // version-tagged on release. images.ts references the version-tagged, digest-pinned image; Renovate keeps the
-    // digests fresh via the hints below, like every third-party image. The two GHCR packages must be public so
-    // tenant hosts can pull them. (sandbox is tag-only until its first nested publish — pin its digest then and
-    // drop the FIRST_PARTY exemption in images.test.ts.)
-    // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/runner
-    runner: "ghcr.io/radarsu/intentic/runner:0.1.0@sha256:2cc116c3bb5826a035a5add7388ae4a89545b25a0bf3fa8de32924f542cac86e",
+    // The first-party intentic image built from _apps/sandbox (the AI-agent workspace), published to the repo's
+    // GHCR by scripts/publish-images.sh — continuously on push to main (latest + commit SHA) and version-tagged
+    // on release. The GHCR package must be public so tenant hosts can pull it. (sandbox is tag-only until its
+    // first nested publish — pin its digest then and drop the FIRST_PARTY exemption in images.test.ts.)
     // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
     sandbox: "ghcr.io/radarsu/intentic/sandbox:0.1.0",
 } as const);

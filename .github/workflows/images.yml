@@ -1,13 +1,12 @@
 name: Images
 
-# Continuous image publishing: build + push the runner/sandbox images to the repo's GHCR on every push to
-# main that touches them (moving `latest` + the commit SHA, for fast iteration). The version-tagged, digest-
-# pinned images that images.ts references are published separately by the release (see .releaserc.json).
+# Continuous image publishing: build + push the sandbox image to the repo's GHCR on every push to main that
+# touches it (moving `latest` + the commit SHA, for fast iteration). The version-tagged, digest-pinned image
+# that images.ts references is published separately by the release (see .releaserc.json).
 on:
   push:
     branches: [main]
     paths:
-      - _apps/runner/**
       - _apps/sandbox/**
       - _apps/cli/**
       - _libs/**

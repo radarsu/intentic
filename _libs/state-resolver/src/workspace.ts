@@ -1,5 +1,5 @@
 import type { SecretRef } from "@intentic/graph";
-import { env, generated, httpOk, makeRef } from "@intentic/graph";
+import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput, ServiceKind, WorkspaceIntent } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { previewDomain } from "./ids.js";
@@ -16,17 +16,20 @@ export interface WorkspaceTool {
     readonly domain: string;
 }
 
-// The host-published port the runner's preview reverse proxy listens on; the wildcard tunnel ingress routes
-// `*.preview.<zone>` to it, and the runner fans out by Host header to each project's sandbox.
-const PREVIEW_PORT = 8088;
-// The shared internal docker network the runner and every sandbox attach to (the runner creates it).
+// The sandbox's dev-server port (the app preview the host's wildcard `*.preview.<zone>` tunnel ingress routes
+// to) and the daemon's HTTP port (host-internal only — the server workspace is preview-only; the browser-direct
+// path is connect.sh, not this). The app's default dev/watch command (matches connect.sh) the daemon runs.
+const DEV_PORT = 5173;
+const DAEMON_PORT = 8787;
+const DEV_COMMAND = "pnpm dev";
+// The shared internal docker network the sandbox attaches to.
 const NETWORK = "intentic-workspace";
 
-// The per-host AI-agent workspace runner: one container deployed onto the host over SSH (like the platform's
-// Forgejo/Komodo) from the pinned runner image, plus its WILDCARD `*.preview.<zone>` Cloudflare route. The
-// node carries the host SSH creds + internal ip and the sandbox image it spawns project sandboxes from; it
-// gates on its host-internal /healthz so readiness passes before the tunnel + DNS route exist. Returns the
-// exposure's ingress pair so the caller aggregates it onto the host's tunnel.
+// The per-host AI-agent workspace: one sandbox container deployed onto the host over SSH (like the platform's
+// Forgejo/Komodo) from the pinned sandbox image, plus its WILDCARD `*.preview.<zone>` Cloudflare route to the
+// sandbox's own dev server. The node carries the host SSH creds + internal ip; it gates on the daemon's
+// host-internal /health so readiness passes before the tunnel + DNS route exist. Returns the exposure's ingress
+// pair so the caller aggregates it onto the host's tunnel — the sandbox is just another service on that tunnel.
 export const resolveWorkspace = (
     intent: WorkspaceIntent,
     host: HostInput,
@@ -41,9 +44,9 @@ export const resolveWorkspace = (
         ...(host.port !== undefined ? { port: host.port } : {}),
     };
     const domain = previewDomain(zone);
-    const exposure = exposeRoute(intent.expose, intent.on, domain, PREVIEW_PORT, apiToken);
+    const exposure = exposeRoute(intent.expose, intent.on, domain, DEV_PORT, apiToken);
     // Each exposed service becomes a remote MCP endpoint at its routed domain, with an intentic-generated
-    // scoped bearer the runner forwards into the sandbox. The same secret key is what the tool itself
+    // scoped bearer the sandbox forwards into the agent. The same secret key is what the tool itself
     // authenticates against, so client and server share it through the secret store.
     const toolEntries = tools.map((tool) => {
         const mcp = serviceMcp(tool.kind);
@@ -64,14 +67,12 @@ export const resolveWorkspace = (
                 internalIp: makeRef<string>(intent.on, "internalIp"),
                 domain,
                 zone,
-                previewPort: PREVIEW_PORT,
+                devPort: DEV_PORT,
+                daemonPort: DAEMON_PORT,
+                devCommand: DEV_COMMAND,
                 network: NETWORK,
-                image: IMAGES.runner,
-                sandboxImage: IMAGES.sandbox,
-                // Opt into the control plane: the runner dials platformUrl with the platform-supplied
-                // RUNNER_TOKEN. Both are omitted (preview-only) unless the author set platformUrl.
-                ...(intent.platformUrl !== undefined ? { platformUrl: intent.platformUrl, runnerToken: env("RUNNER_TOKEN") } : {}),
-                // The runner exports this as ANTHROPIC_BASE_URL into each sandbox; omitted ⇒ Anthropic's cloud.
+                image: IMAGES.sandbox,
+                // The sandbox reads this as ANTHROPIC_BASE_URL for the agent; omitted ⇒ Anthropic's cloud.
                 ...(intent.agentBaseUrl !== undefined ? { agentBaseUrl: intent.agentBaseUrl } : {}),
                 // The agent's MCP tools (intent-declared internal services); omitted when none are exposed.
                 ...(toolEntries.length > 0 ? { tools: toolEntries } : {}),

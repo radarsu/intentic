@@ -163,13 +163,11 @@ export interface WantServiceInput extends ServiceInput {
     expose: Cloudflare;
 }
 
-// The workspace runner takes its host + Cloudflare account; its `*.preview.<zone>` route is derived. An
-// optional `platformUrl` opts it into the control plane: the runner dials that WSS gateway and authenticates
-// with the platform-supplied RUNNER_TOKEN env secret, so the platform can drive sandboxes over one connection.
+// The workspace sandbox takes its host + Cloudflare account; its `*.preview.<zone>` route to the sandbox's dev
+// server is derived from the zone. It is preview-only on the server — the browser-direct path is connect.sh.
 export interface WantWorkspaceInput {
     on: Host;
     expose: Cloudflare;
-    platformUrl?: string;
     // Optional Anthropic-compatible base URL for the in-sandbox agent (set as ANTHROPIC_BASE_URL on the
     // sandbox container). Point it at a local gateway (e.g. LiteLLM/Ollama) to run the agent against a local
     // model; absent ⇒ the agent talks to Anthropic's cloud.
@@ -194,7 +192,7 @@ export interface Want {
     // `const` so environment names come from the object keys, e.g. App<"staging" | "production">.
     app<const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string>;
     service(id: string, input: WantServiceInput): Service;
-    // The per-host AI-agent workspace runner: manages the project's dev sandbox + serves previews at
+    // The per-host AI-agent workspace sandbox: holds the project's dev workspace + serves its preview at
     // `*.preview.<zone>`. Takes only on/expose — the wildcard route is derived from the zone.
     workspace(id: string, input: WantWorkspaceInput): Workspace;
     // Backing capabilities. database/cache are internal-only, so they need only the host they run on; the
