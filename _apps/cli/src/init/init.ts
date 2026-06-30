@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { APP_DIR, CONFIG_FILE, ENV_FILE, INTENT_DIR, LAST_APPLIED_FILE, SECRETS_FILE, TARGET_DIR } from "./artifact.js";
+import { APP_DIR, CONFIG_FILE, ENV_FILE, INTENT_DIR, LAST_APPLIED_FILE, SECRETS_FILE, TARGET_DIR } from "../lib/artifact.js";
 
 const exec = promisify(execFile);
 

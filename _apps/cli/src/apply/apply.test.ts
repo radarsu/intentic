@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 import { createFakeProviders, reconcile } from "@intentic/engine";
 import { resolveState } from "@intentic/state-resolver";
 import { describe, expect, it } from "vitest";
+import { readArtifact, writeArtifact } from "../lib/artifact.js";
+import { loadIntent } from "../resolve/resolve.js";
 import { collectAccess, formatAccessSummary, writeAccessFile } from "./access.js";
-import { readArtifact, writeArtifact } from "./artifact.js";
-import { loadIntent } from "./resolve.js";
 
-const example = fileURLToPath(new URL("./__fixtures__/deploy.config.ts", import.meta.url));
+const example = fileURLToPath(new URL("../__fixtures__/deploy.config.ts", import.meta.url));
 
 // Every secret the example references: the host SSH key and Cloudflare API token plus the app secrets.
 // The host address/user are authored literals and the Cloudflare zone/account are discovered, not here.

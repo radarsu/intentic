@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { resolveState } from "@intentic/state-resolver";
 import { describe, expect, it } from "vitest";
+import { collectSecrets } from "../secrets/secrets.js";
 import { loadIntent } from "./resolve.js";
-import { collectSecrets } from "./secrets.js";
 
-const example = fileURLToPath(new URL("./__fixtures__/deploy.config.ts", import.meta.url));
+const example = fileURLToPath(new URL("../__fixtures__/deploy.config.ts", import.meta.url));
 
 describe("loadIntent", () => {
     it("loads an intent that resolves to a compiled graph", async () => {
@@ -27,7 +27,7 @@ describe("loadIntent", () => {
     });
 
     it("throws when the config does not export intent", async () => {
-        const notAConfig = fileURLToPath(new URL("./artifact.ts", import.meta.url));
+        const notAConfig = fileURLToPath(new URL("../lib/artifact.ts", import.meta.url));
         await expect(loadIntent(notAConfig)).rejects.toThrow(/must export "intent"/);
     });
 });

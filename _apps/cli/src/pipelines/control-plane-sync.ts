@@ -1,8 +1,8 @@
 import type { DesiredStateGraph, SecretSource } from "@intentic/graph";
 import { type ForgejoApi, forgejoApi } from "@intentic/providers";
+import { ARTIFACT_FILE, CONFIG_FILE, INTENT_DIR, TARGET_DIR } from "../lib/artifact.js";
+import { collectSecrets, secretRef } from "../secrets/secrets.js";
 import { APPLY_WORKFLOW_PATH, applyWorkflowYaml, type PipelineInputs, setRepoSecrets, writeWorkflow } from "./adopt-pipelines.js";
-import { ARTIFACT_FILE, CONFIG_FILE, INTENT_DIR, TARGET_DIR } from "./artifact.js";
-import { collectSecrets, secretRef } from "./secrets.js";
 
 // The Forgejo node carries the public git domain + admin identity the control plane authenticates with.
 // Shared by `adopt` (the one-shot push) and the post-adopt resolve sync (this file).

@@ -9,7 +9,7 @@ import { deploymentId, deploymentPort } from "@intentic/state-resolver";
 import { utils } from "ssh2";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readGeneratedSecrets } from "./generated-secrets.js";
+import { readGeneratedSecrets } from "./secrets/generated-secrets.js";
 
 // The realistic Tier-1 run: boot a Docker-in-Docker "host", then drive the REAL CLI (pnpm intentic
 // init/resolve/apply) exactly as an operator would — scaffold, author a deploy.config.ts pointed at the

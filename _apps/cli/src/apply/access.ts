@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import type { DesiredStateGraph, SecretSource } from "@intentic/graph";
-import { secretRef } from "./secrets.js";
+import { secretRef } from "../secrets/secrets.js";
 
 // The user-facing platform services that carry an admin login, mapped to a human label. Anything else with
 // a public `url` output (i.e. a deployment) is surfaced as a URL-only app environment.

@@ -2,8 +2,8 @@ import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DesiredStateGraph } from "@intentic/graph";
 import { komodoApi } from "@intentic/providers";
-import { loadEnvFile, readArtifact } from "./artifact.js";
-import { readGeneratedSecrets } from "./generated-secrets.js";
+import { loadEnvFile, readArtifact } from "../lib/artifact.js";
+import { readGeneratedSecrets } from "../secrets/generated-secrets.js";
 
 // One app deployment as the platform's Apps view renders it: the desired config the resolver baked into the
 // graph (image/env/url) plus whether Komodo currently has it registered, with a deep-link into Komodo for the

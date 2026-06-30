@@ -1,8 +1,10 @@
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SshExecutor, SshTarget } from "@intentic/providers";
-import { SECRETS_FILE } from "./artifact.js";
+import { createStore, resolveInputs } from "@intentic/engine";
+import type { DesiredStateGraph } from "@intentic/graph";
+import { hostTarget, type SshExecutor, type SshTarget } from "@intentic/providers";
+import { SECRETS_FILE } from "../lib/artifact.js";
 
 // A key→value store for intentic's generated secrets (the Forgejo/Komodo admin passwords). Storage only,
 // mirroring HostKeyStore: env-first precedence and minting are policy, and live in ensureGeneratedSecrets — so
@@ -120,4 +122,32 @@ export const createLayeredSecretStore = (
             }
         },
     };
+};
+
+// The generated secrets (Forgejo/Komodo admin passwords) are control-plane secrets whose authoritative home is
+// the control-plane host — the host the Forgejo node runs on (its `server` ref). Anchoring there lets every
+// operator share one value instead of minting its own laptop-local one (which would leave whoever didn't
+// bootstrap unable to authenticate). The host node's inputs are pure SSH creds, so they resolve before the
+// generated secrets exist — resolving the Forgejo node itself would need those very secrets. Falls back to the
+// local cache alone when there is no Forgejo node or its host can't be found. `backfill` reconciles the layers
+// (promote a locally-minted value to the host, mirror the host value back to a fresh operator's local cache);
+// it is OFF for read-only commands so they never mutate a store.
+export const generatedSecretStore = (
+    graph: DesiredStateGraph,
+    dir: string,
+    ssh: SshExecutor,
+    backfill: boolean,
+    log: (message: string) => void,
+): SecretStore => {
+    const local = createLocalSecretStore(dir);
+    const forgejo = Object.values(graph.resources).find((node) => node.type === "forgejo");
+    const serverRef = forgejo?.inputs["server"];
+    const hostId =
+        typeof serverRef === "object" && serverRef !== null && "$ref" in serverRef ? (serverRef as { readonly $ref: string }).$ref : undefined;
+    const hostNode = hostId !== undefined ? graph.resources[hostId] : undefined;
+    if (hostNode === undefined) {
+        return local;
+    }
+    const target = hostTarget(resolveInputs(hostNode.inputs, createStore(), process.env, { lenient: false }));
+    return createLayeredSecretStore([createHostSecretStore(target, ssh), local], { backfill, log });
 };

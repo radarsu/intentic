@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import type { IntentSet } from "@intentic/need-resolver";
 import { cloudflareApi } from "@intentic/providers";
 import { collectDomains, selectZone } from "@intentic/state-resolver";
-import { loadEnvFile } from "./artifact.js";
+import { loadEnvFile } from "../lib/artifact.js";
 
 // Load the intent a deploy.config.ts exports by importing it IN PLACE — so its `@intentic/sdk` and
 // `@intentic/graph` imports resolve from the project the config lives in (Node strips the TS types).

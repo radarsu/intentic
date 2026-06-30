@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { SECRETS_FILE } from "./artifact.js";
+import { SECRETS_FILE } from "../lib/artifact.js";
 import type { SecretStore } from "./secret-store.js";
 
 type MutableEnv = Record<string, string | undefined>;

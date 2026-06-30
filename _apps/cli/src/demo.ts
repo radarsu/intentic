@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { cloudflareApi, forgejoApi, sshExecutor } from "@intentic/providers";
 import { deploymentId, deploymentPort } from "@intentic/state-resolver";
-import { readGeneratedSecrets } from "./generated-secrets.js";
+import { readGeneratedSecrets } from "./secrets/generated-secrets.js";
 
 // ssh2 is CommonJS; under raw Node ESM `import { utils }` can't be resolved as a named export, so load it
 // through createRequire (the keygen is the only piece we need).
