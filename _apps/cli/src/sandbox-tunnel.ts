@@ -11,7 +11,11 @@ export interface SandboxTunnelResult {
 
 // Resolve the zone (id + account) the sandbox hostname lives under: an explicit override (getZone), else the
 // token's sole zone — erroring when the token sees none or several (the operator must then set ZONE).
-const resolveZone = async (api: CloudflareApi, apiToken: string, override: string | undefined): Promise<{ id: string; name: string; accountId: string }> => {
+const resolveZone = async (
+    api: CloudflareApi,
+    apiToken: string,
+    override: string | undefined,
+): Promise<{ id: string; name: string; accountId: string }> => {
     if (override !== undefined && override !== "") {
         const found = await api.getZone({ apiToken, zone: override });
         if (found === undefined) {
@@ -22,10 +26,13 @@ const resolveZone = async (api: CloudflareApi, apiToken: string, override: strin
     const zones = await api.listZones({ apiToken });
     const [only, ...rest] = zones;
     if (only === undefined) {
-        throw new Error("the Cloudflare API token sees no zones — add a zone to the account or set ZONE");
+        throw new Error("the Cloudflare API token sees no zones — add a domain to the account, or broaden the token's Zone:Read scope");
     }
     if (rest.length > 0) {
-        throw new Error(`the API token sees multiple zones (${[only, ...rest].map((zone) => zone.name).join(", ")}); set ZONE to choose one`);
+        const names = [only, ...rest].map((zone) => zone.name);
+        throw new Error(
+            `the Cloudflare API token sees multiple zones (${names.join(", ")}) — set the ZONE env var or pass --zone to choose one, e.g. --zone ${only.name}`,
+        );
     }
     return only;
 };

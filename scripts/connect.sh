@@ -180,6 +180,57 @@ if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf
     exit 1
 fi
 
+# Resolve the Cloudflare zone the sandbox tunnel lives under BEFORE the tunnel step, so a token that sees several
+# zones gets a clear choice here instead of a bare "multiple zones" crash deep inside the CLI. The platform's
+# setup screen normally pins ZONE already; this covers direct/CI runs (and any path that didn't set it). List the
+# token's zones (same Bearer auth as the verify above) and parse "name":"…" with grep/sed — no jq on a stock box.
+if [ -z "$ZONE" ]; then
+    echo "intentic: resolving the Cloudflare zone…"
+    zones_json="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>/dev/null || true)"
+    zones="$(printf '%s' "$zones_json" | grep -o '"name":"[^"]*"' | sed 's/^"name":"//;s/"$//' || true)"
+    zone_count="$(printf '%s\n' "$zones" | grep -c . || true)"
+    if [ "$zone_count" -eq 0 ]; then
+        echo "error: the Cloudflare API token sees no zones — add a domain to the account, or broaden the token's" >&2
+        echo "       Zone:Read scope, at https://dash.cloudflare.com/profile/api-tokens, then re-run." >&2
+        exit 1
+    elif [ "$zone_count" -eq 1 ]; then
+        ZONE="$zones"
+        echo "intentic: using the only zone the token sees — $ZONE."
+    elif [ -r /dev/tty ]; then
+        # The human is at a terminal even under `curl … | sh` (stdin is the script), so prompt on /dev/tty.
+        echo "intentic: this Cloudflare token can use several zones — pick the one your sandbox should use:" >&2
+        i=1
+        for z in $zones; do
+            echo "  $i) $z" >&2
+            i=$((i + 1))
+        done
+        printf "intentic: zone number [1]: " >&2
+        read -r choice </dev/tty || choice=1
+        [ -n "$choice" ] || choice=1
+        case "$choice" in
+            *[!0-9]*)
+                echo "error: invalid selection '$choice'." >&2
+                exit 1
+                ;;
+        esac
+        ZONE="$(printf '%s\n' "$zones" | sed -n "${choice}p")"
+        if [ -z "$ZONE" ]; then
+            echo "error: '$choice' is out of range." >&2
+            exit 1
+        fi
+        echo "intentic: using zone $ZONE."
+    else
+        # Non-interactive (no controlling terminal): can't prompt, so name the zones and the exact remedy.
+        first="$(printf '%s\n' "$zones" | sed -n '1p')"
+        echo "error: the Cloudflare API token sees multiple zones; set ZONE to choose one. The token can use:" >&2
+        for z in $zones; do
+            echo "  - $z" >&2
+        done
+        echo "       Re-run with ZONE set in the environment (alongside CF_TOKEN), e.g. ZONE=$first" >&2
+        exit 1
+    fi
+fi
+
 # When requested, wire this machine as a deploy target before starting the sandbox — sets HOST_SSH_KEY (the
 # generated key) and SELF_HOST_USER, which ride into the sandbox container's env below.
 if [ -n "$SELF_HOST" ]; then

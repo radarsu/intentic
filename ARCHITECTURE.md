@@ -111,8 +111,10 @@ Why a tunnel, rather than "just use SSH and make Cloudflare optional":
 This is enforced in code, not just convention: the SDK types require `expose: Cloudflare`, and both
 `resolveNeeds` ([needs.ts](_libs/need-resolver/src/needs.ts)) and `emit`
 ([emit.ts](_libs/state-resolver/src/emit.ts)) throw when it is missing — there is no alternative ingress.
-The Cloudflare API token is supplied at **connect** time (it rides `connect.sh` into the sandbox, never
-touching the platform) but is consumed at **provision** time by `intentic apply`.
+The Cloudflare API token is supplied at **connect** time (it rides `connect.sh` into the sandbox) and consumed
+at **provision** time by `intentic apply`. It never reaches the platform except for one request-scoped call at
+setup — the platform lists the token's zones so the user can pick which one the sandbox tunnel uses (the browser
+can't call Cloudflare directly), then drops the token: never persisted, never logged.
 
 ## The intent-driven flow
 

@@ -34,7 +34,13 @@ describe("createSandboxTunnel", () => {
             createDnsRecord,
         });
         const hostname = `sandbox-${idOf("conn")}.example.com`;
-        const result = await createSandboxTunnel({ apiToken: "t", connectToken: "conn", service: "http://intentic-sandbox-workspace:8787", log: noop, api });
+        const result = await createSandboxTunnel({
+            apiToken: "t",
+            connectToken: "conn",
+            service: "http://intentic-sandbox-workspace:8787",
+            log: noop,
+            api,
+        });
         expect(result).toEqual({ token: "the-token", hostname });
         expect(putTunnelIngress).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -53,7 +59,14 @@ describe("createSandboxTunnel", () => {
             createDnsRecord,
         });
         const hostname = `sandbox-${idOf("conn")}.example.com`;
-        await createSandboxTunnel({ apiToken: "t", connectToken: "conn", service: "http://sb:8787", previewService: "http://sb:5173", log: noop, api });
+        await createSandboxTunnel({
+            apiToken: "t",
+            connectToken: "conn",
+            service: "http://sb:8787",
+            previewService: "http://sb:5173",
+            log: noop,
+            api,
+        });
         expect(putTunnelIngress).toHaveBeenCalledWith(
             expect.objectContaining({
                 ingress: [
@@ -81,21 +94,36 @@ describe("createSandboxTunnel", () => {
 
     test("errors when the override zone is not found", async () => {
         const api = fakeApi({ getZone: async () => undefined });
-        await expect(createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", zone: "nope.dev", log: noop, api })).rejects.toThrow(/not found/);
+        await expect(createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", zone: "nope.dev", log: noop, api })).rejects.toThrow(
+            /not found/,
+        );
     });
 
-    test("errors when the token sees multiple zones and no override", async () => {
+    test("multiple zones, no override: lists them and names ZONE/--zone with a concrete example", async () => {
         const api = fakeApi({
             listZones: async () => [
                 { id: "1", name: "a.com", accountId: "x" },
                 { id: "2", name: "b.com", accountId: "x" },
             ],
         });
-        await expect(createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", log: noop, api })).rejects.toThrow(/multiple zones/);
+        const error = await createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", log: noop, api }).then(
+            () => undefined,
+            (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain("a.com, b.com");
+        expect((error as Error).message).toContain("ZONE");
+        expect((error as Error).message).toContain("--zone a.com");
     });
 
-    test("errors when the token sees no zones", async () => {
-        await expect(createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", log: noop, api: fakeApi() })).rejects.toThrow(/no zones/);
+    test("no zones: error guides toward adding a domain or broadening the token scope", async () => {
+        const error = await createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", log: noop, api: fakeApi() }).then(
+            () => undefined,
+            (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toMatch(/no zones/);
+        expect((error as Error).message).toMatch(/Zone:Read/);
     });
 
     test("idempotent: reuses an existing tunnel and updates the existing DNS record", async () => {

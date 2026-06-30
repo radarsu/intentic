@@ -130,9 +130,11 @@ if ($LASTEXITCODE -ne 0) { docker network create $Network | Out-Null }
 docker rm -f $Container *> $null
 
 # Self-host on Windows = a Docker-in-Docker "host" the sandbox deploys onto over SSH (Windows can't be a native
-# SSH+Docker target). Stand it up on the shared network so the sandbox reaches it by name; the key is generated
-# INSIDE the target (no Windows ssh-keygen needed, and it stays root-owned), and its private half rides into the
-# sandbox as HOST_SSH_KEY. Mirrors scripts/intentic-local.sh, adapted to the shared Docker network.
+# SSH+Docker target). The sandbox runs ALONGSIDE it on Docker Desktop, NOT inside it — the control plane stays an
+# unprivileged container outside its (privileged) targets, can drive several of them, and outlives any one being
+# rebuilt; it reaches this one over SSH exactly like a remote host. Stand it up on the shared network so the
+# sandbox resolves it by name; the key is generated INSIDE the target (no Windows ssh-keygen needed, and it stays
+# root-owned), and its private half rides into the sandbox as HOST_SSH_KEY. Mirrors scripts/intentic-local.sh.
 if ($SelfHost) {
     Write-Host 'intentic: starting the Docker-in-Docker deploy target...'
     docker rm -f $DindContainer *> $null

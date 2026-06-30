@@ -17,7 +17,7 @@ import {
 } from "@intentic/providers";
 import { resolveState } from "@intentic/state-resolver";
 import type { CommandContext } from "@stricli/core";
-import { buildApplication, buildCommand, buildRouteMap, numberParser } from "@stricli/core";
+import { buildApplication, buildCommand, buildRouteMap, numberParser, text_en } from "@stricli/core";
 import { collectAccess, formatAccessSummary, writeAccessFile } from "./access.js";
 import { adoptRepos } from "./adopt.js";
 import {
@@ -580,6 +580,17 @@ const sandboxTunnel = buildCommand<{ service: string; previewService?: string; z
     },
 });
 
+// User-facing errors should read as a one-line message, not a JS stack trace — the CLI is driven by end users
+// (and by connect.sh inside the sandbox), so a thrown Error renders as "Command failed, <message>". Set
+// INTENTIC_DEBUG to keep the stack when chasing an unexpected failure. This overrides stricli's default
+// formatter, which prints `error.stack`.
+const formatException = (exc: unknown): string => {
+    if (exc instanceof Error) {
+        return process.env["INTENTIC_DEBUG"] !== undefined ? (exc.stack ?? exc.message) : exc.message;
+    }
+    return String(exc);
+};
+
 export const app = buildApplication(
     buildRouteMap({
         routes: { init, resolve: resolveCommand, plan: planCommand, apply, adopt, restore, deployments: deploymentsCommand, sandboxTunnel },
@@ -589,5 +600,6 @@ export const app = buildApplication(
         name: "intentic",
         versionInfo: { currentVersion: version },
         scanner: { caseStyle: "allow-kebab-for-camel" },
+        localization: { loadText: (locale) => (locale.startsWith("en") ? { ...text_en, formatException } : undefined) },
     },
 );
