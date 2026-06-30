@@ -72,5 +72,5 @@ export const IMAGES = Object.freeze({
     // Never :latest or a hand-tagged build — those carry internal version 0.0.0 (unpublished), so init's
     // `pnpm install` of ~0.0.0 deps fails and resolve can't find @intentic/graph.
     // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
-    sandbox: "ghcr.io/radarsu/intentic/sandbox:1.32.0@sha256:434dda985897f3efd8246b045dbd6cc9af1c679ee7faf55e1f4c51db303df7c8",
+    sandbox: "ghcr.io/radarsu/intentic/sandbox:1.32.1@sha256:8d53f67948f04f8770b812c56e0e6918e61d5db8389932a02c007c7ae85d0037",
 } as const);

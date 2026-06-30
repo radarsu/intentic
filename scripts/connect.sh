@@ -22,7 +22,7 @@
 #   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id the daemon verifies sign-in against (default: hardcoded below)
 #
 # Optional env:
-#   SANDBOX_IMAGE   sandbox image to run (default: the pinned release ghcr.io/radarsu/intentic/sandbox:1.32.0)
+#   SANDBOX_IMAGE   sandbox image to run (default: the pinned release ghcr.io/radarsu/intentic/sandbox:1.32.1)
 #   DEV_COMMAND     the app's dev/watch command inside the sandbox (default: pnpm dev)
 #   DEV_PORT        the app's dev-server port, exposed at *.preview.<zone> (default: 5173)
 #   WEB_ORIGIN      scopes the daemon's CORS to the platform web app (default: open — the Google-token audience is the real gate)
@@ -45,7 +45,7 @@ CONNECT_TOKEN="${CONNECT_TOKEN:-${2:-}}"
 # builds carry internal version 0.0.0 (unpublished), so init's `pnpm install` fails and resolve can't find
 # @intentic/graph. Renovate bumps the tag+digest on each release (see renovate.json5).
 # renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
-SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:1.32.0@sha256:434dda985897f3efd8246b045dbd6cc9af1c679ee7faf55e1f4c51db303df7c8}"
+SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:1.32.1@sha256:8d53f67948f04f8770b812c56e0e6918e61d5db8389932a02c007c7ae85d0037}"
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
 DEV_COMMAND="${DEV_COMMAND:-pnpm dev}"
 DEV_PORT="${DEV_PORT:-5173}"
