@@ -145,7 +145,8 @@ fi
 # `docker info` aggregates CLI-plugin data and can hang (e.g. docker-scout/buildx); `docker version`
 # with a server-format does a fast daemon round-trip and fails cleanly if the daemon is unreachable.
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
-    echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
+    echo "error: can't reach the docker daemon. Start Docker — and if it is running, your user may lack" >&2
+    echo "       access: add it to the 'docker' group (then re-login or 'newgrp docker'), or re-run with sudo." >&2
     exit 1
 fi
 if [ -z "$PLATFORM_URL" ] || [ -z "$RUNNER_TOKEN" ]; then
@@ -185,6 +186,13 @@ if [ -n "$SELF_HOST" ]; then
     setup_self_host
 fi
 
+# Pull the pinned image up front (with visible progress) so a slow first-time pull doesn't look like a
+# hang, a private/missing image surfaces as a clear error — and the tunnel step below, which runs this
+# same image via `--entrypoint intentic`, never executes a stale locally-cached tag (docker run reuses a
+# cached tag without re-pulling, so a republished image would otherwise be missed).
+echo "intentic: pulling sandbox image ${SANDBOX_IMAGE} (first run can take a minute)…"
+pull_image "$SANDBOX_IMAGE"
+
 # Create/refresh this sandbox's own Cloudflare tunnel + DNS so the browser can reach it directly:
 # sandbox-<id>.<zone> → the daemon (:8787) and *.preview.<zone> → the app dev server (:$DEV_PORT). The sandbox
 # image carries the intentic CLI, which makes the Cloudflare API calls (reusing the providers' client) and
@@ -207,11 +215,6 @@ if [ -z "$TUNNEL_TOKEN" ] || [ -z "$SANDBOX_HOSTNAME" ]; then
     exit 1
 fi
 SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
-
-# Pull explicitly (with visible progress) so a slow first-time pull doesn't look like a hang — and so a
-# private/missing image surfaces as a clear error instead of silence.
-echo "intentic: pulling sandbox image ${SANDBOX_IMAGE} (first run can take a minute)…"
-pull_image "$SANDBOX_IMAGE"
 
 echo "intentic: starting sandbox…"
 # cloudflared (the sidecar below) reaches the sandbox by container name on this shared network; create it first.

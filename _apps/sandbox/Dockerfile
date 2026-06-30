@@ -23,9 +23,13 @@ LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-# The intentic CLI on PATH — the /intentic endpoint shells out to it for resolve/plan dry-runs.
+# The intentic CLI on PATH — the /intentic endpoint shells out to it for resolve/plan dry-runs, and
+# connect.sh runs it via `--entrypoint intentic`. tsc emits cli.js without the exec bit, so chmod it:
+# runc resolves the entrypoint with Go's exec.LookPath, which reports a non-executable PATH entry as
+# "executable file not found in $PATH".
 COPY --from=build /out/cli /opt/intentic-cli
-RUN ln -s /opt/intentic-cli/dist/cli.js /usr/local/bin/intentic
+RUN chmod +x /opt/intentic-cli/dist/cli.js \
+    && ln -s /opt/intentic-cli/dist/cli.js /usr/local/bin/intentic
 # The sandbox daemon.
 COPY --from=build /out/sandbox /opt/sandbox
 WORKDIR /work
