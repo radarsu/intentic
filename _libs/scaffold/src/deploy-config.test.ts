@@ -1,6 +1,6 @@
 import type { InventoryEntry } from "@intentic/sandbox-contract";
 import { describe, expect, test } from "vitest";
-import { readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
+import { insertAppStanza, readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
 
 const hostEntry: InventoryEntry = { kind: "backend", provider: "host", name: "self", values: { address: "1.2.3.4", user: "deploy", port: 22 } };
 const cfEntry: InventoryEntry = { kind: "backend", provider: "cloudflare", name: "cf", values: {} };
@@ -74,5 +74,22 @@ describe("deploy-config managed region", () => {
     test("skips declarations for providers it does not model", () => {
         const src = scaffoldDeployConfig([]).replace(`// </intentic>`, `    const x = i.have.mystery("x", { foo: "bar" });\n    // </intentic>`);
         expect(readManagedRegion(src)).toEqual([]);
+    });
+});
+
+describe("insertAppStanza", () => {
+    test("inserts an app onto self + cf at app.<zone>, leaving the managed region intact", () => {
+        const src = insertAppStanza(scaffoldDeployConfig([hostEntry, cfEntry]), "example.com");
+        expect(src).toContain(`i.want.app("app"`);
+        expect(src).toContain(`on: self`);
+        expect(src).toContain(`expose: cf`);
+        expect(src).toContain(`domain: "app.example.com"`);
+        // The managed entries are untouched (still round-trip).
+        expect(readManagedRegion(src)).toEqual([hostEntry, cfEntry]);
+    });
+
+    test("is idempotent — a config that already declares an app is returned unchanged", () => {
+        const once = insertAppStanza(scaffoldDeployConfig([hostEntry, cfEntry]), "example.com");
+        expect(insertAppStanza(once, "example.com")).toBe(once);
     });
 });

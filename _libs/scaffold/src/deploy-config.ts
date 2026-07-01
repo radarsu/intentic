@@ -227,3 +227,30 @@ export const scaffoldDeployConfig = (entries: readonly InventoryEntry[]): string
         `});`,
         ``,
     ].join(`\n`);
+
+// Add the deployable app to a scaffolded config: an `i.want.app("app", …)` stanza that references the `self`
+// host + `cf` cloudflare backends the managed region declares, so `resolve`/`apply` deploy it at app.<zone>.
+// Written just after the managed region's end marker (inside the defineIntent body), the same shape the
+// selfhost init template produces — now generated in one place. Idempotent: a config that already declares an
+// app is returned unchanged.
+export const insertAppStanza = (src: string, zone: string): string => {
+    if (src.includes(`i.want.app(`)) {
+        return src;
+    }
+    const lines = src.split(`\n`);
+    const end = lines.findIndex((line) => line.trim().startsWith(END_TAG));
+    if (end === -1) {
+        throw new Error(`deploy.config.ts has no managed region (${END_TAG}) to anchor the app stanza to.`);
+    }
+    const stanza = [
+        ``,
+        `${INDENT}i.want.app("app", {`,
+        `${INDENT}${INDENT}on: self,`,
+        `${INDENT}${INDENT}expose: cf,`,
+        `${INDENT}${INDENT}environments: {`,
+        `${INDENT}${INDENT}${INDENT}production: { domain: ${JSON.stringify(`app.${zone}`)}, branch: "main" },`,
+        `${INDENT}${INDENT}},`,
+        `${INDENT}});`,
+    ];
+    return [...lines.slice(0, end + 1), ...stanza, ...lines.slice(end + 1)].join(`\n`);
+};

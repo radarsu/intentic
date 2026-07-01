@@ -1,7 +1,12 @@
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { workspaceContract } from "@intentic/sandbox-contract";
+import { insertAppStanza, readManagedRegion } from "@intentic/scaffold";
 import { implement, ORPCError } from "@orpc/server";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
+import { createConfigStore } from "../inventory/config-store.js";
+import { zoneFromPublicUrl } from "../system/zone.js";
 import { isValidRepoName, listRepos } from "./repos.js";
 import { isValidToolName } from "./tools.js";
 import { resolveWithin } from "./workspace-files.js";
@@ -37,6 +42,35 @@ export const createWorkspaceRoutes = (services: Services) => {
             }
             await services.git.clone(services.workspace.root, input.name, input.cloneUrl, input.branch);
             return { name: input.name, path: input.name };
+        }),
+        // Scaffold (or adopt) the deployable app at /work/app. The neutral workspace has none until the user opts
+        // to build/deploy one. Then, when this sandbox is a deploy target (self + cf declared), declare the app
+        // for deployment (app.<zone>) and bring the live preview up now (no restart).
+        addApp: i.addApp.handler(async ({ input }) => {
+            const appDir = services.workspace.repos.app;
+            if (existsSync(appDir)) {
+                throw new ORPCError("CONFLICT", { message: "an app already exists" });
+            }
+            const args = ["add-app", "--dir", services.workspace.root, ...(input.cloneUrl !== undefined ? ["--app", input.cloneUrl] : [])];
+            if (spawnSync("intentic", args, { stdio: "inherit" }).status !== 0) {
+                throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "failed to scaffold the app" });
+            }
+            const config = createConfigStore(services);
+            const content = await config.read();
+            const entries = readManagedRegion(content);
+            const hasSelf = entries.some((entry) => entry.kind === "backend" && entry.provider === "host" && entry.name === "self");
+            const hasCf = entries.some((entry) => entry.kind === "backend" && entry.provider === "cloudflare" && entry.name === "cf");
+            const zone = services.config.zone !== "" ? services.config.zone : zoneFromPublicUrl(services.config.sandbox.publicUrl);
+            if (hasSelf && hasCf && zone !== undefined && zone !== "") {
+                const next = insertAppStanza(content, zone);
+                if (next !== content) {
+                    await config.write(next, "chore(intentic): declare app for deployment");
+                }
+            }
+            if (services.config.dev.command !== "" && services.config.dev.port !== "") {
+                services.devServer.start({ command: services.config.dev.command.split(" "), cwd: appDir, port: Number(services.config.dev.port) });
+            }
+            return { ok: true } as const;
         }),
         // GET never returns the token (it stays in the sandbox); the list only reports presence.
         tools: i.tools.handler(async () => ({

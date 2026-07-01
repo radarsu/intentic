@@ -95,6 +95,8 @@ export const WorkspaceFileSchema = z.object({ path: z.string(), content: z.strin
 export const ReposListSchema = z.object({ repos: z.array(z.string()) });
 export const CloneRepoSchema = z.object({ name: z.string().min(1), cloneUrl: z.string().min(1), branch: z.string().optional() });
 export const CloneResultSchema = z.object({ name: z.string(), path: z.string() });
+// Scaffold the deployable app at /work/app: a zero-config starter, or adopt an existing repo via `cloneUrl`.
+export const AppScaffoldSchema = z.object({ cloneUrl: z.string().url().optional() });
 // Add/edit an external MCP tool. `name` is validated more strictly in the handler (isValidToolName).
 export const ToolInputSchema = z.object({ name: z.string().min(1), url: z.string().url(), token: z.string().optional() });
 // The list never returns the token (it stays in the sandbox) — only its presence.

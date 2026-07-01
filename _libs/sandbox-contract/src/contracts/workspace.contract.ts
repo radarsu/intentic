@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import {
+    AppScaffoldSchema,
     CloneRepoSchema,
     CloneResultSchema,
     OkSchema,
@@ -21,6 +22,8 @@ export const workspaceContract = {
     file: oc.route({ method: "GET", path: "/workspace/file" }).input(WorkspaceFileQuerySchema).output(WorkspaceFileSchema),
     repos: oc.route({ method: "GET", path: "/workspace/repos" }).output(ReposListSchema),
     addRepo: oc.route({ method: "POST", path: "/workspace/repos" }).input(CloneRepoSchema).output(CloneResultSchema),
+    // Scaffold (or adopt) the deployable app at /work/app — the fixed app role, distinct from addRepo's sibling repos.
+    addApp: oc.route({ method: "POST", path: "/workspace/app" }).input(AppScaffoldSchema).output(OkSchema),
     tools: oc.route({ method: "GET", path: "/workspace/tools" }).output(ToolsListSchema),
     addTool: oc.route({ method: "POST", path: "/workspace/tools" }).input(ToolInputSchema).output(ToolAddResultSchema),
     removeTool: oc.route({ method: "DELETE", path: "/workspace/tools/{name}" }).input(ToolNameParamSchema).output(OkSchema),

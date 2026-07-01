@@ -1,4 +1,5 @@
 import { buildApplication, buildRouteMap, text_en } from "@stricli/core";
+import { addAppCommand } from "./add-app/add-app.command.js";
 import { adopt } from "./adopt/adopt.command.js";
 import { apply } from "./apply/apply.command.js";
 import { deploymentsCommand } from "./deployments/deployments.command.js";
@@ -28,6 +29,7 @@ export const app = buildApplication(
     buildRouteMap({
         routes: {
             init,
+            addApp: addAppCommand,
             resolve: resolveCommand,
             plan: planCommand,
             apply,
