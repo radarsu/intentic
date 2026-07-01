@@ -11,7 +11,7 @@
       // depName; the string literal supplies the current tag + digest. This keeps images.ts plain TypeScript
       // with no build-time generation.
       customType: "regex",
-      managerFilePatterns: ["/_libs/state-resolver/src/images\\.ts$/"],
+      managerFilePatterns: ["/_libs/state-resolver/src/lib/images\\.ts$/"],
       matchStrings: [
         "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)[\\s\\S]*?\"[^\"]*:(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[a-f0-9]+)\"",
       ],
