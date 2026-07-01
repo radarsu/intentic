@@ -21,17 +21,21 @@ export const hostSshTunnel = buildCommand<{ zone?: string }>({
     },
     async func(this: CommandContext, flags: { zone?: string }) {
         const config = loadConfig();
-        const { cloudflareApiToken: apiToken, connectToken } = config;
+        const { cloudflareApiToken: apiToken, connectToken, hostName } = config;
         if (apiToken === "") {
             throw new Error("set CLOUDFLARE_API_TOKEN");
         }
         if (connectToken === "") {
             throw new Error("set CONNECT_TOKEN (the per-sandbox connection token)");
         }
+        if (hostName === "") {
+            throw new Error("set HOST_NAME (the inventory name of the host being enrolled)");
+        }
         const zone = flags.zone ?? (config.zone !== "" ? config.zone : undefined);
         const { token, hostname } = await createHostSshTunnel({
             apiToken,
             connectToken,
+            hostName,
             ...(zone !== undefined && zone !== "" ? { zone } : {}),
             log: (message) => this.process.stderr.write(`${message}\n`),
         });

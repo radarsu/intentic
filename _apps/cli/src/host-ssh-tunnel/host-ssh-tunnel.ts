@@ -13,8 +13,8 @@ export interface HostSshTunnelResult {
 
 // Create (or refresh, idempotently) the per-host Cloudflare tunnel + proxied DNS that exposes THIS machine's
 // sshd at `ssh-<id>.<zone>` as an `ssh://localhost:22` ingress, and return the connector token connect.sh runs
-// cloudflared with. `<id>` is the same stable digest of the connection token the sandbox tunnel uses, so
-// re-runs reuse the tunnel/hostname. The sandbox then SSH-deploys to this host with
+// cloudflared with. `<id>` is a stable per-host digest of (connection token + host name), so re-runs reuse the
+// same tunnel/hostname and each enrolled host gets a distinct one. The sandbox then SSH-deploys to this host with
 // `cloudflared access tcp --hostname ssh-<id>.<zone>` (host registered via:"cloudflared") — a NAT'd machine it
 // can't reach by IP. This is a SEPARATE tunnel from the sandbox's: its connector runs ON the host to reach
 // localhost:22, whereas the sandbox connector runs on the workspace bridge — one Cloudflare tunnel cannot mix
@@ -22,13 +22,15 @@ export interface HostSshTunnelResult {
 export const createHostSshTunnel = async (args: {
     readonly apiToken: string;
     readonly connectToken: string;
+    // Salts the tunnel id so each enrolled host gets its OWN ssh-<id>.<zone> (many deploy targets, no collision).
+    readonly hostName: string;
     readonly zone?: string;
     readonly log: (message: string) => void;
     readonly api?: CloudflareApi;
 }): Promise<HostSshTunnelResult> => {
     const api = args.api ?? cloudflareApi;
     const zone = await resolveZone(api, args.apiToken, args.zone);
-    const id = createHash("sha256").update(args.connectToken).digest("hex").slice(0, 12);
+    const id = createHash("sha256").update(`${args.connectToken}:${args.hostName}`).digest("hex").slice(0, 12);
     const name = `host-ssh-${id}`;
     const hostname = `ssh-${id}.${zone.name}`;
     args.log(`resolving host SSH tunnel "${name}" on zone "${zone.name}"…`);

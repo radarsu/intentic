@@ -21,6 +21,8 @@ const configSchema = z.object({
     cloudflareApiToken: z.string().default(""),
     connectToken: z.string().default(""),
     zone: z.string().default(""),
+    // The inventory name of the host being enrolled (connect-host.sh) — salts its per-host SSH tunnel id.
+    hostName: z.string().default(""),
     // demo dev-harness (dist/demo.js) inputs: the Cloudflare zone it provisions under, an extra NODE_OPTIONS to
     // prepend (the DoH import hook), and the host ports it publishes Forgejo/Komodo/SSH on for local browsing.
     cloudflareZone: z.string().default("intentic.dev"),
