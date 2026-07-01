@@ -1,8 +1,6 @@
 import type { Capability, CapabilityKind, CapabilityStatus, IntenticLine } from "@intentic/sandbox-contract";
-import { readManagedRegion } from "@intentic/scaffold";
 import type { Services } from "../composition.js";
 import { type ConfigStore, createConfigStore } from "../inventory/config-store.js";
-import { ensureDeployTarget } from "../inventory/deploy-target.js";
 import { ensureIntentInstallable } from "../workspace/ensure-intent.js";
 import { scaffoldNeutralLedger } from "../workspace/scaffold-ledger.js";
 import type { CapabilitiesStore } from "./capabilities-store.js";
@@ -13,7 +11,6 @@ import type { CapabilitiesStore } from "./capabilities-store.js";
 export interface CapabilityCtx {
     readonly logger: Services["logger"];
     readonly workspace: Services["workspace"];
-    readonly selfHost: Services["selfHost"];
     readonly git: Services["git"];
     readonly files: Services["files"];
     readonly intentic: Services["intentic"];
@@ -21,7 +18,6 @@ export interface CapabilityCtx {
     readonly capabilities: CapabilitiesStore;
     readonly scaffoldNeutralLedger: () => Promise<void>;
     readonly ensureIntentInstallable: () => Promise<void>;
-    readonly ensureDeployTarget: () => Promise<void>;
 }
 
 // A capability kind's behaviour. `apply` is idempotent and streams progress (mcp/integration emit one frame;
@@ -40,7 +36,6 @@ export const capabilityCtx = (services: Services): CapabilityCtx => {
     return {
         logger: services.logger,
         workspace: services.workspace,
-        selfHost: services.selfHost,
         git: services.git,
         files: services.files,
         intentic: services.intentic,
@@ -48,10 +43,6 @@ export const capabilityCtx = (services: Services): CapabilityCtx => {
         capabilities: services.capabilities,
         scaffoldNeutralLedger: () => scaffoldNeutralLedger(services),
         ensureIntentInstallable: () => ensureIntentInstallable(services),
-        ensureDeployTarget: async () => {
-            const content = await config.read();
-            await ensureDeployTarget(services, config, content, readManagedRegion(content));
-        },
     };
 };
 

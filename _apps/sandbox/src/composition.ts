@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { AgentEvent, IntenticLine, SelfHost, WorkspaceTree } from "@intentic/sandbox-contract";
+import type { AgentEvent, IntenticLine, WorkspaceTree } from "@intentic/sandbox-contract";
 import type { Logger } from "pino";
 import { type AgentRequest, runAgent } from "./agent/agent.js";
 import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/capabilities-store.js";
@@ -33,8 +33,6 @@ export interface Services {
     readonly logger: Logger;
     readonly workspace: WorkspacePaths;
     readonly devServer: DevServer;
-    // Present only when this sandbox was started with a wired self-host deploy target (SELF_HOST_USER + a key).
-    readonly selfHost: SelfHost | undefined;
     // This sandbox's identity for the platform's Connections card; undefined ⇒ /info returns {} (loopback/test).
     readonly info: { readonly name: string; readonly image: string } | undefined;
     // Intent-declared internal MCP tools (constant for the sandbox), merged with mcp-kind capabilities each turn.
@@ -77,10 +75,6 @@ export interface Services {
 // real module functions referenced directly (their injectable last arg defaults to the real subprocess/fs).
 export const createServices = (config: Config, logger: Logger): Services => {
     const workspace = workspacePaths(config.workspaceRoot);
-    const selfHost: SelfHost | undefined =
-        config.selfHost.user !== "" && config.hostSshKey !== ""
-            ? { user: config.selfHost.user, address: config.selfHost.address, port: 22, via: config.selfHost.via }
-            : undefined;
     const info = config.sandbox.name !== "" && config.sandbox.image !== "" ? { name: config.sandbox.name, image: config.sandbox.image } : undefined;
     const auth =
         config.google.clientId !== ""
@@ -99,7 +93,6 @@ export const createServices = (config: Config, logger: Logger): Services => {
         logger,
         workspace,
         devServer: createDevServer(),
-        selfHost,
         info,
         tools: internalTools(config.intenticAgentTools),
         capabilities: fileCapabilitiesStore(join(workspace.root, ".intentic", "capabilities.json")),

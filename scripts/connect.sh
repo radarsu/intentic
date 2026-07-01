@@ -365,14 +365,15 @@ pull_image "$SANDBOX_IMAGE"
 # the app dev server (:$DEV_PORT) on the own-Cloudflare path. Either the platform pre-provisioned it with
 # intentic's token (nothing to do here), or the bundled CLI creates/refreshes it with the user's token below and
 # prints the connector token; cloudflared runs as a sidecar once the sandbox is up.
+# Defined unconditionally so the host-ssh-tunnel step below (own-Cloudflare self-host) can reuse it too.
+zone_env=""
+[ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
 if [ -n "$PROVIDED_TUNNEL" ]; then
     # Intentic-provided path: the platform already created the tunnel + DNS with intentic's token and filled
     # TUNNEL_TOKEN + SANDBOX_HOSTNAME into the one-liner — nothing to do but record the public URL.
     SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
 else
     echo "intentic: creating the sandbox tunnel…"
-    zone_env=""
-    [ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
     # An explicit subdomain (own-Cloudflare path) overrides the derived sandbox-<id>; validated as a DNS label
     # upstream, so it word-splits safely here (mirrors zone_env).
     sub_flag=""

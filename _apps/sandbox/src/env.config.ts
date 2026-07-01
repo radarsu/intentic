@@ -3,8 +3,8 @@ import { z } from "zod";
 
 // All sandbox configuration, from env set at `docker run` — by connect.sh (your PC) or the workspace provider
 // (a server). @puristic/env derives each env var name from the schema path (camelToScreamingSnake per segment,
-// joined with "_"): workspaceRoot → WORKSPACE_ROOT, sandbox.publicUrl → SANDBOX_PUBLIC_URL, selfHost.user →
-// SELF_HOST_USER, intenticAgentTools → INTENTIC_AGENT_TOOLS, claudeCodeOauthToken → CLAUDE_CODE_OAUTH_TOKEN.
+// joined with "_"): workspaceRoot → WORKSPACE_ROOT, sandbox.publicUrl → SANDBOX_PUBLIC_URL, intenticAgentTools →
+// INTENTIC_AGENT_TOOLS, claudeCodeOauthToken → CLAUDE_CODE_OAUTH_TOKEN.
 // These names are the fixed contract the connect scripts / providers set, so the schema shape preserves them.
 const configSchema = z.object({
     // The project workspace dir; the three repos (intent / desired-state / app) are cloned under <root>/<role>.
@@ -17,8 +17,6 @@ const configSchema = z.object({
         .transform((value) => value === "true" || value === "1"),
     // Cloudflare zone for the scaffolded app's domain (else derived from the public URL's host minus its label).
     zone: z.string().default(""),
-    // Presence gates self-host mode (the SSH key the deploy target uses); never read for its value here.
-    hostSshKey: z.string().default("").meta({ secret: true }),
     // The first-bind connection token (TOFU owner gate) and the platform web origin scoped for CORS.
     connectToken: z.string().default("").meta({ secret: true }),
     webOrigin: z.string().default(""),
@@ -53,19 +51,6 @@ const configSchema = z.object({
             // The Google *web* client id (public) — the audience the daemon verifies bearer ID tokens against.
             // Empty ⇒ loopback mode (no auth): tests, or the host-internal server preview.
             clientId: z.string().default(""),
-        })
-        .prefault({}),
-    selfHost: z
-        .object({
-            // SSH user of the wired deploy target; empty (or no host key) ⇒ this sandbox has no self-host target.
-            user: z.string().default(""),
-            // Where the sandbox SSHes to deploy: with via "direct" the host it runs on (default
-            // host.docker.internal, the host-gateway connect.sh maps); with via "cloudflared" the host's SSH
-            // tunnel hostname (ssh-<id>.<zone>) connect.sh creates for a NAT'd self-host.
-            address: z.string().default("host.docker.internal"),
-            // SSH transport for the self host: "cloudflared" reaches `address` through its Cloudflare tunnel
-            // (the sandbox runs `cloudflared access`), for a host it can't reach by IP (e.g. Docker Desktop).
-            via: z.enum(["direct", "cloudflared"]).default("direct"),
         })
         .prefault({}),
 });

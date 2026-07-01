@@ -20,8 +20,6 @@ export const createSystemRoutes = (services: Services) => {
     return {
         preview: i.preview.handler(() => services.devServer.status()),
         devLogs: i.devLogs.handler(() => services.devServer.logs()),
-        // null (not undefined) when not wired — the platform mirrors a present host into the inventory.
-        selfHost: i.selfHost.handler(() => ({ selfHost: services.selfHost ?? null })),
         info: i.info.handler(() => services.info ?? {}),
         events: i.events.handler(({ signal }) => heartbeat(signal)),
     };

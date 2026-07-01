@@ -4,7 +4,6 @@ import { implement } from "@orpc/server";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
 import { createConfigStore } from "./config-store.js";
-import { ensureDeployTarget } from "./deploy-target.js";
 
 // The i.have.* / i.want.service entries in deploy.config.ts's managed region. add/remove rewrite the region and
 // commit it (mirroring an agent edit). ensureDeployTarget mirrors this sandbox's deploy target into the inventory
@@ -14,10 +13,7 @@ export const createInventoryRoutes = (services: Services) => {
     const config = createConfigStore(services);
 
     return {
-        list: i.list.handler(async () => {
-            const content = await config.read();
-            return { entries: await ensureDeployTarget(services, config, content, readManagedRegion(content)) };
-        }),
+        list: i.list.handler(async () => ({ entries: readManagedRegion(await config.read()) })),
         add: i.add.handler(async ({ input }) => {
             const content = await config.read();
             // Upsert by name: a re-added capability replaces the old declaration.
@@ -34,11 +30,6 @@ export const createInventoryRoutes = (services: Services) => {
                 await config.write(writeManagedRegion(content, next), `chore(intentic): remove "${input.name}"`);
             }
             return { entries: next };
-        }),
-        selfHost: i.selfHost.handler(async () => {
-            const content = await config.read();
-            await ensureDeployTarget(services, config, content, readManagedRegion(content));
-            return { ok: true } as const;
         }),
     };
 };

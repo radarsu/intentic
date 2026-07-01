@@ -1,4 +1,4 @@
-import type { AgentEvent, Capability, SelfHost } from "@intentic/sandbox-contract";
+import type { AgentEvent, Capability } from "@intentic/sandbox-contract";
 import { sandboxContract } from "@intentic/sandbox-contract";
 import { createORPCClient } from "@orpc/client";
 import type { ContractRouterClient } from "@orpc/contract";
@@ -59,7 +59,6 @@ const baseConfig: Config = {
     logLevel: "silent",
     logPretty: false,
     zone: "",
-    hostSshKey: "",
     connectToken: "",
     webOrigin: "",
     platformUrl: "",
@@ -69,7 +68,6 @@ const baseConfig: Config = {
     sandbox: { port: 8787, host: "0.0.0.0", publicUrl: "", name: "", image: "" },
     dev: { command: "", port: "" },
     google: { clientId: "" },
-    selfHost: { user: "", address: "host.docker.internal", via: "direct" },
 };
 
 const services = (overrides: Partial<Services> = {}): Services => ({
@@ -77,7 +75,6 @@ const services = (overrides: Partial<Services> = {}): Services => ({
     logger: createLogger(baseConfig),
     workspace: workspacePaths("/work"),
     devServer: fakeDevServer({ running: true, port: 5173, healthy: true }),
-    selfHost: undefined,
     info: undefined,
     tools: [],
     capabilities: memoryCapabilitiesStore(),
@@ -136,10 +133,17 @@ test("system.preview returns the dev server status", async () => {
     expect(await client.system.preview()).toEqual({ running: true, port: 5173, healthy: true });
 });
 
-test("system.selfHost reports null by default, and the host descriptor when wired", async () => {
-    expect(await clientFor(createApp(services())).system.selfHost()).toEqual({ selfHost: null });
-    const wired: SelfHost = { user: "intentic", address: "ssh-4afccf5506ad.intentic.dev", port: 22, via: "cloudflared" };
-    expect(await clientFor(createApp(services({ selfHost: wired }))).system.selfHost()).toEqual({ selfHost: wired });
+test("POST /enroll rejects a wrong connect token and 412s until DevOps (when auth is enforced)", async () => {
+    const app = createApp(services({ auth: { authorize: async () => {} }, config: { ...baseConfig, connectToken: "ct" } }));
+    const enroll = (token: string) =>
+        app.request("/enroll", {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-intentic-connect": token },
+            body: JSON.stringify({ name: "prod", user: "deploy", address: "ssh-x.zone", sshKey: "KEY" }),
+        });
+    expect((await enroll("wrong")).status).toBe(401);
+    // Right token, but the desired-state repo is absent under test → 412 (DevOps not active).
+    expect((await enroll("ct")).status).toBe(412);
 });
 
 test("agent.run streams the agent events", async () => {

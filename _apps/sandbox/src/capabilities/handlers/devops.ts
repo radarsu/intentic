@@ -14,8 +14,7 @@ export const devopsHandler: CapabilityHandler = {
         }
         yield { kind: "log", message: "Installing provisioning dependencies (this can take a minute)…" };
         await ctx.ensureIntentInstallable();
-        await ctx.ensureDeployTarget();
-        yield { kind: "log", message: "DevOps ready — infrastructure is now available." };
+        yield { kind: "log", message: "DevOps ready — connect a machine (Infra) to provision onto." };
     },
     status: async (ctx) =>
         existsSync(ctx.workspace.repos.intent) && existsSync(ctx.workspace.repos["desired-state"]) ? { state: "active" } : { state: "inactive" },

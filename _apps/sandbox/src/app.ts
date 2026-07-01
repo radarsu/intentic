@@ -1,9 +1,12 @@
+import { type EnrollHostInput, EnrollHostInputSchema } from "@intentic/sandbox-contract";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ORPCError } from "@orpc/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { tokenEquals } from "./auth/auth.js";
 import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
+import { enrollHost } from "./inventory/enroll-host.js";
 import { createRouter } from "./router.js";
 import { createTerminalRoute } from "./system/terminal.js";
 import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
@@ -52,7 +55,7 @@ export const createApp = (services: Services): Hono => {
         app.use("*", async (c, next) => {
             // /system/terminal is a WebSocket upgrade: the browser can't set an Authorization header on it, so
             // the terminal route authorizes the token from the query string itself (see createTerminalRoute).
-            if (c.req.path === "/health" || c.req.path === "/system/terminal") {
+            if (c.req.path === "/health" || c.req.path === "/system/terminal" || c.req.path === "/enroll") {
                 return next();
             }
             const header = c.req.header("authorization") ?? "";
@@ -125,6 +128,30 @@ export const createApp = (services: Services): Hono => {
     // Interactive PTY over a WebSocket. Paired with the `ws` server passed to serve() in main.ts (node-server's
     // upgradeWebSocket drives it); registered before the oRPC catch-all so the upgrade matches here.
     app.get("/system/terminal", createTerminalRoute(services));
+
+    // Deploy-target enrollment from the connect-host script (curl, not a browser): authenticated by the connect
+    // token alone (exempt from the bearer middleware above), so it self-registers a host without a Google login.
+    // Loopback mode (no services.auth) accepts any caller, like every other route.
+    app.post("/enroll", async (c) => {
+        if (services.auth !== undefined && !tokenEquals(c.req.header("x-intentic-connect") ?? "", services.config.connectToken)) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        let input: EnrollHostInput;
+        try {
+            input = EnrollHostInputSchema.parse(await c.req.json());
+        } catch {
+            return c.json({ error: "invalid enrollment body" }, 400);
+        }
+        try {
+            await enrollHost(services, input);
+        } catch (error) {
+            if (error instanceof ORPCError && error.code === "PRECONDITION_FAILED") {
+                return c.json({ error: error.message }, 412);
+            }
+            throw error;
+        }
+        return c.json({ ok: true });
+    });
 
     // Everything else flows through the oRPC OpenAPI handler, mounted at the root (its contract paths ARE the
     // daemon's routes). Registered last so /health + /workspace/raw match first.
