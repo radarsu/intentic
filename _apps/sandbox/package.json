@@ -21,6 +21,7 @@
         "@anthropic-ai/claude-agent-sdk": "catalog:",
         "@hono/node-server": "catalog:",
         "@intentic/sandbox-contract": "workspace:*",
+        "@intentic/scaffold": "workspace:*",
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",
         "@puristic/env": "catalog:",

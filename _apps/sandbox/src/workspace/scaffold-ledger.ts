@@ -1,7 +1,7 @@
 import { join } from "node:path";
+import { scaffoldDeployConfig } from "@intentic/scaffold";
 import type { Services } from "../composition.js";
 import { AGENT_GIT_AUTHOR } from "../git/git.js";
-import { scaffoldDeployConfig } from "../inventory/deploy-config.js";
 
 // The desired-state repo's local-only / secret files, kept out of its PR-managed history (mirrors the CLI init's
 // TARGET_GITIGNORE): the user-supplied `.env`, the generated `.secrets.json`, and the `.last-applied.json` prune

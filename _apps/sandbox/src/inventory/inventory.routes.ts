@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { type InventoryEntry, inventoryContract } from "@intentic/sandbox-contract";
+import { readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "@intentic/scaffold";
 import { implement } from "@orpc/server";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
 import { AGENT_GIT_AUTHOR } from "../git/git.js";
-import { readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
 
 const INVENTORY_CONFIG = "deploy.config.ts";
 const SELF_HOST_NAME = "self";

@@ -144,6 +144,9 @@ importers:
       '@intentic/providers':
         specifier: workspace:*
         version: link:../../_libs/providers
+      '@intentic/scaffold':
+        specifier: workspace:*
+        version: link:../../_libs/scaffold
       '@intentic/state-resolver':
         specifier: workspace:*
         version: link:../../_libs/state-resolver
@@ -202,6 +205,9 @@ importers:
       '@intentic/sandbox-contract':
         specifier: workspace:*
         version: link:../../_libs/sandbox-contract
+      '@intentic/scaffold':
+        specifier: workspace:*
+        version: link:../../_libs/scaffold
       '@orpc/openapi':
         specifier: 'catalog:'
         version: 1.14.3
@@ -386,6 +392,25 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+
+  _libs/scaffold:
+    dependencies:
+      '@intentic/sandbox-contract':
+        specifier: workspace:*
+        version: link:../sandbox-contract
+      tslib:
+        specifier: 'catalog:'
+        version: 2.8.1
+    devDependencies:
+      '@intentic/tsconfig':
+        specifier: workspace:*
+        version: link:../../_tools/tsconfig
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.9(@types/node@25.5.2)(vite@7.3.3(@types/node@25.5.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   _libs/sdk:
     dependencies:

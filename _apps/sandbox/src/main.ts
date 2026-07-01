@@ -5,6 +5,7 @@ import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
 import { createLogger } from "./logger.js";
 import { registerWithPlatform } from "./system/register.js";
+import { ensureIntentInstallable } from "./workspace/ensure-intent.js";
 import { scaffoldNeutralLedger } from "./workspace/scaffold-ledger.js";
 
 // The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
@@ -23,6 +24,12 @@ const main = async (): Promise<void> => {
     if (!existsSync(workspace.repos.intent)) {
         logger.info("empty workspace — scaffolding a neutral ledger…");
         await scaffoldNeutralLedger(services);
+    }
+
+    // A sandbox wired as a deploy target (SELF_HOST=1) needs the intent repo's @intentic deps installed so
+    // `resolve`/`apply` can import deploy.config.ts; the reachability-only boot leaves it uninstalled. Idempotent.
+    if (services.selfHost !== undefined) {
+        await ensureIntentInstallable(services);
     }
 
     // The app repo only exists once the user opts to build/deploy an app; skip the preview until then.

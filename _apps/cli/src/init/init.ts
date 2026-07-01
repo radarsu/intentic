@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { promisify } from "node:util";
-import { APP_DIR, CONFIG_FILE, ENV_FILE, INTENT_DIR, LAST_APPLIED_FILE, SECRETS_FILE, TARGET_DIR } from "../lib/artifact.js";
+import { INTENT_GITIGNORE, INTENT_TSCONFIG, intentPackageJson, scaffoldDeployConfig, TARGET_GITIGNORE } from "@intentic/scaffold";
+import { APP_DIR, CONFIG_FILE, INTENT_DIR, TARGET_DIR } from "../lib/artifact.js";
 import { renderTemplate } from "../lib/templates.js";
 
 const exec = promisify(execFile);
@@ -17,21 +17,6 @@ const starterConfig = (): string => renderTemplate("scaffold/deploy.config.ts", 
 // example placeholder when the zone is unknown). No DB env — the zero-dependency starter app needs none.
 export const selfHostConfig = (zone: string | undefined): string =>
     renderTemplate("scaffold/deploy.config.selfhost.ts", { zone: zone ?? "example.com" });
-
-// The reachability-only ledger: an empty deploy.config.ts with only the managed `// <intentic>` region — no
-// host, no app. Byte-identical to the daemon's scaffoldDeployConfig([]) so a later /inventory edit diffs cleanly.
-export const neutralConfig = (): string => renderTemplate("scaffold/deploy.config.neutral.ts", {});
-
-// Keep secret + local-only files out of the PR-managed desired-state repo: the user-supplied `.env`, the
-// intentic-generated `.secrets.json`, and the `.last-applied.json` prune baseline (local snapshot of the
-// last successfully-applied artifact). The matching `.env.example` is not written here — `resolve`
-// generates it from the graph, the only complete source of the required keys (the resolver injects
-// platform secrets the authored config never names).
-const TARGET_GITIGNORE = `${ENV_FILE}\n${SECRETS_FILE}\n${LAST_APPLIED_FILE}\n`;
-
-// The intent repo is a self-contained TS project; `init` runs `pnpm install` in it, producing a
-// node_modules/ that must stay out of the repo.
-const INTENT_GITIGNORE = "node_modules/\n";
 
 const APP_GITIGNORE = "node_modules/\n";
 
@@ -66,36 +51,6 @@ const scaffoldApp = async (appDir: string, appRepo: string | undefined): Promise
     await writeFile(join(appDir, ".gitignore"), APP_GITIGNORE);
 };
 
-// A standalone TS project for the one config file: type-strip-importable by `resolve`, type-checked in an
-// editor against the @intentic/* packages' shipped declarations (no build of the intent repo itself).
-const STARTER_TSCONFIG = `${JSON.stringify(
-    {
-        compilerOptions: { module: "nodenext", moduleResolution: "nodenext", target: "ES2024", strict: true, skipLibCheck: true, noEmit: true },
-        include: [CONFIG_FILE],
-    },
-    undefined,
-    4,
-)}\n`;
-
-// `--link` resolves @intentic/* to this monorepo's local source instead of the registry, so the CLI can be
-// dogfooded against unpublished packages. Computed from the compiled CLI location: dist → cli → _apps → root.
-const LIBS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "_libs");
-
-const starterPackage = (version: string, link: boolean): string => {
-    const dependency = (pkg: string): string => (link ? `link:${join(LIBS_DIR, pkg)}` : `~${version}`);
-    return `${JSON.stringify(
-        {
-            name: "intent",
-            version: "0.0.0",
-            private: true,
-            type: "module",
-            dependencies: { "@intentic/graph": dependency("graph"), "@intentic/sdk": dependency("sdk") },
-        },
-        undefined,
-        4,
-    )}\n`;
-};
-
 // Scaffold the local workspace: an `intent` repo (holds deploy.config.ts and its package), a `desired-state`
 // repo (holds the artifact `resolve` writes and the status `apply` writes), and — unless `minimal` — an `app`
 // repo (the application code), each its own git repo so the generated target can later become PR-managed and
@@ -121,9 +76,9 @@ export const scaffold = async (
         await mkdir(targetDir, { recursive: true });
         await exec("git", ["init", "-q", intentDir]);
         await exec("git", ["init", "-q", targetDir]);
-        await writeFile(join(intentDir, CONFIG_FILE), minimal ? neutralConfig() : selfHost ? selfHostConfig(zone) : starterConfig());
-        await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
-        await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
+        await writeFile(join(intentDir, CONFIG_FILE), minimal ? scaffoldDeployConfig([]) : selfHost ? selfHostConfig(zone) : starterConfig());
+        await writeFile(join(intentDir, "package.json"), intentPackageJson(version, link));
+        await writeFile(join(intentDir, "tsconfig.json"), INTENT_TSCONFIG);
         await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);
         await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
         // A minimal ledger is reachability-only: no app repo (it arrives with the "Deploy on this machine" flow).

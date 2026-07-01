@@ -45,6 +45,7 @@
         "@intentic/graph": "workspace:*",
         "@intentic/need-resolver": "workspace:*",
         "@intentic/providers": "workspace:*",
+        "@intentic/scaffold": "workspace:*",
         "@intentic/state-resolver": "workspace:*",
         "@puristic/env": "catalog:",
         "@stricli/core": "catalog:",

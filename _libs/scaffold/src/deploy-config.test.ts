@@ -18,6 +18,18 @@ describe("deploy-config managed region", () => {
         expect(readManagedRegion(scaffoldDeployConfig([]))).toEqual([]);
     });
 
+    test("the neutral scaffold declares no host and no app", () => {
+        const src = scaffoldDeployConfig([]);
+        expect(src).toContain("// <intentic> managed");
+        expect(src).toContain("defineIntent");
+        // Keeps both imports so the file stays valid the moment /inventory inserts an env()-bearing backend.
+        expect(src).toContain(`import { env } from "@intentic/graph"`);
+        expect(src).not.toContain("i.have.host(");
+        expect(src).not.toContain("i.want.app(");
+        expect(src).not.toContain("203.0.113.10");
+        expect(src).not.toContain("on: self");
+    });
+
     test("round-trips a backend entry, dropping its secret (env) fields from the parsed values", () => {
         const src = scaffoldDeployConfig([hostEntry]);
         // The rendered host carries sshKey: env("HOST_SSH_KEY"); the parser surfaces only the non-secret scalars.

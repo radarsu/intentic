@@ -215,7 +215,7 @@ export const readManagedRegion = (src: string): InventoryEntry[] => {
 };
 
 // A fresh deploy.config.ts containing only the managed region — the base when writing inventory into a repo
-// that has no config yet.
+// that has no config yet, and the neutral ledger the CLI's `init --minimal` and the daemon's first-boot scaffold.
 export const scaffoldDeployConfig = (entries: readonly InventoryEntry[]): string =>
     [
         `import { env } from "@intentic/graph";`,

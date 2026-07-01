@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { neutralConfig, selfHostConfig } from "./init.js";
+import { selfHostConfig } from "./init.js";
 
 describe("selfHostConfig", () => {
     it("targets the self host with the app.<zone> domain", () => {
@@ -16,20 +16,5 @@ describe("selfHostConfig", () => {
 
     it("falls back to the placeholder domain when the zone is unknown", () => {
         expect(selfHostConfig(undefined)).toContain(`domain: "app.example.com"`);
-    });
-});
-
-describe("neutralConfig", () => {
-    it("emits an empty managed region with no host and no app", () => {
-        const config = neutralConfig();
-        expect(config).toContain("// <intentic> managed");
-        expect(config).toContain("// </intentic>");
-        expect(config).toContain("defineIntent");
-        // Keeps both imports so the file stays valid the moment /inventory inserts an env()-bearing backend.
-        expect(config).toContain(`import { env } from "@intentic/graph"`);
-        expect(config).not.toContain("i.have.host(");
-        expect(config).not.toContain("i.want.app(");
-        expect(config).not.toContain("203.0.113.10");
-        expect(config).not.toContain("on: self");
     });
 });
