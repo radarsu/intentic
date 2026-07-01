@@ -149,7 +149,7 @@ ensure_sshd() {
         echo "intentic: installing OpenSSH server…"
         if command -v apt-get >/dev/null 2>&1; then
             $SUDO apt-get update -qq >/dev/null 2>&1 || true
-            $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server >/dev/null
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server >/dev/null
         elif command -v dnf >/dev/null 2>&1; then
             $SUDO dnf install -y -q openssh-server >/dev/null
         elif command -v yum >/dev/null 2>&1; then
