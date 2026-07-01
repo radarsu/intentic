@@ -18,6 +18,8 @@ export const createSandboxTunnel = async (args: {
     // When set, also route the app preview wildcard `*.preview.<zone>` straight to the sandbox's dev server.
     readonly previewService?: string;
     readonly zone?: string;
+    // An explicit subdomain prefix chosen by the own-Cloudflare user; default is the derived `sandbox-<id>`.
+    readonly subdomain?: string;
     readonly log: (message: string) => void;
     readonly api?: CloudflareApi;
 }): Promise<SandboxTunnelResult> => {
@@ -25,7 +27,7 @@ export const createSandboxTunnel = async (args: {
     const api = args.api ?? cloudflareApi;
     const zone = await resolveZone(api, apiToken, args.zone);
     const id = createHash("sha256").update(connectToken).digest("hex").slice(0, 12);
-    const name = `sandbox-${id}`;
+    const name = args.subdomain !== undefined && args.subdomain !== "" ? args.subdomain : `sandbox-${id}`;
     const hostname = `${name}.${zone.name}`;
     const previewHostname = `*.preview.${zone.name}`;
     const withPreview = previewService !== undefined && previewService !== "";

@@ -52,7 +52,7 @@ export const fileOwnerStore = (path: string): OwnerStore => ({
     },
 });
 
-const tokenEquals = (a: string, b: string): boolean => {
+export const tokenEquals = (a: string, b: string): boolean => {
     const ab = Buffer.from(a);
     const bb = Buffer.from(b);
     return ab.length === bb.length && timingSafeEqual(ab, bb);

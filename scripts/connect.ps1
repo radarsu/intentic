@@ -65,7 +65,14 @@ $GoogleClientId = if ($env:GOOGLE_CLIENT_ID) { $env:GOOGLE_CLIENT_ID } else { '4
 $WebOrigin = $env:WEB_ORIGIN
 $Zone = $env:ZONE
 $CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else { 'cloudflare/cloudflared:2026.6.1' }
-$TunnelToken = ''
+# The platform can PRE-PROVISION the tunnel (intentic-provided path, for users with no Cloudflare of their own):
+# it fills $env:TUNNEL_TOKEN + $env:SANDBOX_HOSTNAME into the one-liner instead of CF_TOKEN. When both are set we
+# skip all Cloudflare API work and just run the sandbox + cloudflared with the given connector token. $Subdomain
+# is the optional custom prefix for the self-provision (own-Cloudflare) path.
+$TunnelToken = $env:TUNNEL_TOKEN
+$SandboxHostname = $env:SANDBOX_HOSTNAME
+$Subdomain = $env:SUBDOMAIN
+$ProvidedTunnel = [bool]$TunnelToken -and [bool]$SandboxHostname
 $SandboxPublicUrl = ''
 
 # One sandbox per machine; the name is fixed so the tunnel ingress + cloudflared sidecar resolve it by DNS on
@@ -94,22 +101,31 @@ if (-not $ConnectToken) {
     Write-Error 'CONNECT_TOKEN is required (env var or -ConnectToken) — copy the one-liner from the platform''s setup screen.'
     exit 1
 }
+# Intentic-provided sandboxes (pre-provisioned tunnel, no CF_TOKEN) are reachability-only — SELF_HOST's deploy
+# target needs your OWN Cloudflare token at apply time. Fail fast with a clear message.
+if ($ProvidedTunnel -and $SelfHost) {
+    Write-Error 'SELF_HOST needs your own Cloudflare API token (CF_TOKEN). Intentic-provided sandboxes are reachability-only — add your own Cloudflare from the workspace to deploy onto this PC.'
+    exit 1
+}
 # Cloudflare is intentic's reachability fabric (the tunnel that connects services and exposes them), so the
 # token is required and validated up front rather than failing later at `intentic apply`. It never reaches the
 # platform — it rides into the sandbox below. Verify it against Cloudflare's token-verify endpoint.
-if (-not $CfToken) {
+if (-not $ProvidedTunnel -and -not $CfToken) {
     Write-Error 'CF_TOKEN is required — Cloudflare is intentic''s reachability fabric (the tunnel that connects your services and exposes them). Create a token at https://dash.cloudflare.com/profile/api-tokens with Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit.'
     exit 1
 }
-Write-Host 'intentic: validating Cloudflare API token...'
-try {
-    $cfVerify = Invoke-RestMethod -Uri 'https://api.cloudflare.com/client/v4/user/tokens/verify' -Headers @{ Authorization = "Bearer $CfToken" }
-} catch {
-    $cfVerify = $null
-}
-if (-not $cfVerify -or -not $cfVerify.success -or $cfVerify.result.status -ne 'active') {
-    Write-Error 'the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens.'
-    exit 1
+# Validate the token only when the user supplied one (own-Cloudflare path); the intentic-provided path has none.
+if ($CfToken) {
+    Write-Host 'intentic: validating Cloudflare API token...'
+    try {
+        $cfVerify = Invoke-RestMethod -Uri 'https://api.cloudflare.com/client/v4/user/tokens/verify' -Headers @{ Authorization = "Bearer $CfToken" }
+    } catch {
+        $cfVerify = $null
+    }
+    if (-not $cfVerify -or -not $cfVerify.success -or $cfVerify.result.status -ne 'active') {
+        Write-Error 'the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens.'
+        exit 1
+    }
 }
 
 # Pull the sandbox image up front so the moving `stable` tag always runs the newest release (docker run reuses a
@@ -127,22 +143,27 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-# Create/refresh this sandbox's own Cloudflare tunnel + DNS via the intentic CLI bundled in the sandbox image
-# (reusing the providers' Cloudflare client), which prints the connector token: sandbox-<id>.<zone> → the
-# daemon (:8787) and *.preview.<zone> → the app dev server (:$DevPort). cloudflared runs as a sidecar below.
-Write-Host 'intentic: creating the sandbox tunnel...'
-# --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
-$tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CfToken", '-e', "CONNECT_TOKEN=$ConnectToken")
-if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
-$tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${Container}:8787", '--preview-service', "http://${Container}:$DevPort")
-$tunnelOut = & docker $tunnelArgs
-$TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
-$SandboxHostname = ($tunnelOut | Where-Object { $_ -like 'SANDBOX_HOSTNAME=*' } | Select-Object -First 1) -replace '^SANDBOX_HOSTNAME=', ''
-if (-not $TunnelToken -or -not $SandboxHostname) {
-    Write-Error 'failed to create the sandbox tunnel (see the output above).'
-    exit 1
+# Point at the sandbox tunnel (sandbox-<id>.<zone> → the daemon :8787, plus *.preview.<zone> → the dev server
+# :$DevPort on the own-Cloudflare path). Either the platform pre-provisioned it with intentic's token (nothing to
+# do), or the bundled CLI creates/refreshes it with the user's token and prints the connector token below.
+if ($ProvidedTunnel) {
+    $SandboxPublicUrl = "https://$SandboxHostname"
+} else {
+    Write-Host 'intentic: creating the sandbox tunnel...'
+    # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
+    $tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CfToken", '-e', "CONNECT_TOKEN=$ConnectToken")
+    if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
+    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${Container}:8787", '--preview-service', "http://${Container}:$DevPort")
+    if ($Subdomain) { $tunnelArgs += @('--subdomain', $Subdomain) }
+    $tunnelOut = & docker $tunnelArgs
+    $TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
+    $SandboxHostname = ($tunnelOut | Where-Object { $_ -like 'SANDBOX_HOSTNAME=*' } | Select-Object -First 1) -replace '^SANDBOX_HOSTNAME=', ''
+    if (-not $TunnelToken -or -not $SandboxHostname) {
+        Write-Error 'failed to create the sandbox tunnel (see the output above).'
+        exit 1
+    }
+    $SandboxPublicUrl = "https://$SandboxHostname"
 }
-$SandboxPublicUrl = "https://$SandboxHostname"
 
 # cloudflared (the sidecar below) reaches the sandbox by container name on this shared network; create it first.
 docker network inspect $Network *> $null

@@ -15,7 +15,13 @@ import type {
     GitHubIntent,
     HostInput,
     HostIntent,
+    ImapInput,
+    ImapIntent,
     IntentSet,
+    OutlineInput,
+    OutlineIntent,
+    RedmineInput,
+    RedmineIntent,
     ServiceIntent,
     StripeInput,
     StripeIntent,
@@ -36,7 +42,10 @@ import type {
     Discord,
     GitHub,
     Host,
+    Imap,
     ObjectStorage,
+    Outline,
+    Redmine,
     Repo,
     Service,
     Stack,
@@ -80,6 +89,9 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         github?: GitHubIntent;
         discord?: DiscordIntent;
         stripe?: StripeIntent;
+        redmine?: RedmineIntent;
+        outline?: OutlineIntent;
+        imap?: ImapIntent;
         backup?: BackupIntent;
         users: UserIntent[];
         teams: TeamIntent[];
@@ -139,6 +151,33 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
         claim(id);
         intent.stripe = { id, input };
         return Object.freeze(makeRef(id)) as Stripe;
+    };
+
+    const redmine = (id: string, input: RedmineInput): Redmine => {
+        if (intent.redmine !== undefined) {
+            throw new Error("a Redmine integration is already declared; intentic supports a single Redmine instance");
+        }
+        claim(id);
+        intent.redmine = { id, input };
+        return Object.freeze(makeRef(id)) as Redmine;
+    };
+
+    const outline = (id: string, input: OutlineInput): Outline => {
+        if (intent.outline !== undefined) {
+            throw new Error("an Outline integration is already declared; intentic supports a single Outline instance");
+        }
+        claim(id);
+        intent.outline = { id, input };
+        return Object.freeze(makeRef(id)) as Outline;
+    };
+
+    const imap = (id: string, input: ImapInput): Imap => {
+        if (intent.imap !== undefined) {
+            throw new Error("an IMAP integration is already declared; intentic supports a single IMAP inbox");
+        }
+        claim(id);
+        intent.imap = { id, input };
+        return Object.freeze(makeRef(id)) as Imap;
     };
 
     const app = <const E extends Record<string, EnvironmentInput>>(id: string, input: WantAppInput & { environments: E }): App<keyof E & string> => {
@@ -269,7 +308,7 @@ export const createStack = (): { stack: Stack; intent: IntentSet } => {
     };
 
     const stack: Stack = {
-        have: { host, cloudflare, github, backup, discord, stripe },
+        have: { host, cloudflare, github, backup, discord, stripe, redmine, outline, imap },
         want: { app, service, workspace, database, cache, auth, objectStorage, user, team },
         moved: recordMove,
     };

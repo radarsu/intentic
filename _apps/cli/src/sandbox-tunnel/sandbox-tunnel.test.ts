@@ -92,6 +92,29 @@ describe("createSandboxTunnel", () => {
         expect(result.hostname).toBe(`sandbox-${idOf("conn")}.my.dev`);
     });
 
+    test("uses an explicit subdomain in place of the derived sandbox-<id>", async () => {
+        const putTunnelIngress = vi.fn(async () => {});
+        const createDnsRecord = vi.fn(async () => {});
+        const api = fakeApi({
+            listZones: async () => [{ id: "zone-1", name: "example.com", accountId: "acct-1" }],
+            putTunnelIngress,
+            createDnsRecord,
+        });
+        const result = await createSandboxTunnel({
+            apiToken: "t",
+            connectToken: "conn",
+            service: "http://sb:8787",
+            subdomain: "my-box",
+            log: noop,
+            api,
+        });
+        expect(result.hostname).toBe("my-box.example.com");
+        expect(putTunnelIngress).toHaveBeenCalledWith(
+            expect.objectContaining({ ingress: [{ hostname: "my-box.example.com", service: "http://sb:8787" }, { service: "http_status:404" }] }),
+        );
+        expect(createDnsRecord).toHaveBeenCalledWith(expect.objectContaining({ name: "my-box.example.com", content: "tunnel-1.cfargotunnel.com" }));
+    });
+
     test("errors when the override zone is not found", async () => {
         const api = fakeApi({ getZone: async () => undefined });
         await expect(createSandboxTunnel({ apiToken: "t", connectToken: "c", service: "s", zone: "nope.dev", log: noop, api })).rejects.toThrow(

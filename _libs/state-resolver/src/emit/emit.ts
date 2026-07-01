@@ -137,6 +137,42 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
         });
     }
 
+    // Self-hosted integrations (i.have.redmine / i.have.outline): a standalone node like stripe, carrying the
+    // instance url + the $secret credential the provider validates during reconcile.
+    if (intent.redmine !== undefined) {
+        nodes.push({
+            id: intent.redmine.id,
+            type: "redmine",
+            inputs: { url: intent.redmine.input.url, apiKey: intent.redmine.input.apiKey },
+            explicitDependsOn: [],
+        });
+    }
+
+    if (intent.outline !== undefined) {
+        nodes.push({
+            id: intent.outline.id,
+            type: "outline",
+            inputs: { url: intent.outline.input.url, apiKey: intent.outline.input.apiKey },
+            explicitDependsOn: [],
+        });
+    }
+
+    // An IMAP inbox (i.have.imap): host/username/port are literals, the password a $secret; the provider
+    // validates them with an IMAP LOGIN during reconcile.
+    if (intent.imap !== undefined) {
+        nodes.push({
+            id: intent.imap.id,
+            type: "imap",
+            inputs: {
+                host: intent.imap.input.host,
+                username: intent.imap.input.username,
+                ...(intent.imap.input.port !== undefined ? { port: intent.imap.input.port } : {}),
+                password: intent.imap.input.password,
+            },
+            explicitDependsOn: [],
+        });
+    }
+
     // Per-host ingress buckets (for tunnel aggregation).
     const ingressByHost = new Map<string, IngressPair[]>();
 

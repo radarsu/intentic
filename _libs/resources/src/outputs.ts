@@ -14,6 +14,11 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     // An external SaaS integration (e.g. Stripe). A pure sink in v1: the provider validates the API key on
     // read/apply but exposes no refs — the apiKey is injected into consuming apps as a $secret env, not a $ref.
     stripe: [],
+    // Self-hosted integrations + IMAP inbox: pure sinks like stripe. The provider validates the credential on
+    // read/apply; the secret is injected into consuming apps as a $secret env, never a $ref, so no outputs.
+    redmine: [],
+    outline: [],
+    imap: [],
     "cf-route": ["url"],
     tunnel: ["tunnelId", "cname"],
     forgejo: ["url", "internalUrl", "runnerToken", "gitToken", "packagesToken"],

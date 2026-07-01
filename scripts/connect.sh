@@ -76,8 +76,19 @@ CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.1}"
 # the sidecar image tag). The connector must be native, not a container: under Docker Desktop a container's
 # localhost is the VM, not this machine, so it could not reach the host's sshd at localhost:22.
 CLOUDFLARED_VERSION="${CLOUDFLARED_VERSION:-2026.6.1}"
-TUNNEL_TOKEN=""
+# The platform can PRE-PROVISION the tunnel (the intentic-provided path, for users with no Cloudflare of their
+# own): it fills TUNNEL_TOKEN + SANDBOX_HOSTNAME into the one-liner INSTEAD of CF_TOKEN. When both are set we skip
+# every Cloudflare API call and just run the sandbox + cloudflared with the given connector token — CF_TOKEN stays
+# empty, so the sandbox gets no Cloudflare API token (reachability-only). SUBDOMAIN is the optional custom prefix
+# for the self-provision (own-Cloudflare) path — sandbox-tunnel uses it in place of the derived sandbox-<id>.
+TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
+SANDBOX_HOSTNAME="${SANDBOX_HOSTNAME:-}"
+SUBDOMAIN="${SUBDOMAIN:-}"
 SANDBOX_PUBLIC_URL=""
+PROVIDED_TUNNEL=""
+if [ -n "$TUNNEL_TOKEN" ] && [ -n "$SANDBOX_HOSTNAME" ]; then
+    PROVIDED_TUNNEL=1
+fi
 
 # One sandbox per machine; the name is fixed so the tunnel ingress + cloudflared sidecar resolve it by DNS on
 # the shared network, and the workspace volume persists the cloned repos across re-runs.
@@ -257,29 +268,40 @@ if [ -z "$CONNECT_TOKEN" ]; then
     exit 1
 fi
 
+# Intentic-provided sandboxes (pre-provisioned tunnel, no CF_TOKEN) are reachability-only — the host tunnel that
+# SELF_HOST wires needs your OWN Cloudflare token. Fail fast rather than deep inside the host-tunnel step.
+if [ -n "$PROVIDED_TUNNEL" ] && [ -n "$SELF_HOST" ]; then
+    echo "error: SELF_HOST needs your own Cloudflare API token (CF_TOKEN). Intentic-provided sandboxes are" >&2
+    echo "       reachability-only — add your own Cloudflare from the workspace to deploy onto this machine." >&2
+    exit 1
+fi
+
 # Cloudflare is intentic's reachability fabric (the tunnel that connects services and exposes them), so the
 # token is required and validated up front rather than failing later at `intentic apply`. The token never
 # reaches the platform — it rides into the sandbox below. Verify it against Cloudflare's token-verify endpoint
 # (the same Bearer/api.cloudflare.com auth intentic itself uses). `*: *true` tolerates compact or spaced JSON.
-if [ -z "$CF_TOKEN" ]; then
+if [ -z "$PROVIDED_TUNNEL" ] && [ -z "$CF_TOKEN" ]; then
     echo "error: CF_TOKEN is required — Cloudflare is intentic's reachability fabric (the tunnel that" >&2
     echo "       connects your services and exposes them). Create a token at" >&2
     echo "       https://dash.cloudflare.com/profile/api-tokens with: Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit." >&2
     exit 1
 fi
-echo "intentic: validating Cloudflare API token…"
-cf_verify="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
-if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf_verify" | grep -q '"status": *"active"'; then
-    echo "error: the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its" >&2
-    echo "       scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens." >&2
-    exit 1
+# Validate the token only when the user supplied one (own-Cloudflare path); the intentic-provided path has none.
+if [ -n "$CF_TOKEN" ]; then
+    echo "intentic: validating Cloudflare API token…"
+    cf_verify="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
+    if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf_verify" | grep -q '"status": *"active"'; then
+        echo "error: the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its" >&2
+        echo "       scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens." >&2
+        exit 1
+    fi
 fi
 
 # Resolve the Cloudflare zone the sandbox tunnel lives under BEFORE the tunnel step, so a token that sees several
 # zones gets a clear choice here instead of a bare "multiple zones" crash deep inside the CLI. The platform's
 # setup screen normally pins ZONE already; this covers direct/CI runs (and any path that didn't set it). List the
 # token's zones (same Bearer auth as the verify above) and parse "name":"…" with grep/sed — no jq on a stock box.
-if [ -z "$ZONE" ]; then
+if [ -z "$PROVIDED_TUNNEL" ] && [ -z "$ZONE" ]; then
     echo "intentic: resolving the Cloudflare zone…"
     zones_json="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>/dev/null || true)"
     zones="$(printf '%s' "$zones_json" | grep -o '"name":"[^"]*"' | sed 's/^"name":"//;s/"$//' || true)"
@@ -339,28 +361,39 @@ fi
 echo "intentic: pulling sandbox image ${SANDBOX_IMAGE} (first run can take a minute)…"
 pull_image "$SANDBOX_IMAGE"
 
-# Create/refresh this sandbox's own Cloudflare tunnel + DNS so the browser can reach it directly:
-# sandbox-<id>.<zone> → the daemon (:8787) and *.preview.<zone> → the app dev server (:$DEV_PORT). The sandbox
-# image carries the intentic CLI, which makes the Cloudflare API calls (reusing the providers' client) and
+# Point at the sandbox tunnel that exposes the daemon at sandbox-<id>.<zone> (:8787), plus *.preview.<zone> →
+# the app dev server (:$DEV_PORT) on the own-Cloudflare path. Either the platform pre-provisioned it with
+# intentic's token (nothing to do here), or the bundled CLI creates/refreshes it with the user's token below and
 # prints the connector token; cloudflared runs as a sidecar once the sandbox is up.
-echo "intentic: creating the sandbox tunnel…"
-zone_env=""
-[ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
-# --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
-tunnel_out="$(docker run --rm --entrypoint intentic \
-    -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
-    -e CONNECT_TOKEN="$CONNECT_TOKEN" \
-    $zone_env \
-    "$SANDBOX_IMAGE" sandbox-tunnel \
-    --service "http://${CONTAINER}:8787" \
-    --preview-service "http://${CONTAINER}:${DEV_PORT}")"
-TUNNEL_TOKEN="$(printf '%s\n' "$tunnel_out" | sed -n 's/^TUNNEL_TOKEN=//p')"
-SANDBOX_HOSTNAME="$(printf '%s\n' "$tunnel_out" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
-if [ -z "$TUNNEL_TOKEN" ] || [ -z "$SANDBOX_HOSTNAME" ]; then
-    echo "error: failed to create the sandbox tunnel (see the output above)." >&2
-    exit 1
+if [ -n "$PROVIDED_TUNNEL" ]; then
+    # Intentic-provided path: the platform already created the tunnel + DNS with intentic's token and filled
+    # TUNNEL_TOKEN + SANDBOX_HOSTNAME into the one-liner — nothing to do but record the public URL.
+    SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
+else
+    echo "intentic: creating the sandbox tunnel…"
+    zone_env=""
+    [ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
+    # An explicit subdomain (own-Cloudflare path) overrides the derived sandbox-<id>; validated as a DNS label
+    # upstream, so it word-splits safely here (mirrors zone_env).
+    sub_flag=""
+    [ -n "$SUBDOMAIN" ] && sub_flag="--subdomain $SUBDOMAIN"
+    # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
+    tunnel_out="$(docker run --rm --entrypoint intentic \
+        -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
+        -e CONNECT_TOKEN="$CONNECT_TOKEN" \
+        $zone_env \
+        "$SANDBOX_IMAGE" sandbox-tunnel \
+        --service "http://${CONTAINER}:8787" \
+        --preview-service "http://${CONTAINER}:${DEV_PORT}" \
+        $sub_flag)"
+    TUNNEL_TOKEN="$(printf '%s\n' "$tunnel_out" | sed -n 's/^TUNNEL_TOKEN=//p')"
+    SANDBOX_HOSTNAME="$(printf '%s\n' "$tunnel_out" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
+    if [ -z "$TUNNEL_TOKEN" ] || [ -z "$SANDBOX_HOSTNAME" ]; then
+        echo "error: failed to create the sandbox tunnel (see the output above)." >&2
+        exit 1
+    fi
+    SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
 fi
-SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
 
 # When self-hosting, expose THIS machine's sshd over its own Cloudflare tunnel so the sandbox can deploy to it
 # through `cloudflared access` — a NAT'd local machine the sandbox can't reach by IP (e.g. Docker Desktop,

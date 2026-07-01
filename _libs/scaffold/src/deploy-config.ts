@@ -58,6 +58,26 @@ const REGISTRY: Record<InventoryProvider, ProviderSpec> = {
     stripe: {
         fields: [{ key: `apiKey`, source: `env`, envVar: `STRIPE_API_KEY` }],
     },
+    redmine: {
+        fields: [
+            { key: `url`, source: `string` },
+            { key: `apiKey`, source: `env`, envVar: `REDMINE_API_KEY` },
+        ],
+    },
+    outline: {
+        fields: [
+            { key: `url`, source: `string` },
+            { key: `apiKey`, source: `env`, envVar: `OUTLINE_API_KEY` },
+        ],
+    },
+    imap: {
+        fields: [
+            { key: `host`, source: `string` },
+            { key: `port`, source: `number` },
+            { key: `username`, source: `string` },
+            { key: `password`, source: `env`, envVar: `IMAP_PASSWORD` },
+        ],
+    },
 };
 
 // i.want.service field specs (beyond kind/on/expose, which are rendered structurally). SigNoz takes a domain.
@@ -65,15 +85,14 @@ const SERVICE_REGISTRY: Record<ServiceKind, ProviderSpec> = {
     signoz: { fields: [{ key: `domain`, source: `string` }] },
 };
 
-// Each host's SSH key rides its OWN env var so multiple hosts don't collide: `self` keeps HOST_SSH_KEY (what
-// connect.sh's SELF_HOST=1 injects), any other host `<name>` reads env("<NAME>_SSH_KEY") (name upper-cased, set
-// via the secrets route). Returns undefined for non-host / non-sshKey fields so they use their static envVar.
-const hostSshKeyEnvVar = (entry: InventoryEntry, field: FieldSpec): string | undefined => {
-    if (entry.kind !== `backend` || entry.provider !== `host` || field.key !== `sshKey`) {
-        return undefined;
-    }
-    return entry.name === `self` ? `HOST_SSH_KEY` : `${entry.name.toUpperCase()}_SSH_KEY`;
-};
+// The env var a host's SSH private key rides. `self` keeps HOST_SSH_KEY (legacy); any other host `<name>` reads
+// env("<NAME>_SSH_KEY") (name upper-cased). ONE rule, shared by the render below and the daemon's /enroll route
+// (enroll-host.ts) so the two can never drift.
+export const hostSshKeyVar = (name: string): string => (name === `self` ? `HOST_SSH_KEY` : `${name.toUpperCase()}_SSH_KEY`);
+
+// Returns undefined for non-host / non-sshKey fields so they use their static envVar.
+const hostSshKeyEnvVar = (entry: InventoryEntry, field: FieldSpec): string | undefined =>
+    entry.kind === `backend` && entry.provider === `host` && field.key === `sshKey` ? hostSshKeyVar(entry.name) : undefined;
 
 const renderOption = (entry: InventoryEntry, field: FieldSpec): string | undefined => {
     if (field.source === `env`) {

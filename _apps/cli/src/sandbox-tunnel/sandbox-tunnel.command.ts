@@ -6,7 +6,7 @@ import { createSandboxTunnel } from "./sandbox-tunnel.js";
 // per-sandbox Cloudflare tunnel + DNS that exposes the daemon at sandbox-<id>.<zone>, reusing the providers'
 // Cloudflare client. Prints `TUNNEL_TOKEN=…` / `SANDBOX_HOSTNAME=…` on stdout (progress on stderr) so the
 // bootstrap can capture them and run cloudflared. Run inside the sandbox image (which carries this CLI).
-export const sandboxTunnel = buildCommand<{ service: string; previewService?: string; zone?: string }>({
+export const sandboxTunnel = buildCommand<{ service: string; previewService?: string; zone?: string; subdomain?: string }>({
     docs: { brief: "Create/refresh the per-sandbox Cloudflare tunnel + DNS and print its connector token (used by connect.sh)" },
     parameters: {
         flags: {
@@ -27,9 +27,15 @@ export const sandboxTunnel = buildCommand<{ service: string; previewService?: st
                 optional: true,
                 brief: "Cloudflare zone for the DNS record (default: the API token's sole zone, or set ZONE)",
             },
+            subdomain: {
+                kind: "parsed",
+                parse: String,
+                optional: true,
+                brief: "Explicit subdomain prefix for the hostname (default: the derived sandbox-<id>)",
+            },
         },
     },
-    async func(this: CommandContext, flags: { service: string; previewService?: string; zone?: string }) {
+    async func(this: CommandContext, flags: { service: string; previewService?: string; zone?: string; subdomain?: string }) {
         const config = loadConfig();
         const { cloudflareApiToken: apiToken, connectToken } = config;
         if (apiToken === "") {
@@ -45,6 +51,7 @@ export const sandboxTunnel = buildCommand<{ service: string; previewService?: st
             service: flags.service,
             ...(flags.previewService !== undefined && flags.previewService !== "" ? { previewService: flags.previewService } : {}),
             ...(zone !== undefined && zone !== "" ? { zone } : {}),
+            ...(flags.subdomain !== undefined && flags.subdomain !== "" ? { subdomain: flags.subdomain } : {}),
             log: (message) => this.process.stderr.write(`${message}\n`),
         });
         // Machine-readable on stdout for connect.sh to capture (progress went to stderr).

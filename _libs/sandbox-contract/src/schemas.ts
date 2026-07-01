@@ -106,7 +106,7 @@ export const AppScaffoldSchema = z.object({ cloneUrl: z.string().url().optional(
 // The daemon renders/parses these; the browser edits them through the inventory routes. Moved here from the
 // daemon's deploy-config.ts so the daemon and the browser validate against ONE schema (no cross-repo dupes).
 
-export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe"]);
+export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe", "redmine", "outline", "imap"]);
 export type InventoryProvider = z.infer<typeof InventoryProviderSchema>;
 export const ServiceKindSchema = z.enum(["signoz"]);
 export type ServiceKind = z.infer<typeof ServiceKindSchema>;
@@ -143,6 +143,19 @@ export type AddInventoryInput = z.infer<typeof AddInventoryInputSchema>;
 export const InventoryNameParamSchema = z.object({ name: z.string() });
 export const InventoryListSchema = z.object({ entries: z.array(InventoryEntrySchema) });
 
+// A deploy-target host self-registering via the connect-host script's POST /enroll (connect-token auth). The SSH
+// key (+ optional Cloudflare token) is written to desired-state/.env; the host (+ cf) is upserted into inventory.
+export const EnrollHostInputSchema = z.object({
+    name: inventoryName,
+    user: z.string().min(1),
+    address: z.string().min(1),
+    port: z.coerce.number().default(22),
+    via: z.enum(["direct", "cloudflared"]).default("cloudflared"),
+    sshKey: z.string().min(1),
+    cfToken: z.string().optional(),
+});
+export type EnrollHostInput = z.infer<typeof EnrollHostInputSchema>;
+
 // ---- capabilities: the sandbox's unified capability manifest (.intentic/capabilities.json) ----
 // Everything a user adds to a sandbox is a capability with an idempotent apply + a status check. The manifest is
 // the source of truth for what's active; `mcp`-kind entries also feed the agent's MCP servers each turn. DevOps
@@ -168,7 +181,14 @@ export const ServiceConfigSchema = z.object({
     on: z.string().min(1),
     expose: z.string().min(1),
 });
-export const IntegrationConfigSchema = z.object({ provider: z.enum(["stripe"]) });
+// Per-provider integration config. Stripe carries only its provider tag (fixed API base, key from env);
+// the self-hosted ones carry the non-secret coordinates the user provides — the secret always comes from env.
+export const IntegrationConfigSchema = z.discriminatedUnion("provider", [
+    z.object({ provider: z.literal("stripe") }),
+    z.object({ provider: z.literal("redmine"), url: z.string().url() }),
+    z.object({ provider: z.literal("outline"), url: z.string().url() }),
+    z.object({ provider: z.literal("imap"), host: z.string().min(1), port: z.coerce.number(), username: z.string().min(1) }),
+]);
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
 export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
@@ -215,7 +235,4 @@ export const DevLogsSchema = z.object({
     output: z.string(),
     lastExit: z.object({ code: z.number().optional(), signal: z.string().optional() }).optional(),
 });
-export const SelfHostSchema = z.object({ user: z.string(), address: z.string(), port: z.number(), via: z.enum(["direct", "cloudflared"]) });
-export type SelfHost = z.infer<typeof SelfHostSchema>;
-export const SelfHostResponseSchema = z.object({ selfHost: SelfHostSchema.nullable() });
 export const InfoSchema = z.object({ name: z.string().optional(), image: z.string().optional() });
