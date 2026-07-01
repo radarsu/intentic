@@ -1,4 +1,4 @@
-import type { AgentEvent, SelfHost } from "@intentic/sandbox-contract";
+import type { AgentEvent, Capability, SelfHost } from "@intentic/sandbox-contract";
 import { sandboxContract } from "@intentic/sandbox-contract";
 import { createORPCClient } from "@orpc/client";
 import type { ContractRouterClient } from "@orpc/contract";
@@ -6,27 +6,28 @@ import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import type { Hono } from "hono";
 import { expect, test } from "vitest";
 import { createApp } from "./app.js";
+import type { CapabilitiesStore } from "./capabilities/capabilities-store.js";
 import type { Services } from "./composition.js";
 import type { Config } from "./env.config.js";
 import { createLogger } from "./logger.js";
 import type { DevServer } from "./system/dev-server.js";
 import type { AgentTool } from "./workspace/tools.js";
-import type { ToolsStore } from "./workspace/tools-store.js";
 import { workspacePaths } from "./workspace/workspace.js";
 import { MAX_RAW_BYTES } from "./workspace/workspace-files.js";
 
-// An in-memory external-tools store so the tool routes + turn merge are testable without the fs.
-const memoryToolsStore = (initial: AgentTool[] = []): ToolsStore => {
-    let tools = [...initial];
+// An in-memory capabilities store so the capability routes + turn merge are testable without the fs.
+const memoryCapabilitiesStore = (initial: Capability[] = []): CapabilitiesStore => {
+    let capabilities = [...initial];
     return {
-        list: async () => tools,
-        add: async (tool) => {
-            tools = [...tools.filter((existing) => existing.name !== tool.name), tool];
+        list: async () => capabilities,
+        get: async (id) => capabilities.find((capability) => capability.id === id),
+        upsert: async (capability) => {
+            capabilities = [...capabilities.filter((existing) => existing.id !== capability.id), capability];
         },
-        remove: async (name) => {
-            const next = tools.filter((tool) => tool.name !== name);
-            const existed = next.length !== tools.length;
-            tools = next;
+        remove: async (id) => {
+            const next = capabilities.filter((capability) => capability.id !== id);
+            const existed = next.length !== capabilities.length;
+            capabilities = next;
             return existed;
         },
     };
@@ -79,7 +80,7 @@ const services = (overrides: Partial<Services> = {}): Services => ({
     selfHost: undefined,
     info: undefined,
     tools: [],
-    externalTools: memoryToolsStore(),
+    capabilities: memoryCapabilitiesStore(),
     // A connected account by default, so the /agent guard (no token + no env creds) doesn't short-circuit
     // turns under test. Tests that exercise the disconnected path override this.
     claudeStore: { read: async () => ({ accessToken: "tok-xyz" }), write: async () => {}, clear: async () => {} },
@@ -174,13 +175,13 @@ test("agent.run resolves the oauth token from the sandbox store (not the body) a
     expect(seen?.sessionId).toBe("s1");
 });
 
-test("agent.run merges internal (env) tools with the sandbox's stored external tools for the turn", async () => {
+test("agent.run merges internal (env) tools with the mcp-kind capabilities for the turn", async () => {
     let seen: { tools?: readonly AgentTool[] } | undefined;
     const client = clientFor(
         createApp(
             services({
                 tools: [{ name: "obs", url: "https://signoz.example.com/mcp", token: "internal" }],
-                externalTools: memoryToolsStore([{ name: "linear", url: "https://mcp.linear.app/sse", token: "external" }]),
+                capabilities: memoryCapabilitiesStore([{ id: "linear", kind: "mcp", config: { url: "https://mcp.linear.app/sse", token: "external" } }]),
                 agent: async function* (request) {
                     seen = request;
                     yield { kind: "done" };
@@ -189,29 +190,22 @@ test("agent.run merges internal (env) tools with the sandbox's stored external t
         ),
     );
     await collect(await client.agent.run({ prompt: "do it" }));
-    // Internal first, then external (last-wins on name collisions).
+    // Internal first, then external mcp capabilities (last-wins on name collisions).
     expect(seen?.tools).toEqual([
         { name: "obs", url: "https://signoz.example.com/mcp", token: "internal" },
         { name: "linear", url: "https://mcp.linear.app/sse", token: "external" },
     ]);
 });
 
-test("the external-tools routes add / list (token-free) / delete against the sandbox store", async () => {
-    const client = clientFor(createApp(services({ externalTools: memoryToolsStore() })));
-
-    expect(await client.workspace.addTool({ name: "linear", url: "https://mcp.linear.app/sse", token: "lin_tok" })).toEqual({ name: "linear" });
-    // The token is never returned — it stays in the sandbox; the list only reports presence.
-    expect(await client.workspace.tools()).toEqual({ tools: [{ name: "linear", url: "https://mcp.linear.app/sse", hasToken: true }] });
-    expect(await client.workspace.removeTool({ name: "linear" })).toEqual({ ok: true });
-    expect(await client.workspace.tools()).toEqual({ tools: [] });
-    // Deleting an unknown tool is NOT_FOUND.
-    expect(await errorCode(client.workspace.removeTool({ name: "ghost" }))).toBe("NOT_FOUND");
-});
-
-test("workspace.addTool rejects an invalid tool name and a bad URL", async () => {
-    const client = clientFor(createApp(services({ externalTools: memoryToolsStore() })));
-    expect(await errorCode(client.workspace.addTool({ name: "../evil", url: "https://x/mcp" }))).toBe("BAD_REQUEST");
-    expect(await errorCode(client.workspace.addTool({ name: "ok", url: "not-a-url" }))).toBe("BAD_REQUEST");
+test("capabilities.list reports each capability with its status; devops can't be removed, unknown is NOT_FOUND", async () => {
+    const client = clientFor(createApp(services({ capabilities: memoryCapabilitiesStore([{ id: "devops", kind: "devops", config: {} }]) })));
+    // devops status is derived from the repos on disk — absent under test, so it reads inactive.
+    expect(await client.capabilities.list()).toEqual({
+        capabilities: [{ id: "devops", kind: "devops", status: { state: "inactive" }, config: {} }],
+    });
+    // DevOps has no teardown (deleting the repos is data loss) → CONFLICT; an unknown id is NOT_FOUND.
+    expect(await errorCode(client.capabilities.remove({ id: "devops" }))).toBe("CONFLICT");
+    expect(await errorCode(client.capabilities.remove({ id: "ghost" }))).toBe("NOT_FOUND");
 });
 
 test("agent.run surfaces a connect-your-account error (not an opaque CLI failure) when no account and no env creds", async () => {
@@ -366,7 +360,7 @@ test("workspace.file reads any contained file, denies secrets, NOT_FOUNDs missin
     // The secret denylist short-circuits before the read, even though files.read would return the contents.
     expect(await errorCode(client.workspace.file({ path: "desired-state/.env" }))).toBe("NOT_FOUND");
     expect(await errorCode(client.workspace.file({ path: ".intentic/claude.json" }))).toBe("NOT_FOUND");
-    expect(await errorCode(client.workspace.file({ path: ".intentic/tools.json" }))).toBe("NOT_FOUND");
+    expect(await errorCode(client.workspace.file({ path: ".intentic/capabilities.json" }))).toBe("NOT_FOUND");
     expect(await errorCode(client.workspace.file({ path: "app/nope.ts" }))).toBe("NOT_FOUND");
     expect(await errorCode(client.workspace.file({ path: "../../etc/passwd" }))).toBe("BAD_REQUEST");
 });

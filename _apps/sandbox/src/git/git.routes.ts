@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { gitContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
 import type { Services } from "../composition.js";
@@ -8,20 +7,16 @@ import { resolveWithin } from "../workspace/workspace-files.js";
 import { AGENT_GIT_AUTHOR } from "./git.js";
 
 // Per-repo git ops over the three workspace repos. An unknown {repo} is NOT_FOUND; a path that escapes the
-// repo dir is BAD_REQUEST; a missing file is NOT_FOUND.
+// repo dir is BAD_REQUEST; a missing file is NOT_FOUND. The sandbox boots empty (no intent/desired-state until
+// DevOps is activated); the only route the web hits before then is `file` (readFile), which 404s naturally when
+// the file is absent — status/files/commit are only reached from the DevOps-gated Infra UI.
 export const createGitRoutes = (services: Services) => {
     const i = implement(gitContract).$context<OrpcContext>();
     const repoDir = (repo: string): string => {
         if (!(REPO_ROLES as readonly string[]).includes(repo)) {
             throw new ORPCError("NOT_FOUND", { message: "unknown repo" });
         }
-        const dir = services.workspace.repos[repo as RepoRole];
-        // The sandbox boots empty; intent/desired-state exist only after DevOps is activated. A read against an
-        // absent repo is NOT_FOUND (the web treats that as "no state yet"), not a 500 out of git.
-        if (!existsSync(dir)) {
-            throw new ORPCError("NOT_FOUND", { message: "repo not initialized" });
-        }
-        return dir;
+        return services.workspace.repos[repo as RepoRole];
     };
     return {
         status: i.status.handler(({ input }) => services.git.status(repoDir(input.repo))),
