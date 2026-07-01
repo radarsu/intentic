@@ -1,12 +1,24 @@
 import { execFile } from "node:child_process";
+import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
+
+// The identity every daemon-authored commit carries (inventory edits, the neutral-ledger scaffold, the git
+// routes). One source of truth so the workspace history reads consistently regardless of which route wrote it.
+export const AGENT_GIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const;
 
 // Runs a git subcommand inside `dir`; injectable so the workspace git ops are unit-testable without a real
 // repo (mirrors the CLI's adopt.ts GitRunner seam).
 export type GitRunner = (dir: string, args: readonly string[]) => Promise<{ readonly stdout: string; readonly stderr: string }>;
 const defaultGit: GitRunner = (dir, args) => exec("git", ["-C", dir, ...args]);
+
+// Initialize a fresh git repo in `dir` (created if absent). Scaffolds the workspace's neutral ledger (intent +
+// desired-state) at first boot without shelling to `intentic init`.
+export const gitInit = async (dir: string, git: GitRunner = defaultGit): Promise<void> => {
+    await mkdir(dir, { recursive: true });
+    await git(dir, ["init", "-q"]);
+};
 
 export interface GitStatus {
     readonly branch: string;

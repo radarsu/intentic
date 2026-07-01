@@ -5,7 +5,7 @@ import { type AgentRequest, runAgent } from "./agent/agent.js";
 import { createAuthorizer, createGoogleVerifier, fileOwnerStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
-import { type GitStatus, gitClone, gitCommitAll, gitListFiles, gitPush, gitStatus } from "./git/git.js";
+import { type GitStatus, gitClone, gitCommitAll, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
 import { type IntenticRun, runIntentic } from "./intentic/intentic-runner.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions/sessions.js";
 import { createDevServer, type DevServer } from "./system/dev-server.js";
@@ -35,6 +35,7 @@ export interface Services {
     readonly agent: (request: AgentRequest) => AsyncGenerator<AgentEvent>;
     readonly intentic: (run: IntenticRun) => AsyncGenerator<IntenticLine>;
     readonly git: {
+        readonly init: (dir: string) => Promise<void>;
         readonly status: (dir: string) => Promise<GitStatus>;
         readonly listFiles: (dir: string) => Promise<string[]>;
         readonly commitAll: (dir: string, message: string, author: { name: string; email: string }) => Promise<boolean>;
@@ -92,7 +93,7 @@ export const createServices = (config: Config, logger: Logger): Services => {
         claudeStore: fileClaudeStore(join(workspace.root, ".intentic", "claude.json")),
         agent: runAgent,
         intentic: runIntentic,
-        git: { status: gitStatus, listFiles: gitListFiles, commitAll: gitCommitAll, push: gitPush, clone: gitClone },
+        git: { init: gitInit, status: gitStatus, listFiles: gitListFiles, commitAll: gitCommitAll, push: gitPush, clone: gitClone },
         files: { read: readWorkspaceFile, write: writeWorkspaceFile, readBytes: readWorkspaceFileBytes, size: statWorkspaceFileSize },
         workspaceTree: walkWorkspaceTree,
         sessions: { list: listWorkspaceSessions, read: readWorkspaceSession },

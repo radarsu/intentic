@@ -3,11 +3,11 @@ import { type InventoryEntry, inventoryContract } from "@intentic/sandbox-contra
 import { implement } from "@orpc/server";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
+import { AGENT_GIT_AUTHOR } from "../git/git.js";
 import { readManagedRegion, scaffoldDeployConfig, writeManagedRegion } from "./deploy-config.js";
 
 const INVENTORY_CONFIG = "deploy.config.ts";
 const SELF_HOST_NAME = "self";
-const COMMIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const;
 
 // The i.have.* / i.want.service entries in deploy.config.ts's managed region. add/remove rewrite the region and
 // commit it (mirroring an agent edit). ensureSelfHost mirrors this sandbox's host into the inventory when
@@ -18,7 +18,7 @@ export const createInventoryRoutes = (services: Services) => {
     const readConfig = async (): Promise<string> => (await services.files.read(configPath)) ?? scaffoldDeployConfig([]);
     const writeConfig = async (content: string, message: string): Promise<void> => {
         await services.files.write(configPath, content);
-        await services.git.commitAll(services.workspace.repos.intent, message, COMMIT_AUTHOR);
+        await services.git.commitAll(services.workspace.repos.intent, message, AGENT_GIT_AUTHOR);
     };
     const ensureSelfHost = async (content: string, entries: InventoryEntry[]): Promise<InventoryEntry[]> => {
         if (services.selfHost === undefined || entries.some((entry) => entry.name === SELF_HOST_NAME)) {

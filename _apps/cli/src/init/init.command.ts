@@ -5,7 +5,7 @@ import { createOutput } from "../lib/output.js";
 import { version } from "../lib/version.js";
 import { scaffold } from "./init.js";
 
-export const init = buildCommand<{ dir?: string; link: boolean; app?: string; selfHost: boolean; zone?: string }>({
+export const init = buildCommand<{ dir?: string; link: boolean; app?: string; selfHost: boolean; zone?: string; minimal: boolean }>({
     docs: { brief: "Scaffold local intent, desired-state, and app git repos" },
     parameters: {
         flags: {
@@ -22,11 +22,31 @@ export const init = buildCommand<{ dir?: string; link: boolean; app?: string; se
                 optional: true,
                 brief: "Cloudflare zone for the scaffolded app's domain (app.<zone>); used with --self-host",
             },
+            minimal: {
+                kind: "boolean",
+                brief: "Reachability-only ledger: intent + desired-state with an empty deploy.config.ts, no app repo and no placeholder host",
+            },
         },
     },
-    async func(this: CommandContext, flags: { dir?: string; link: boolean; app?: string; selfHost: boolean; zone?: string }) {
+    async func(this: CommandContext, flags: { dir?: string; link: boolean; app?: string; selfHost: boolean; zone?: string; minimal: boolean }) {
+        if (flags.minimal && (flags.app !== undefined || flags.selfHost || flags.zone !== undefined)) {
+            throw new Error("--minimal cannot be combined with --app, --self-host, or --zone");
+        }
         const out = createOutput(this.process.stdout, loadConfig().intenticOutput);
-        const { intentDir, targetDir, appDir } = await scaffold(flags.dir ?? ".", version, flags.link, flags.app, flags.selfHost, flags.zone);
+        const { intentDir, targetDir, appDir } = await scaffold(
+            flags.dir ?? ".",
+            version,
+            flags.link,
+            flags.app,
+            flags.selfHost,
+            flags.zone,
+            flags.minimal,
+        );
+        if (appDir === undefined) {
+            out.text(`initialized ${intentDir} (with ${CONFIG_FILE}) and ${targetDir}`);
+            out.result({ intentDir, targetDir });
+            return;
+        }
         out.text(`initialized ${intentDir} (with ${CONFIG_FILE}), ${targetDir}, and ${appDir}`);
         out.result({ intentDir, targetDir, appDir });
     },

@@ -18,6 +18,10 @@ const starterConfig = (): string => renderTemplate("scaffold/deploy.config.ts", 
 export const selfHostConfig = (zone: string | undefined): string =>
     renderTemplate("scaffold/deploy.config.selfhost.ts", { zone: zone ?? "example.com" });
 
+// The reachability-only ledger: an empty deploy.config.ts with only the managed `// <intentic>` region — no
+// host, no app. Byte-identical to the daemon's scaffoldDeployConfig([]) so a later /inventory edit diffs cleanly.
+export const neutralConfig = (): string => renderTemplate("scaffold/deploy.config.neutral.ts", {});
+
 // Keep secret + local-only files out of the PR-managed desired-state repo: the user-supplied `.env`, the
 // intentic-generated `.secrets.json`, and the `.last-applied.json` prune baseline (local snapshot of the
 // last successfully-applied artifact). The matching `.env.example` is not written here — `resolve`
@@ -93,12 +97,13 @@ const starterPackage = (version: string, link: boolean): string => {
 };
 
 // Scaffold the local workspace: an `intent` repo (holds deploy.config.ts and its package), a `desired-state`
-// repo (holds the artifact `resolve` writes and the status `apply` writes), and an `app` repo (the
-// application code), each its own git repo so the generated target can later become PR-managed and `adopt`
-// can push it. The intent repo is a self-contained TS project against `@intentic/{graph,sdk}` — pinned to the
-// CLI's own version, or linked to local source with `--link`. `appRepo`, when set, clones an existing repo as
-// the app instead of scaffolding a starter. `selfHost` scaffolds the example app onto the auto-registered
+// repo (holds the artifact `resolve` writes and the status `apply` writes), and — unless `minimal` — an `app`
+// repo (the application code), each its own git repo so the generated target can later become PR-managed and
+// `adopt` can push it. The intent repo is a self-contained TS project against `@intentic/{graph,sdk}` — pinned
+// to the CLI's own version, or linked to local source with `--link`. `appRepo`, when set, clones an existing
+// repo as the app instead of scaffolding a starter. `selfHost` scaffolds the example app onto the auto-registered
 // `self` deploy target (domain app.`zone`) so Provision works with no edits; otherwise a placeholder remote host.
+// `minimal` scaffolds a reachability-only ledger: an empty config (no host, no app), nothing to provision yet.
 export const scaffold = async (
     dir: string,
     version: string,
@@ -106,7 +111,8 @@ export const scaffold = async (
     appRepo: string | undefined,
     selfHost: boolean,
     zone: string | undefined,
-): Promise<{ readonly intentDir: string; readonly targetDir: string; readonly appDir: string }> => {
+    minimal: boolean,
+): Promise<{ readonly intentDir: string; readonly targetDir: string; readonly appDir: string | undefined }> => {
     const intentDir = join(dir, INTENT_DIR);
     const targetDir = join(dir, TARGET_DIR);
     const appDir = join(dir, APP_DIR);
@@ -115,15 +121,18 @@ export const scaffold = async (
         await mkdir(targetDir, { recursive: true });
         await exec("git", ["init", "-q", intentDir]);
         await exec("git", ["init", "-q", targetDir]);
-        await writeFile(join(intentDir, CONFIG_FILE), selfHost ? selfHostConfig(zone) : starterConfig());
+        await writeFile(join(intentDir, CONFIG_FILE), minimal ? neutralConfig() : selfHost ? selfHostConfig(zone) : starterConfig());
         await writeFile(join(intentDir, "package.json"), starterPackage(version, link));
         await writeFile(join(intentDir, "tsconfig.json"), STARTER_TSCONFIG);
         await writeFile(join(intentDir, ".gitignore"), INTENT_GITIGNORE);
         await writeFile(join(targetDir, ".gitignore"), TARGET_GITIGNORE);
-        // The app repo is independent of the intent's deps, so scaffold it BEFORE `pnpm install`: a failed install
-        // must not also cost us /work/app (the dev server's cwd — its absence surfaces as a confusing `spawn pnpm
-        // ENOENT`). The install goes last, as the one step that reaches the network and is most likely to fail.
-        await scaffoldApp(appDir, appRepo);
+        // A minimal ledger is reachability-only: no app repo (it arrives with the "Deploy on this machine" flow).
+        // Otherwise scaffold the app BEFORE `pnpm install`: a failed install must not also cost us /work/app (the
+        // dev server's cwd — its absence surfaces as a confusing `spawn pnpm ENOENT`). The install goes last, as
+        // the one step that reaches the network and is most likely to fail.
+        if (!minimal) {
+            await scaffoldApp(appDir, appRepo);
+        }
         await exec("pnpm", ["install", "--ignore-workspace"], { cwd: intentDir });
     } catch (error) {
         // All-or-nothing: a partial scaffold leaves /work/intent in place, and the daemon gates init on its
@@ -134,5 +143,5 @@ export const scaffold = async (
         await rm(appDir, { recursive: true, force: true });
         throw error;
     }
-    return { intentDir, targetDir, appDir };
+    return { intentDir, targetDir, appDir: minimal ? undefined : appDir };
 };

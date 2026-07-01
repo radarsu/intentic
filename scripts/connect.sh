@@ -27,8 +27,9 @@
 #   DEV_PORT        the app's dev-server port, exposed at *.preview.<zone> (default: 5173)
 #   WEB_ORIGIN      scopes the daemon's CORS to the platform web app (default: open — the Google-token audience is the real gate)
 #   ZONE            the Cloudflare zone to use when the token sees more than one
-#   SELF_HOST       wire THIS machine as a deploy target (service user + SSH key). DEFAULT ON — the platform flow
-#                   always self-hosts (needs root, hence `sudo`). Opt out of a non-deploy run with `SELF_HOST= `.
+#   SELF_HOST       wire THIS machine as a deploy target (service user + SSH key + host SSH tunnel). DEFAULT OFF —
+#                   setup is reachability-only. Set `SELF_HOST=1` (needs root, hence `sudo`) to register this
+#                   machine as a deploy target; this is what the platform's "Deploy on this machine" action runs.
 #   SELF_HOST_USER  the service user to create/use for self-host (default: intentic).
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
@@ -56,9 +57,10 @@ DEV_PORT="${DEV_PORT:-5173}"
 # CLI reads. HOST_SSH_KEY is optional (auto-generated when SELF_HOST wires this machine as a deploy target).
 HOST_SSH_KEY="${HOST_SSH_KEY:-}"
 CF_TOKEN="${CF_TOKEN:-}"
-# Self-host: wire this machine as a deploy target. DEFAULT ON — the platform flow always makes this machine the
-# first deploy target (the one-liner runs under `sudo`). Opt out of a non-deploy run with `SELF_HOST= ` (empty).
-SELF_HOST="${SELF_HOST-1}"
+# Self-host: wire this machine as a deploy target (service user + SSH key + host SSH tunnel; needs root). DEFAULT
+# OFF — setup only makes the sandbox reachable. The platform's "Deploy on this machine" action re-runs this with
+# `SELF_HOST=1` (under `sudo`) to register the host as a deploy target so `intentic apply` can deploy onto it.
+SELF_HOST="${SELF_HOST-}"
 SELF_HOST_USER="${SELF_HOST_USER:-}"
 # Browser-direct access: the sandbox is exposed at sandbox-<id>.<zone> via its OWN Cloudflare tunnel and the
 # browser talks to it directly — the daemon verifies the user's Google ID token (audience = GOOGLE_CLIENT_ID, the
@@ -435,4 +437,7 @@ docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network 
 echo "intentic sandbox started and registering with ${PLATFORM_URL}."
 echo "Your sandbox will be reachable at ${SANDBOX_PUBLIC_URL} (DNS may take a few seconds to propagate)."
 echo "Return to the platform — setup will continue automatically once it connects."
+if [ -z "$SELF_HOST" ]; then
+    echo "Reachable only — no deploy target. To deploy an app onto this machine later, re-run with SELF_HOST=1 (needs sudo)."
+fi
 echo "Logs: docker logs -f ${CONTAINER}   Stop: docker rm -f ${CONTAINER} intentic-sandbox-tunnel"

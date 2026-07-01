@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
@@ -6,37 +5,28 @@ import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
 import { createLogger } from "./logger.js";
 import { registerWithPlatform } from "./system/register.js";
-import { zoneFromPublicUrl } from "./system/zone.js";
+import { scaffoldNeutralLedger } from "./workspace/scaffold-ledger.js";
 
 // The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
-// the workspace provider (a server); the workspace (the three repos) and agent credentials are injected there,
+// the workspace provider (a server); the workspace (the repos) and agent credentials are injected there,
 // never baked in.
-const main = (): void => {
+const main = async (): Promise<void> => {
     const config = loadConfig();
     const logger = createLogger(config);
     const services = createServices(config, logger);
     const { workspace } = services;
 
-    // First start with an empty workspace: scaffold the three repos (intent / desired-state / app) so chat,
-    // inventory, and source-control have something to read. Idempotent — skipped once the repos exist. With a
-    // self-host target + a known zone, the scaffold targets `self` at app.<zone>; otherwise the generic starter.
+    // First start with an empty workspace: scaffold a NEUTRAL ledger (intent + desired-state, no app) so chat,
+    // inventory, and source-control have something to read. Setup is reachability-only — nothing is provisioned
+    // and no deploy target is wired; the app repo + a deploy target arrive later via "Deploy on this machine".
+    // Idempotent — skipped once the repos exist.
     if (!existsSync(workspace.repos.intent)) {
-        logger.info("empty workspace — running intentic init…");
-        const zone = config.zone !== "" ? config.zone : zoneFromPublicUrl(config.sandbox.publicUrl);
-        const initArgs = ["init", "--dir", config.workspaceRoot];
-        if (services.selfHost !== undefined) {
-            initArgs.push("--self-host");
-            if (zone !== undefined && zone !== "") {
-                initArgs.push("--zone", zone);
-            }
-        }
-        const init = spawnSync("intentic", initArgs, { stdio: "inherit" });
-        if (init.status !== 0) {
-            logger.warn({ status: init.status ?? undefined }, "intentic init failed; the workspace may be incomplete");
-        }
+        logger.info("empty workspace — scaffolding a neutral ledger…");
+        await scaffoldNeutralLedger(services);
     }
 
-    if (config.dev.command !== "" && config.dev.port !== "") {
+    // The app repo only exists once the user opts to build/deploy an app; skip the preview until then.
+    if (config.dev.command !== "" && config.dev.port !== "" && existsSync(workspace.repos.app)) {
         services.devServer.start({ command: config.dev.command.split(" "), cwd: workspace.repos.app, port: Number(config.dev.port) });
     }
 
@@ -68,4 +58,4 @@ const main = (): void => {
     process.on("SIGINT", shutdown);
 };
 
-main();
+void main();

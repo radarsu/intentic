@@ -75,6 +75,7 @@ const services = (overrides: Partial<Services> = {}): Services => ({
     },
     intentic: async function* () {},
     git: {
+        init: async () => {},
         status: async () => ({ branch: "main", dirty: false, files: [] }),
         listFiles: async () => [],
         commitAll: async () => false,
@@ -260,6 +261,7 @@ test("git.status resolves the repo dir, and rejects an unknown repo", async () =
         createApp(
             services({
                 git: {
+                    init: async () => {},
                     status: async (dir) => {
                         seen.push(dir);
                         return { branch: "main", dirty: false, files: [] };
@@ -282,6 +284,7 @@ test("git.files lists the repo's tracked files", async () => {
         createApp(
             services({
                 git: {
+                    init: async () => {},
                     status: async () => ({ branch: "main", dirty: false, files: [] }),
                     listFiles: async (dir) => (dir === "/work/intent" ? ["deploy.config.ts", "package.json"] : []),
                     commitAll: async () => false,

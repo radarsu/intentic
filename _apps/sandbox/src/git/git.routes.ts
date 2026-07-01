@@ -4,8 +4,7 @@ import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
 import { REPO_ROLES, type RepoRole } from "../workspace/workspace.js";
 import { resolveWithin } from "../workspace/workspace-files.js";
-
-const COMMIT_AUTHOR = { name: "intentic", email: "agent@intentic.dev" } as const;
+import { AGENT_GIT_AUTHOR } from "./git.js";
 
 // Per-repo git ops over the three workspace repos. An unknown {repo} is NOT_FOUND; a path that escapes the
 // repo dir is BAD_REQUEST; a missing file is NOT_FOUND.
@@ -20,7 +19,7 @@ export const createGitRoutes = (services: Services) => {
     return {
         status: i.status.handler(({ input }) => services.git.status(repoDir(input.repo))),
         commit: i.commit.handler(async ({ input }) => ({
-            committed: await services.git.commitAll(repoDir(input.repo), input.message, COMMIT_AUTHOR),
+            committed: await services.git.commitAll(repoDir(input.repo), input.message, AGENT_GIT_AUTHOR),
         })),
         push: i.push.handler(async ({ input }) => {
             await services.git.push(repoDir(input.repo), input.branch);

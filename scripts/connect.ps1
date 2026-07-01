@@ -10,9 +10,10 @@
   socket), and runs a cloudflared sidecar. The browser then talks to the sandbox DIRECTLY over that
   tunnel — the daemon verifies your Google sign-in, and the platform stays off the command path. On
   boot the sandbox registers its public URL with the platform's directory, so its setup gate flips to
-  "ready". To give a server-less user a deploy target, it also stands up a Docker-in-Docker "host"
-  container the sandbox deploys onto over SSH (Windows can't be a native SSH+Docker target) — opt out
-  with $env:SELF_HOST=''. Requires Docker Desktop in Linux-containers mode (the sandbox image is Linux).
+  "ready". Setup is reachability-only. To later deploy an app onto this PC, the platform's "Deploy on
+  this machine" action re-runs with $env:SELF_HOST='1', which stands up a Docker-in-Docker "host"
+  container the sandbox deploys onto over SSH (Windows can't be a native SSH+Docker target). Requires
+  Docker Desktop in Linux-containers mode (the sandbox image is Linux).
 
 .EXAMPLE
   $env:CF_TOKEN='<cf>'; $env:CONNECT_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
@@ -48,10 +49,11 @@ $DevPort    = if ($env:DEV_PORT)    { $env:DEV_PORT }    else { '5173' }
 # it is validated below and passed to the sandbox as the Cloudflare-standard CLOUDFLARE_API_TOKEN the CLI reads.
 $CfToken = $env:CF_TOKEN
 # Self-host: unlike Linux (where the box you ran this on becomes the deploy target), Windows can't be a native
-# SSH+Docker target, so we stand up a Docker-in-Docker "host" container below and deploy onto THAT. DEFAULT ON
-# (parity with connect.sh); opt out of a non-deploy run with `$env:SELF_HOST=''`. SELF_HOST_ADDRESS/SELF_HOST_USER/
-# HOST_SSH_KEY are derived from that container below — the user never supplies an SSH key.
-$SelfHost = if ($null -eq $env:SELF_HOST) { '1' } else { $env:SELF_HOST }
+# SSH+Docker target, so a Docker-in-Docker "host" container below is the deploy target and we deploy onto THAT.
+# DEFAULT OFF — setup is reachability-only; set `$env:SELF_HOST='1'` (the platform's "Deploy on this machine"
+# action) to stand it up. SELF_HOST_ADDRESS/SELF_HOST_USER/HOST_SSH_KEY are derived from that container below —
+# the user never supplies an SSH key.
+$SelfHost = $env:SELF_HOST
 $HostSshKey = ''
 $SelfHostUser = ''
 $SelfHostAddress = ''
@@ -209,4 +211,7 @@ if ($SelfHost) { $StopList += " $DindContainer" }
 Write-Host "intentic sandbox started and registering with $PlatformUrl."
 Write-Host "Your sandbox will be reachable at $SandboxPublicUrl (DNS may take a few seconds to propagate)."
 Write-Host 'Return to the platform — setup will continue automatically once it connects.'
+if (-not $SelfHost) {
+    Write-Host 'Reachable only — no deploy target. To deploy an app onto this PC later, re-run with $env:SELF_HOST=''1''.'
+}
 Write-Host "Logs: docker logs -f $Container   Stop: docker rm -f $StopList"
