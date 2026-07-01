@@ -29,10 +29,23 @@ FROM node:24.18.0-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f106
 # Links the GHCR package to the repo (inherits its visibility/permissions, shows under its Packages).
 LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 # procps gives the interactive terminal (system/terminal.ts) real process tools — `ps`, `top`, `kill` — so the
-# owner can see what's running in the sandbox and reap a stuck dev command.
+# owner can see what's running in the sandbox and reap a stuck dev command. zsh is the terminal's shell (below).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates procps \
+    && apt-get install -y --no-install-recommends git ca-certificates procps zsh \
     && rm -rf /var/lib/apt/lists/*
+# The terminal (system/terminal.ts) launches zsh with the oh-my-zsh "bira" theme + zsh-autosuggestions, so the
+# owner gets a real prompt and history autocomplete. Installed into root's home (the daemon/terminal run as
+# root); --depth=1 tracks the default branch (pin to a commit if reproducibility matters).
+RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /root/.oh-my-zsh \
+    && git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions \
+    && printf '%s\n' \
+        'export ZSH="$HOME/.oh-my-zsh"' \
+        'ZSH_THEME="bira"' \
+        'ZSH_DISABLE_COMPFIX=true' \
+        "zstyle ':omz:update' mode disabled" \
+        'plugins=(git zsh-autosuggestions)' \
+        'source $ZSH/oh-my-zsh.sh' \
+        > /root/.zshrc
 # The daemon runs the app's `pnpm dev` (dev-server.ts) — the build stage's corepack doesn't carry over, so
 # enable it here too and bake in the repo's pinned pnpm so the sandbox needs no first-run download or prompt.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

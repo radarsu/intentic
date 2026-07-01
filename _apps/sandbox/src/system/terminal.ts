@@ -18,7 +18,7 @@ type ClientMessage = { readonly type: "input"; readonly data: string } | { reado
 const spawnShell = (root: string, cwd: string | undefined, cols: number, rows: number): IPty => {
     const requested = cwd !== undefined && cwd !== "" ? resolveWithin(root, cwd) : undefined;
     const dir = requested !== undefined && existsSync(requested) ? requested : root;
-    return spawn("bash", [], { name: "xterm-color", cwd: dir, env: process.env, cols, rows });
+    return spawn("zsh", [], { name: "xterm-color", cwd: dir, env: process.env, cols, rows });
 };
 
 const dimension = (value: string | undefined, fallback: number): number => {
