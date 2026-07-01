@@ -103,6 +103,36 @@ const envFile = (privateKey: string): string =>
 CLOUDFLARE_API_TOKEN=${required("CLOUDFLARE_API_TOKEN")}
 `;
 
+// Poll a public URL through the tunnel until it answers from the origin (not a Cloudflare edge error),
+// then return the final status + body. Edge/tunnel-not-ready responses (5xx + the cloudflared error page)
+// are retried until the deadline since DNS + connector propagation takes seconds.
+const pollUrl = async (url: string, timeoutMs: number, bodyIncludes?: string): Promise<{ status: number; body: string }> => {
+    const deadline = Date.now() + timeoutMs;
+    let last: { status: number; body: string } | undefined;
+    for (;;) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 10_000);
+            const response = await fetch(url, { redirect: "manual", signal: controller.signal });
+            clearTimeout(timer);
+            const body = (await response.text()).slice(0, 4000);
+            last = { status: response.status, body };
+            const edgeDown = [502, 521, 522, 523, 525, 530].includes(response.status) || /Error 10\d\d|Argo Tunnel|cloudflare/i.test(body);
+            // When a body marker is required (the app must serve its real content, not CI's seeded
+            // placeholder), keep polling until it appears; otherwise any live-origin response is enough.
+            if (!edgeDown && (bodyIncludes === undefined || body.includes(bodyIncludes))) {
+                return last;
+            }
+        } catch {
+            // DNS not propagated / connection reset — keep polling.
+        }
+        if (Date.now() >= deadline) {
+            throw new Error(`${url} never returned a live-origin response; last=${JSON.stringify(last)}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+};
+
 describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + DinD)", () => {
     let host: StartedTestContainer;
     let tmp: string;
@@ -170,7 +200,9 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
             return stdout;
         } catch (error) {
             const e = error as { code?: number; stdout?: string; stderr?: string };
-            throw new Error(`pnpm intentic ${args.join(" ")} failed (code ${e.code}):\nSTDOUT:\n${e.stdout ?? ""}\nSTDERR:\n${e.stderr ?? ""}`);
+            throw new Error(`pnpm intentic ${args.join(" ")} failed (code ${e.code}):\nSTDOUT:\n${e.stdout ?? ""}\nSTDERR:\n${e.stderr ?? ""}`, {
+                cause: error,
+            });
         }
     };
 
@@ -180,36 +212,6 @@ describe.skipIf(!enabled)("intentic CLI end-to-end (manual, real Cloudflare + Di
             return (await session.exec(command)).stdout;
         } finally {
             await session.dispose();
-        }
-    };
-
-    // Poll a public URL through the tunnel until it answers from the origin (not a Cloudflare edge error),
-    // then return the final status + body. Edge/tunnel-not-ready responses (5xx + the cloudflared error page)
-    // are retried until the deadline since DNS + connector propagation takes seconds.
-    const pollUrl = async (url: string, timeoutMs: number, bodyIncludes?: string): Promise<{ status: number; body: string }> => {
-        const deadline = Date.now() + timeoutMs;
-        let last: { status: number; body: string } | undefined;
-        for (;;) {
-            try {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 10_000);
-                const response = await fetch(url, { redirect: "manual", signal: controller.signal });
-                clearTimeout(timer);
-                const body = (await response.text()).slice(0, 4000);
-                last = { status: response.status, body };
-                const edgeDown = [502, 521, 522, 523, 525, 530].includes(response.status) || /Error 10\d\d|Argo Tunnel|cloudflare/i.test(body);
-                // When a body marker is required (the app must serve its real content, not CI's seeded
-                // placeholder), keep polling until it appears; otherwise any live-origin response is enough.
-                if (!edgeDown && (bodyIncludes === undefined || body.includes(bodyIncludes))) {
-                    return last;
-                }
-            } catch {
-                // DNS not propagated / connection reset — keep polling.
-            }
-            if (Date.now() >= deadline) {
-                throw new Error(`${url} never returned a live-origin response; last=${JSON.stringify(last)}`);
-            }
-            await new Promise((resolve) => setTimeout(resolve, 2_000));
         }
     };
 

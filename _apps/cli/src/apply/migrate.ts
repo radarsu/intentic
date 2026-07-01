@@ -111,6 +111,7 @@ const migrateHost = async (move: HostMove, args: MigrateArgs): Promise<void> => 
         if (local) {
             throw new Error(
                 `host "${move.id}" moved to ${move.newAddress}, but its old machine ${move.oldAddress} is unreachable and the restic repo lives on it — bring the old host back to migrate its data: ${String(error)}`,
+                { cause: error },
             );
         }
         args.log(

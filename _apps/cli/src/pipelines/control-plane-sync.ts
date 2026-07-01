@@ -83,7 +83,7 @@ export const syncControlPlaneSecrets = async (args: {
         artifactFile: ARTIFACT_FILE,
         intentRepo: INTENT_DIR,
         desiredStateRepo: TARGET_DIR,
-        applySecretKeys: [...next.generated, ...next.env].sort(),
+        applySecretKeys: [...next.generated, ...next.env].toSorted(),
         forgejoPasswordKey: adminPasswordRef.key,
     };
     await writeWorkflow(args.dir, APPLY_WORKFLOW_PATH, applyWorkflowYaml(inputs));

@@ -56,8 +56,7 @@ export interface Services {
     // When set, the daemon is exposed directly and verifies the owner's Google ID token on every route but
     // /health; CORS is emitted for `allowOrigin`. Undefined ⇒ loopback mode (tests / host-internal preview).
     readonly auth:
-        | { readonly authorize: (bearer: string, firstBind: string | undefined) => Promise<void>; readonly allowOrigin?: string }
-        | undefined;
+        { readonly authorize: (bearer: string, firstBind: string | undefined) => Promise<void>; readonly allowOrigin?: string } | undefined;
 }
 
 // Build the production services from config (env). The agent/intentic/git/files/sessions/tree members are the

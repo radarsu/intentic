@@ -5,7 +5,8 @@
         "pkief.material-icon-theme",
 
         // Formatters and linters.
-        "biomejs.biome",
+        "oxc.oxc-vscode",
+        "esbenp.prettier-vscode",
         "foxundermoon.shell-format",
 
         // Quality of Life.

@@ -71,7 +71,7 @@ describe("rewriteGraphForMoves", () => {
     it("renames a moved resource's key, id, and inbound dependsOn edges in the prune baseline", () => {
         const previous = graphOf({ db: node("db"), app: node("app", ["db"]) });
         const rewritten = rewriteGraphForMoves(previous, [{ from: "db", to: "db2" }]);
-        expect(Object.keys(rewritten.resources).sort()).toEqual(["app", "db2"]);
+        expect(Object.keys(rewritten.resources).toSorted()).toEqual(["app", "db2"]);
         expect(rewritten.resources["db2"]?.id).toBe("db2");
         expect(rewritten.resources["app"]?.dependsOn).toEqual(["db2"]);
     });

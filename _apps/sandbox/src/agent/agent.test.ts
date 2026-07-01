@@ -26,7 +26,7 @@ test("a turn surfaces session, text deltas, tool actions, and a terminal done", 
     const events = await collect(
         request,
         fakeQuery(
-            { type: "system", subtype: "init", session_id: "sess-1" },
+            { type: "system", subtype: "init", session_id: "sess-1", model: "sonnet" },
             { type: "stream_event", session_id: "sess-1", event: { type: "content_block_delta", delta: { type: "text_delta", text: "Adding " } } },
             {
                 type: "assistant",
@@ -39,6 +39,7 @@ test("a turn surfaces session, text deltas, tool actions, and a terminal done", 
     );
     expect(events).toEqual([
         { kind: "session", sessionId: "sess-1" },
+        { kind: "init", model: "sonnet" },
         { kind: "delta", text: "Adding " },
         { kind: "tool", name: "Edit", target: "src/app.ts" },
         { kind: "tool", name: "Bash", target: "pnpm test" },
@@ -108,11 +109,12 @@ test("a non-success result becomes an error followed by done", async () => {
     ]);
 });
 
+const throwing: QueryFn = async function* () {
+    yield { type: "system", session_id: "s" } as SDKMessage;
+    throw new Error("stream blew up");
+};
+
 test("a thrown error from the SDK is reported as an error event, then done", async () => {
-    const throwing: QueryFn = async function* () {
-        yield { type: "system", session_id: "s" } as SDKMessage;
-        throw new Error("stream blew up");
-    };
     expect(await collect(request, throwing)).toEqual([
         { kind: "session", sessionId: "s" },
         { kind: "error", message: "stream blew up" },

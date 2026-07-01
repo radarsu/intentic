@@ -35,7 +35,10 @@ dns.lookup = (hostname, options, callback) => {
                 return;
             }
             if (opts.all) {
-                cb(null, ips.map((address) => ({ address, family: 4 })));
+                cb(
+                    null,
+                    ips.map((address) => ({ address, family: 4 })),
+                );
             } else {
                 cb(null, ips[0], 4);
             }

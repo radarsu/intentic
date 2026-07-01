@@ -19,7 +19,7 @@ test("derived order is a valid topological linearization of the bootstrap", () =
     }
 
     // It is a permutation of the resource ids (nothing dropped or duplicated).
-    expect([...order].sort()).toEqual(Object.keys(graph.resources).sort());
+    expect([...order].toSorted()).toEqual(Object.keys(graph.resources).toSorted());
 
     // Sanity on the headline phases: host -> git -> app deployment, and the platform tunnel comes up before
     // the control plane that reaches Forgejo/Komodo through its public routes.

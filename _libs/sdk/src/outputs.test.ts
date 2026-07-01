@@ -39,7 +39,7 @@ test("public handles' output refs match OUTPUTS exactly", () => {
     for (const type of ["host", "cloudflare", "deployment", "repo", "postgres", "valkey", "workspace"] as const) {
         const handle = handles[type];
         expect(handle, `no handle captured for type "${type}"`).toBeDefined();
-        expect(outputPropsOf(handle as object)).toEqual([...OUTPUTS[type]].sort());
+        expect(outputPropsOf(handle as object)).toEqual([...OUTPUTS[type]].toSorted());
     }
 });
 

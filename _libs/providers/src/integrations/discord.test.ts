@@ -131,11 +131,11 @@ test("apply creates guild, categories, channels, and webhooks from scratch", asy
 
     // Categories were created.
     const categories = channels.filter((ch) => ch.type === CHANNEL_TYPE_CATEGORY);
-    expect(categories.map((c) => c.name).sort()).toEqual(["apps", "intentic"]);
+    expect(categories.map((c) => c.name).toSorted()).toEqual(["apps", "intentic"]);
 
     // Text channels were created.
     const textChannels = channels.filter((ch) => ch.type === CHANNEL_TYPE_TEXT);
-    expect(textChannels.map((c) => c.name).sort()).toEqual(["my-app", "reconcile"]);
+    expect(textChannels.map((c) => c.name).toSorted()).toEqual(["my-app", "reconcile"]);
 
     // Webhooks were created for both channels.
     expect(webhooks).toHaveLength(2);

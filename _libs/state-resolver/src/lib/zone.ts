@@ -32,7 +32,7 @@ export const selectZone = (zoneNames: readonly string[], domains: readonly strin
     }
     let resolved: string | undefined;
     for (const domain of domains) {
-        const best = zoneNames.filter((name) => inZone(domain, name)).sort((a, b) => b.length - a.length)[0];
+        const best = zoneNames.filter((name) => inZone(domain, name)).toSorted((a, b) => b.length - a.length)[0];
         if (best === undefined) {
             throw new Error(`domain "${domain}" is not under any zone the Cloudflare API token can access`);
         }

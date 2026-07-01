@@ -13,7 +13,7 @@ export const intent = defineIntent((i) => {
         sshKey: env("HOST_SSH_KEY"),
     });
 
-    const gh = i.have.github("gh", {
+    i.have.github("gh", {
         token: env("GITHUB_TOKEN"),
     });
 

@@ -44,7 +44,7 @@ test("apply creates every resource in dependency order, then is idempotent", asy
     expect(first.steps).toHaveLength(16);
     expect(first.steps.every((step) => step.action === "create")).toBe(true);
     expect(first.steps.map((step) => step.id)).toEqual(linearize(graph));
-    expect(Object.keys(first.outputs).sort()).toEqual(Object.keys(graph.resources).sort());
+    expect(Object.keys(first.outputs).toSorted()).toEqual(Object.keys(graph.resources).toSorted());
     expect(first.orphans).toEqual([]);
 
     // Same providers (same world) => everything is found => all noop.

@@ -174,7 +174,7 @@ const initScript = (): string =>
         `version="${HISTOGRAM_QUANTILE_VERSION}"`,
         "node_os=$(uname -s | tr '[:upper:]' '[:lower:]')",
         "node_arch=$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: literal bash variable expansion in the init script
+        // literal bash variable expansion in the init script
         'url="https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F${version}/histogram-quantile_${node_os}_${node_arch}.tar.gz"',
         "cd /tmp",
         'wget -O histogram-quantile.tar.gz "$url"',
@@ -292,7 +292,7 @@ const otelCollectorConfig = (): string =>
         "exporters:",
         "  clickhousetraces:",
         "    datasource: tcp://clickhouse:9000/signoz_traces",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: literal OTel collector env-var reference
+        // literal OTel collector env-var reference
         "    low_cardinal_exception_grouping: ${env:LOW_CARDINAL_EXCEPTION_GROUPING}",
         "    use_new_schema: true",
         "  signozclickhousemetrics:",

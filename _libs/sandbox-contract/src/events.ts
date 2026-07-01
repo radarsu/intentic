@@ -21,13 +21,44 @@ export const AskQuestionSchema = z.object({
 });
 export type AskQuestion = z.infer<typeof AskQuestionSchema>;
 
-// One frame from an agent turn, relayed to the UI. `kind`-discriminated. `tool` surfaces agent actions
-// ("editing <file>" / "running <command>") so the UI shows what the agent is doing; `plan` and `question`
-// pause the turn until the user answers on a side channel (agent.decision / agent.answer).
+// One TodoWrite/Task checklist item, surfaced live so the UI shows the agent's plan-of-work (Claude Code style).
+export const TodoItemSchema = z.object({
+    content: z.string(),
+    status: z.enum(["pending", "in_progress", "completed"]),
+    activeForm: z.string().optional(),
+});
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+
+// One frame from an agent turn, relayed to the UI. `kind`-discriminated. The daemon normalizes the SDK's
+// ~40 SDKMessage types down to this union: high-value block types get a dedicated frame
+// (delta/thinking/tool/tool_result/todos/usage/init/compact); any SDK message without a UI mapping is
+// dropped. `plan`/`question` pause the turn until the user answers on a side channel. `parentToolUseId`
+// tags frames produced inside a subagent (Task tool).
 export const AgentEventSchema = z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("session"), sessionId: z.string() }),
-    z.object({ kind: z.literal("delta"), text: z.string() }),
-    z.object({ kind: z.literal("tool"), name: z.string(), target: z.string().optional() }),
+    // The SDK's init handshake; carries the model it actually resolved for the turn.
+    z.object({ kind: z.literal("init"), model: z.string() }),
+    z.object({ kind: z.literal("delta"), text: z.string(), parentToolUseId: z.string().optional() }),
+    z.object({ kind: z.literal("thinking"), text: z.string(), parentToolUseId: z.string().optional() }),
+    z.object({
+        kind: z.literal("tool"),
+        id: z.string().optional(),
+        name: z.string(),
+        target: z.string().optional(),
+        parentToolUseId: z.string().optional(),
+    }),
+    // The result of a tool call (edit diff / bash output), correlated to its `tool` frame by `id`.
+    z.object({ kind: z.literal("tool_result"), id: z.string().optional(), output: z.string(), isError: z.boolean().optional() }),
+    z.object({ kind: z.literal("todos"), items: z.array(TodoItemSchema) }),
+    z.object({
+        kind: z.literal("usage"),
+        costUsd: z.number().optional(),
+        inputTokens: z.number().optional(),
+        outputTokens: z.number().optional(),
+        durationMs: z.number().optional(),
+        numTurns: z.number().optional(),
+    }),
+    z.object({ kind: z.literal("compact"), trigger: z.string(), preTokens: z.number().optional(), postTokens: z.number().optional() }),
     z.object({ kind: z.literal("plan"), decisionId: z.string(), text: z.string() }),
     z.object({ kind: z.literal("question"), requestId: z.string(), questions: z.array(AskQuestionSchema) }),
     z.object({ kind: z.literal("error"), message: z.string() }),

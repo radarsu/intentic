@@ -36,5 +36,5 @@ export const listRepos = async (root: string): Promise<string[]> => {
             repos.push(entry.name);
         }
     }
-    return repos.sort();
+    return repos.toSorted();
 };

@@ -10,12 +10,13 @@ interface FakeHost {
     nonce: string;
     expiresAt: number;
 }
+const lockResult = (stdout: string): SshResult => ({ stdout, stderr: "", code: 0 });
+
 const createFakeFleet = (options: { unreachable?: ReadonlySet<string> } = {}) => {
     const locks = new Map<string, FakeHost>();
     const commands: Array<{ host: string; op: string }> = [];
     const clock = { now: 1_000 };
     const unreachable = options.unreachable ?? new Set<string>();
-    const res = (stdout: string): SshResult => ({ stdout, stderr: "", code: 0 });
     const executor: SshExecutor = {
         connect: (target: SshTarget) => {
             const host = `${target.address}:${target.port}`;
@@ -32,27 +33,27 @@ const createFakeFleet = (options: { unreachable?: ReadonlySet<string> } = {}) =>
                     if (op === "acquire") {
                         if (!fresh) {
                             locks.set(host, { nonce, expiresAt: clock.now + ttl });
-                            return Promise.resolve(res(cur === undefined ? "ACQUIRED" : "TOOKOVER"));
+                            return Promise.resolve(lockResult(cur === undefined ? "ACQUIRED" : "TOOKOVER"));
                         }
-                        return Promise.resolve(res(`HELD other-run`));
+                        return Promise.resolve(lockResult(`HELD other-run`));
                     }
                     if (op === "verify") {
-                        return Promise.resolve(res(cur?.nonce === nonce ? "OK" : `LOST ${cur?.nonce ?? ""}`));
+                        return Promise.resolve(lockResult(cur?.nonce === nonce ? "OK" : `LOST ${cur?.nonce ?? ""}`));
                     }
                     if (op === "renew") {
                         if (cur?.nonce === nonce) {
                             cur.expiresAt = clock.now + ttl;
                         }
-                        return Promise.resolve(res(cur?.nonce === nonce ? "OK" : "LOST"));
+                        return Promise.resolve(lockResult(cur?.nonce === nonce ? "OK" : "LOST"));
                     }
                     if (op === "release") {
                         if (cur?.nonce === nonce) {
                             locks.delete(host);
-                            return Promise.resolve(res("RELEASED"));
+                            return Promise.resolve(lockResult("RELEASED"));
                         }
-                        return Promise.resolve(res("SKIP"));
+                        return Promise.resolve(lockResult("SKIP"));
                     }
-                    return Promise.resolve(res(""));
+                    return Promise.resolve(lockResult(""));
                 },
                 dispose: () => Promise.resolve(),
             });

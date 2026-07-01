@@ -58,7 +58,7 @@ export const adopt = buildCommand<{ artifact?: string }>({
             artifactFile: ARTIFACT_FILE,
             intentRepo: INTENT_DIR,
             desiredStateRepo: TARGET_DIR,
-            applySecretKeys: Object.keys(desiredStateSecrets).sort(),
+            applySecretKeys: Object.keys(desiredStateSecrets).toSorted(),
             forgejoPasswordKey: ref.key,
         };
         // Seed the pipelines into the repo dirs BEFORE the push, so adopt's normal commit/push carries them.
@@ -89,8 +89,8 @@ export const adopt = buildCommand<{ artifact?: string }>({
         );
         out.result({
             repos,
-            intentSecrets: Object.keys(intentSecrets).sort(),
-            desiredStateSecrets: Object.keys(desiredStateSecrets).sort(),
+            intentSecrets: Object.keys(intentSecrets).toSorted(),
+            desiredStateSecrets: Object.keys(desiredStateSecrets).toSorted(),
         });
     },
 });

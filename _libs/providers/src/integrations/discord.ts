@@ -75,7 +75,7 @@ export const createDiscordProvider = (api: DiscordApi = discordApi): Provider =>
 
             // Collect webhook names across all text channels.
             const webhookNames: string[] = [];
-            for (const ch of channels.filter((ch) => ch.type === CHANNEL_TYPE_TEXT)) {
+            for (const ch of channels.filter((c) => c.type === CHANNEL_TYPE_TEXT)) {
                 const webhooks = await api.getChannelWebhooks(parsed.botToken, ch.id);
                 webhookNames.push(...webhooks.map((wh) => `${ch.name}:${wh.name}`));
             }

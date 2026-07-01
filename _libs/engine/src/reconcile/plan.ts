@@ -41,8 +41,8 @@ export const plan = async (graph: DesiredStateGraph, config: EngineConfig): Prom
                 if (name.endsWith(":")) {
                     // Prefix pattern: seed PENDING for every actual $ref in the graph that matches.
                     const prefix = `${id}.${name}`;
-                    for (const node of Object.values(graph.resources)) {
-                        JSON.stringify(node.inputs, (_k, v) => {
+                    for (const refNode of Object.values(graph.resources)) {
+                        JSON.stringify(refNode.inputs, (_k, v) => {
                             if (typeof v === "object" && v !== null && "$ref" in v && typeof v.$ref === "string" && v.$ref.startsWith(prefix)) {
                                 store.set(v.$ref as string, PENDING);
                             }

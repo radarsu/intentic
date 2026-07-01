@@ -105,21 +105,24 @@ export const collectDeployments = async (artifact: string, log: (message: string
         }
     }
 
-    return Object.values(graph.resources)
-        .filter((resource) => resource.type === "deployment")
-        .map((node) => {
-            const { registry, owner, repoName, tag, domain, port, env } = deploymentInputs.parse(node.inputs);
-            const komodoId = liveIds.get(node.id);
-            return {
-                name: node.id,
-                image: `${registry ?? ""}/${owner ?? ""}/${repoName ?? ""}:${tag ?? ""}`,
-                tag: tag ?? "",
-                ...(domain !== undefined ? { domain, url: `https://${domain}` } : {}),
-                ...(port !== undefined ? { port } : {}),
-                env,
-                live: komodoId !== undefined,
-                komodoUrl,
-                ...(komodoId !== undefined && komodoUrl !== "" ? { komodoDeploymentUrl: `${komodoUrl}/deployment/${komodoId}` } : {}),
-            };
-        });
+    return (
+        Object.values(graph.resources)
+            .filter((resource) => resource.type === "deployment")
+            // oxlint-disable-next-line oxc/no-map-spread -- conditional spreads omit optional keys, required under exactOptionalPropertyTypes
+            .map((node) => {
+                const { registry, owner, repoName, tag, domain, port, env } = deploymentInputs.parse(node.inputs);
+                const komodoId = liveIds.get(node.id);
+                return {
+                    name: node.id,
+                    image: `${registry ?? ""}/${owner ?? ""}/${repoName ?? ""}:${tag ?? ""}`,
+                    tag: tag ?? "",
+                    ...(domain !== undefined ? { domain, url: `https://${domain}` } : {}),
+                    ...(port !== undefined ? { port } : {}),
+                    env,
+                    live: komodoId !== undefined,
+                    komodoUrl,
+                    ...(komodoId !== undefined && komodoUrl !== "" ? { komodoDeploymentUrl: `${komodoUrl}/deployment/${komodoId}` } : {}),
+                };
+            })
+    );
 };

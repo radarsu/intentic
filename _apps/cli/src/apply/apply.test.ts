@@ -35,7 +35,7 @@ describe("the local resolve → write → read → apply pipeline", () => {
         const result = await reconcile(roundTripped, { providers, env: fullEnv, probe: async () => true, log: () => {} }, { maxIterations: 5 });
 
         expect(result.converged).toBe(true);
-        expect(Object.keys(result.outcome.outputs).sort()).toEqual(Object.keys(roundTripped.resources).sort());
+        expect(Object.keys(result.outcome.outputs).toSorted()).toEqual(Object.keys(roundTripped.resources).toSorted());
     });
 
     it("derives access info from the real resolved graph and writes a secret-free access.md", async () => {

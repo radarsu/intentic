@@ -71,10 +71,10 @@ test("a per-app binding node is emitted per (app, instance) and depends on the i
 test("the deployment receives the binding connection env vars (DATABASE_URL, VALKEY_URL + REDIS_URL alias) and depends on each binding", () => {
     const nodes = nodesById(intentWithBindings);
     const deployment = nodes.get("app.prod");
-    const env = deployment?.inputs["env"] as Record<string, unknown>;
-    expect(env["DATABASE_URL"]).toEqual({ kind: "ref", resourceId: "app-uses-db", output: "url" });
-    expect(env["VALKEY_URL"]).toEqual({ kind: "ref", resourceId: "app-uses-cache", output: "url" });
-    expect(env["REDIS_URL"]).toEqual({ kind: "ref", resourceId: "app-uses-cache", output: "url" });
+    const envVars = deployment?.inputs["env"] as Record<string, unknown>;
+    expect(envVars["DATABASE_URL"]).toEqual({ kind: "ref", resourceId: "app-uses-db", output: "url" });
+    expect(envVars["VALKEY_URL"]).toEqual({ kind: "ref", resourceId: "app-uses-cache", output: "url" });
+    expect(envVars["REDIS_URL"]).toEqual({ kind: "ref", resourceId: "app-uses-cache", output: "url" });
     expect(deployment?.explicitDependsOn).toEqual(expect.arrayContaining(["app-uses-db", "app-uses-cache"]));
 });
 
@@ -89,7 +89,8 @@ test("an author env var overrides an injected binding var (binding spread before
         ],
     };
     const deployment = nodesById(intent).get("app.prod");
-    expect((deployment?.inputs["env"] as Record<string, unknown>)["DATABASE_URL"]).toBe("postgres://custom");
+    expect(deployment).toBeDefined();
+    expect((deployment!.inputs["env"] as Record<string, unknown>)["DATABASE_URL"]).toBe("postgres://custom");
 });
 
 test("using an undeclared backing is a descriptive error", () => {
@@ -168,10 +169,10 @@ test("the auth binding injects OIDC_* env, depends on the instance + its route, 
     expect(binding?.type).toBe("authentik-client");
     expect(binding?.inputs["redirectDomains"]).toEqual(["app.example.com"]);
     expect(binding?.explicitDependsOn).toEqual(expect.arrayContaining(["auth", "cf-auth-example-com"]));
-    const env = nodes.get("app.prod")?.inputs["env"] as Record<string, unknown>;
-    expect(env["OIDC_ISSUER"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "issuer" });
-    expect(env["OIDC_CLIENT_ID"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "clientId" });
-    expect(env["OIDC_CLIENT_SECRET"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "clientSecret" });
+    const envVars = nodes.get("app.prod")?.inputs["env"] as Record<string, unknown>;
+    expect(envVars["OIDC_ISSUER"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "issuer" });
+    expect(envVars["OIDC_CLIENT_ID"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "clientId" });
+    expect(envVars["OIDC_CLIENT_SECRET"]).toEqual({ kind: "ref", resourceId: "app-uses-auth", output: "clientSecret" });
 });
 
 test("the object-storage binding injects S3_* env and depends on the instance", () => {
@@ -180,9 +181,9 @@ test("the object-storage binding injects S3_* env and depends on the instance", 
     expect(binding?.type).toBe("garage-bucket");
     expect(binding?.inputs["bucket"]).toBe("app");
     expect(binding?.explicitDependsOn).toContain("store");
-    const env = nodes.get("app.prod")?.inputs["env"] as Record<string, unknown>;
-    expect(env["S3_ENDPOINT"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "endpoint" });
-    expect(env["S3_ACCESS_KEY"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "accessKey" });
-    expect(env["S3_SECRET_KEY"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "secretKey" });
-    expect(env["S3_BUCKET"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "bucket" });
+    const envVars = nodes.get("app.prod")?.inputs["env"] as Record<string, unknown>;
+    expect(envVars["S3_ENDPOINT"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "endpoint" });
+    expect(envVars["S3_ACCESS_KEY"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "accessKey" });
+    expect(envVars["S3_SECRET_KEY"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "secretKey" });
+    expect(envVars["S3_BUCKET"]).toEqual({ kind: "ref", resourceId: "app-uses-store", output: "bucket" });
 });

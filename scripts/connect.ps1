@@ -34,7 +34,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 # The central platform is a single static domain (never self-hosted), so PlatformUrl defaults to it. LOCAL DEV
 # ONLY: to test against a platform on your own machine, pass -PlatformUrl http://host.docker.internal:<apiPort>
 # (the sandbox container reaches your host's platform there) — never shown in the product UI.
-if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://platform.intentic.dev' } }
+if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://app.intentic.dev' } }
 if (-not $ConnectToken) { $ConnectToken = $env:CONNECT_TOKEN }
 # The latest RELEASE image via the moving `stable` tag (pulled fresh below), never :latest — see connect.sh for
 # why (the :latest/hand-tagged builds carry internal version 0.0.0, whose @intentic/* deps are unpublished, so
@@ -229,4 +229,6 @@ Write-Host 'Return to the platform — setup will continue automatically once it
 if (-not $SelfHost) {
     Write-Host 'Reachable only — no deploy target. To deploy an app onto this PC later, re-run with $env:SELF_HOST=''1''.'
 }
-Write-Host "Logs: docker logs -f $Container   Stop: docker rm -f $StopList"
+Write-Host "Logs: docker logs -f $Container"
+Write-Host "Stop (keeps your /work): docker stop $StopList"
+Write-Host 'Reset (also removes the persistent /work volume): irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.ps1 | iex'

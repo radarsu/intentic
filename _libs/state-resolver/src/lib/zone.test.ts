@@ -20,7 +20,7 @@ test("collectDomains gathers every app-environment and service domain", () => {
         ],
         [{ id: "obs", kind: "signoz", on: "host", expose: "cf", domain: "signoz.example.com" }],
     );
-    expect(collectDomains(set).sort()).toEqual(["app.example.com", "signoz.example.com", "staging.example.com"]);
+    expect(collectDomains(set).toSorted()).toEqual(["app.example.com", "signoz.example.com", "staging.example.com"]);
 });
 
 test("selectZone matches the apex and subdomains to their zone", () => {

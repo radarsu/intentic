@@ -194,7 +194,7 @@ export const komodoApi: KomodoApi = {
     },
     listUsers: async ({ baseUrl, jwt }) => {
         const users = await read({ baseUrl, module: "read", type: "ListUsers", params: { service_users: "Include" }, jwt }, z.array(rawUserSchema));
-        return users.map((user) => ({ id: user._id, username: user.username, enabled: user.enabled }));
+        return users.map((user) => ({ id: user["_id"], username: user.username, enabled: user.enabled }));
     },
     createUser: async ({ baseUrl, jwt, username, password }) => {
         await post({ baseUrl, module: "write", type: "CreateLocalUser", params: { username, password }, jwt });

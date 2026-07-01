@@ -33,7 +33,7 @@ const orderedHosts = (targets: readonly SshTarget[]): SshTarget[] => {
     for (const target of targets) {
         byKey.set(lockKey(target), target);
     }
-    return [...byKey.values()].sort((a, b) => lockKey(a).localeCompare(lockKey(b)));
+    return [...byKey.values()].toSorted((a, b) => lockKey(a).localeCompare(lockKey(b)));
 };
 
 // Identifies the run holding the lock, surfaced to whoever is blocked. Sanitized to a space-free token so it

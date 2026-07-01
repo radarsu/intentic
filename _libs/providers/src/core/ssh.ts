@@ -50,13 +50,14 @@ export interface HostKeyStore {
 // A process-lifetime store: trusts the first key seen per host and verifies later connects against it, but
 // nothing survives the process. The default for `sshExecutor`, and the safe baseline for tests/e2e (fresh
 // hosts re-pin per run).
+const hostKeyId = (host: string, port: number): string => `${host}:${port}`;
+
 export const inMemoryHostKeyStore = (): HostKeyStore => {
     const keys = new Map<string, string>();
-    const id = (host: string, port: number): string => `${host}:${port}`;
     return {
-        get: (host, port) => Promise.resolve(keys.get(id(host, port))),
+        get: (host, port) => Promise.resolve(keys.get(hostKeyId(host, port))),
         set: (host, port, key) => {
-            keys.set(id(host, port), key);
+            keys.set(hostKeyId(host, port), key);
             return Promise.resolve();
         },
     };

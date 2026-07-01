@@ -18,7 +18,7 @@
 #   CONNECT_TOKEN  the per-user connection token the platform mints + fills into the one-liner
 #
 # Platform statics (defaulted below — overridden only for local dev against a non-prod platform):
-#   PLATFORM_URL         the platform base the sandbox registers back to (default: https://platform.intentic.dev)
+#   PLATFORM_URL         the platform base the sandbox registers back to (default: https://app.intentic.dev)
 #   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id the daemon verifies sign-in against (default: hardcoded below)
 #
 # Optional env:
@@ -38,7 +38,7 @@ set -eu
 # registers its public URL at ${PLATFORM_URL}/sandbox/register. LOCAL DEV ONLY: to test against a platform running
 # on your own machine, prepend PLATFORM_URL=http://host.docker.internal:<apiPort> (the sandbox container reaches
 # your host's platform there, not localhost) — this is never shown in the product UI.
-PLATFORM_URL="${PLATFORM_URL:-${1:-https://platform.intentic.dev}}"
+PLATFORM_URL="${PLATFORM_URL:-${1:-https://app.intentic.dev}}"
 CONNECT_TOKEN="${CONNECT_TOKEN:-${2:-}}"
 # The latest RELEASE image via the moving `stable` tag (pulled fresh below), never :latest: the release pipeline
 # bumps every @intentic/* package to the release version, publishes them to npm, THEN builds this image and moves
@@ -440,4 +440,6 @@ echo "Return to the platform — setup will continue automatically once it conne
 if [ -z "$SELF_HOST" ]; then
     echo "Reachable only — no deploy target. To deploy an app onto this machine later, re-run with SELF_HOST=1 (needs sudo)."
 fi
-echo "Logs: docker logs -f ${CONTAINER}   Stop: docker rm -f ${CONTAINER} intentic-sandbox-tunnel"
+echo "Logs: docker logs -f ${CONTAINER}"
+echo "Stop (keeps your /work): docker stop ${CONTAINER} intentic-sandbox-tunnel"
+echo "Reset (also removes the persistent /work volume): curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.sh | sh"

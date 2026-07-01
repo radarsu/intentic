@@ -59,7 +59,7 @@ export const prune = async (previous: DesiredStateGraph, current: DesiredStateGr
 
     const deleted: PrunedResource[] = [];
     const skipped: PrunedResource[] = [];
-    for (const id of [...linearize(previous)].reverse()) {
+    for (const id of [...linearize(previous)].toReversed()) {
         if (!removed.has(id)) {
             continue;
         }

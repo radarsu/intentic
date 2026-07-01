@@ -177,7 +177,7 @@ const up = async (): Promise<void> => {
             break;
         } catch (error) {
             if (i >= 90) {
-                throw new Error(`host SSH never came up: ${String(error)}`);
+                throw new Error(`host SSH never came up: ${String(error)}`, { cause: error });
             }
             await sleep(1000);
         }

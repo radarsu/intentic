@@ -27,6 +27,8 @@ const serviceImages = (yaml: string): Record<string, string> => {
     return images;
 };
 
+const ok = (stdout = "", code = 0): SshResult => ({ stdout, stderr: "", code });
+
 // A stateful host shared by host/forgejo/forgejo-runner/komodo/tunnel/signoz: Docker-ready, default route ->
 // 10.0.0.5, and it remembers which containers have been started (and on which image) so a second apply reads
 // them as running on the desired pin — exercising the image-drift diff's idempotency.
@@ -38,7 +40,6 @@ const fakeSsh = (): SshExecutor => {
     let tokenPersisted = false;
     let gitTokenPersisted = false;
     let packagesTokenPersisted = false;
-    const ok = (stdout = "", code = 0): SshResult => ({ stdout, stderr: "", code });
     return {
         connect: async () => ({
             exec: async (command): Promise<SshResult> => {
@@ -184,7 +185,9 @@ const fakeForgejoApi = (): ForgejoApi => {
         updateHook: async ({ name, id, config, events }) => {
             hooks.set(
                 name,
-                (hooks.get(name) ?? []).map((hook) => (hook.id === id ? { ...hook, config, events } : hook)),
+                (hooks.get(name) ?? []).map((hook) =>
+                    hook.id === id ? { id: hook.id, type: hook.type, config, events, active: hook.active } : hook,
+                ),
             );
         },
         latestCommit: async ({ name, branch }) => (files.has(`${name}@${branch}`) ? `sha-${name}-${branch}` : undefined),
@@ -289,7 +292,7 @@ test("the full provider suite reconciles an app end-to-end, then is idempotent",
         }
     }
     // The whole derived suite is present: git/CI, deploy, repo, ci, deployment, routes.
-    expect([...byId.keys()].sort()).toEqual(
+    expect([...byId.keys()].toSorted()).toEqual(
         [
             "host",
             "cf",
@@ -304,7 +307,7 @@ test("the full provider suite reconciles an app end-to-end, then is idempotent",
             "cf-app-example-com",
             "host-backup",
             "host-tunnel",
-        ].sort(),
+        ].toSorted(),
     );
     // Komodo's output is url/internalUrl only — the stale v1 passkey was dropped.
     expect(first.outputs["host-deploy"]).toEqual({ url: "https://deploy.example.com", internalUrl: "http://10.0.0.5:9120" });

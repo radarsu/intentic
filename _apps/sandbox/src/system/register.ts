@@ -19,7 +19,7 @@ export const platformBaseFrom = (platformUrl: string): string | undefined => {
 
 // Local-dev platform hosts are never publicly routable, so an https platform running there carries a
 // self-signed cert — Node's TLS verification would reject it (the daemon would log "could not reach the
-// platform"). Skip verification for these hosts only; a public platform (platform.intentic.dev) still verifies.
+// platform"). Skip verification for these hosts only; a public platform (app.intentic.dev) still verifies.
 const isLocalDevHost = (hostname: string): boolean =>
     hostname === "host.docker.internal" || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 

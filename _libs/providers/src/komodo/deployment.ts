@@ -70,7 +70,7 @@ const normalizeEnv = (env: string | readonly { readonly variable: string; readon
             const eq = line.indexOf("=");
             return eq < 0 ? line : `${line.slice(0, eq).trim()}=${line.slice(eq + 1).trim()}`;
         })
-        .sort()
+        .toSorted()
         .join("\n");
 };
 

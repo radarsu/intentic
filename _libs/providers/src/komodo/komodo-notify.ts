@@ -26,13 +26,14 @@ const desiredConfig = (parsed: KomodoNotifyInputs): AlerterConfig => ({
     except_resources: [],
 });
 
+const targetKey = (target: ResourceTarget): string => `${target.type}:${target.id}`;
+
 const sameTargets = (a: readonly ResourceTarget[], b: readonly ResourceTarget[]): boolean => {
     if (a.length !== b.length) {
         return false;
     }
-    const key = (target: ResourceTarget): string => `${target.type}:${target.id}`;
-    const set = new Set(b.map(key));
-    return a.every((target) => set.has(key(target)));
+    const set = new Set(b.map(targetKey));
+    return a.every((target) => set.has(targetKey(target)));
 };
 
 // CD notifications: a native Komodo Discord Alerter named <app>-notify (= ctx.id), scoped to the app's

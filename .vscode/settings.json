@@ -2,11 +2,11 @@
     // Editor and explorer.
     "editor.bracketPairColorization.enabled": true,
     "editor.codeActionsOnSave": {
-        "source.fixAll.biome": "explicit",
+        "source.fixAll.oxc": "explicit",
         "source.addMissingImports": "always",
         "source.sortImports": "always"
     },
-    "editor.defaultFormatter": "biomejs.biome",
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.detectIndentation": false,
     "editor.fontLigatures": true,
     "editor.formatOnSave": true,
@@ -31,7 +31,7 @@
         ".env.local": ".env.local.template",
 
         // * Node.js
-        "package.json": ".editorconfig, .gitignore, .npmrc, biome.json, pnpm-workspace.yaml, pnpm-lock.yaml, *.md, tsconfig.json, tsconfig.*.json, turbo.json, LICENSE, vitest.config.ts, .releaserc.json",
+        "package.json": ".editorconfig, .gitignore, .npmrc, .oxlintrc.json, .prettierrc.json, .prettierignore, pnpm-workspace.yaml, pnpm-lock.yaml, *.md, tsconfig.json, tsconfig.*.json, turbo.json, LICENSE, vitest.config.ts, .releaserc.json",
 
         // * TypeScript
         "*.js": "$(capture).d.ts, $(capture).js.map, $(capture).d.ts.map"
@@ -88,12 +88,12 @@
         "editor.tabSize": 4
     },
     "[typescript]": {
-        "editor.defaultFormatter": "biomejs.biome"
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
     "[json]": {
-        "editor.defaultFormatter": "biomejs.biome"
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
     "[jsonc]": {
-        "editor.defaultFormatter": "biomejs.biome"
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
     }
 }

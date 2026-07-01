@@ -46,9 +46,10 @@ test("read returns undefined and logs when the host is unreachable", async () =>
     expect(logs.some((message) => message.includes("not reachable"))).toBe(true);
 });
 
+const noDocker = (command: string): SshResult =>
+    command.includes("docker") ? { stdout: "", stderr: "docker: command not found", code: 127 } : { stdout: "10.0.0.5", stderr: "", code: 0 };
+
 test("read propagates (does not swallow) a missing Docker", async () => {
-    const noDocker = (command: string): SshResult =>
-        command.includes("docker") ? { stdout: "", stderr: "docker: command not found", code: 127 } : { stdout: "10.0.0.5", stderr: "", code: 0 };
     const provider = createHostProvider(reachable(noDocker));
     await expect(provider.read(inputs, ctx())).rejects.toThrow(/not Docker-ready/);
 });

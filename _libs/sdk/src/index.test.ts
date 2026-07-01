@@ -60,7 +60,7 @@ test("linearize derives a topological order (dependency before dependent)", () =
 
     const order = linearize(graph);
     expect(order[0]).toBe("host");
-    expect([...order].sort()).toEqual(Object.keys(graph.resources).sort());
+    expect([...order].toSorted()).toEqual(Object.keys(graph.resources).toSorted());
 });
 
 test("want.service derives a signoz node + route, and want.app's observe wires the app's deployment to its OTLP endpoint", () => {

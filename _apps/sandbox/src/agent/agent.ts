@@ -7,7 +7,7 @@ import {
     type SDKMessage,
     tool,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentEvent, AskQuestion } from "@intentic/sandbox-contract";
+import type { AgentEvent, AskQuestion, TodoItem } from "@intentic/sandbox-contract";
 import { z } from "zod";
 import { type AgentTool, mcpServersOf } from "../workspace/tools.js";
 import { createPlanRequest, createQuestionRequest, type QuestionResponse } from "./agent-requests.js";
@@ -57,8 +57,45 @@ const toolTarget = (input: unknown): string | undefined => {
     return typeof command === "string" ? command : undefined;
 };
 
-// Map the SDK message stream onto AgentEvents (session / delta / tool / error). Shared by the plain and
-// plan paths; does NOT emit the terminal `done` (callers do that once the whole turn settles).
+// Flatten a tool_result block's content (a string, or an array of text/other blocks) to plain text — the
+// edit diff / bash output the UI shows under the tool card. Non-text blocks are summarised by type.
+const resultText = (content: unknown): string => {
+    if (typeof content === "string") {
+        return content;
+    }
+    if (!Array.isArray(content)) {
+        return "";
+    }
+    return content
+        .map((block) => {
+            const b = block as { type?: string; text?: string };
+            return b.type === "text" && typeof b.text === "string" ? b.text : `[${b.type ?? "block"}]`;
+        })
+        .join("");
+};
+
+// Pull the TodoWrite/Task checklist off a tool_use input, or undefined if the shape doesn't match.
+const todoItems = (input: unknown): TodoItem[] | undefined => {
+    const todos = (input as { todos?: unknown }).todos;
+    if (!Array.isArray(todos)) {
+        return undefined;
+    }
+    return todos.map((t) => {
+        const item = t as { content?: unknown; status?: unknown; activeForm?: unknown };
+        const todo: TodoItem = {
+            content: String(item.content ?? ""),
+            status: item.status === "in_progress" || item.status === "completed" ? item.status : "pending",
+        };
+        if (typeof item.activeForm === "string") {
+            todo.activeForm = item.activeForm;
+        }
+        return todo;
+    });
+};
+
+// Normalize the SDK's SDKMessage stream onto AgentEvents. High-value block types get a dedicated frame;
+// any SDK message without a mapping is dropped. Shared by the plain and plan paths; does NOT emit the
+// terminal `done` (callers do that once the whole turn settles).
 async function* streamSdk(queryFn: QueryFn, prompt: string, options: Options): AsyncGenerator<AgentEvent> {
     let sessionSent = false;
     for await (const message of queryFn({ prompt, options })) {
@@ -67,30 +104,98 @@ async function* streamSdk(queryFn: QueryFn, prompt: string, options: Options): A
             sessionSent = true;
             yield { kind: "session", sessionId };
         }
+        // Frames produced inside a subagent (Task tool) carry its id so the UI can group them.
+        const parent = (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? undefined;
+        const withParent = parent !== undefined ? { parentToolUseId: parent } : {};
 
         if (message.type === "stream_event") {
-            const event = message.event as { type: string; delta?: { type: string; text?: string } };
+            // Token deltas — text and extended thinking both arrive here (partial messages are enabled).
+            const event = message.event as { type: string; delta?: { type: string; text?: string; thinking?: string } };
             if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && typeof event.delta.text === "string") {
-                yield { kind: "delta", text: event.delta.text };
+                yield { kind: "delta", text: event.delta.text, ...withParent };
+            } else if (event.type === "content_block_delta" && event.delta?.type === "thinking_delta" && typeof event.delta.thinking === "string") {
+                yield { kind: "thinking", text: event.delta.thinking, ...withParent };
             }
         } else if (message.type === "assistant") {
+            // Text/thinking already streamed as deltas above; here we only surface tool calls (and the
+            // TodoWrite checklist, which is a tool call we render as its own live list).
             if (message.error !== undefined) {
                 yield { kind: "error", message: `agent error: ${message.error}` };
             } else {
-                const content = message.message.content as ReadonlyArray<{ type: string; name?: string; input?: unknown }>;
+                const content = message.message.content as ReadonlyArray<{ type: string; id?: string; name?: string; input?: unknown }>;
                 for (const block of content) {
-                    if (block.type === "tool_use" && typeof block.name === "string") {
-                        const target = toolTarget(block.input);
-                        yield target !== undefined ? { kind: "tool", name: block.name, target } : { kind: "tool", name: block.name };
+                    if (block.type !== "tool_use" || typeof block.name !== "string") {
+                        continue;
                     }
+                    if (block.name === "TodoWrite") {
+                        const items = todoItems(block.input);
+                        if (items !== undefined) {
+                            yield { kind: "todos", items };
+                            continue;
+                        }
+                    }
+                    const target = toolTarget(block.input);
+                    yield {
+                        kind: "tool",
+                        name: block.name,
+                        ...(block.id !== undefined ? { id: block.id } : {}),
+                        ...(target !== undefined ? { target } : {}),
+                        ...withParent,
+                    };
                 }
             }
+        } else if (message.type === "user") {
+            // Tool results come back as tool_result blocks on a (usually synthetic) user message — this is
+            // where edit diffs and bash output live.
+            const content = message.message.content;
+            if (Array.isArray(content)) {
+                for (const block of content as ReadonlyArray<{ type?: string; tool_use_id?: string; content?: unknown; is_error?: boolean }>) {
+                    if (block.type !== "tool_result") {
+                        continue;
+                    }
+                    yield {
+                        kind: "tool_result",
+                        output: resultText(block.content),
+                        ...(block.tool_use_id !== undefined ? { id: block.tool_use_id } : {}),
+                        ...(block.is_error === true ? { isError: true } : {}),
+                    };
+                }
+            }
+        } else if (message.type === "system") {
+            if (message.subtype === "init") {
+                // Guard the model: the frame's schema requires a string, so never forward an empty init.
+                if (message.model) {
+                    yield { kind: "init", model: message.model };
+                }
+            } else if (message.subtype === "compact_boundary") {
+                const meta = message.compact_metadata;
+                yield {
+                    kind: "compact",
+                    trigger: meta.trigger,
+                    preTokens: meta.pre_tokens,
+                    ...(meta.post_tokens !== undefined ? { postTokens: meta.post_tokens } : {}),
+                };
+            }
         } else if (message.type === "result") {
+            // Only surface accounting when the SDK actually reported it (real turns always do; the empty
+            // frame would be noise).
+            if (message.usage !== undefined || message.total_cost_usd !== undefined) {
+                yield {
+                    kind: "usage",
+                    ...(message.total_cost_usd !== undefined ? { costUsd: message.total_cost_usd } : {}),
+                    ...(message.usage?.input_tokens !== undefined ? { inputTokens: message.usage.input_tokens } : {}),
+                    ...(message.usage?.output_tokens !== undefined ? { outputTokens: message.usage.output_tokens } : {}),
+                    ...(message.duration_ms !== undefined ? { durationMs: message.duration_ms } : {}),
+                    ...(message.num_turns !== undefined ? { numTurns: message.num_turns } : {}),
+                };
+            }
             if (message.subtype !== "success") {
                 yield { kind: "error", message: `agent did not complete (${message.subtype})` };
             }
             return;
         }
+        // Any other SDK message type (hook / task / plugin / status / …) has no UI mapping — dropped, as
+        // before. New high-value types earn a dedicated frame above; the rest stay silent rather than noisy.
     }
 }
 
@@ -125,6 +230,15 @@ const baseOptions = (request: AgentRequest, abortController: AbortController, pe
     includePartialMessages: true,
     permissionMode,
     abortController,
+    // Inherit Claude Code's coding-tuned system prompt. The Agent SDK sends an EMPTY system prompt when this
+    // is omitted, which is the main reason a bare SDK turn feels weaker at coding than the CLI/VSCode product.
+    systemPrompt: { type: "preset", preset: "claude_code" },
+    // Load the workspace's .claude/ config: CLAUDE.md memory, skills, subagents (.claude/agents), settings,
+    // hooks, and .mcp.json — plus the user tier. The SDK default is [] (loads nothing), so every filesystem
+    // capability was invisible until now. New skills/subagents/hooks then arrive as files, no code change.
+    settingSources: ["user", "project"],
+    // Back up files before Write/Edit so a turn's changes can be rewound. Prerequisite for the UI's undo.
+    enableFileCheckpointing: true,
     env: {
         ...process.env,
         // We run with --dangerously-skip-permissions (bypassPermissions) because the container IS the
@@ -178,9 +292,11 @@ export async function* runAgent(request: AgentRequest, queryFn: QueryFn = defaul
 // approval), asks clarifying questions via AskUserQuestion (aliased to our `ask` tool → `question` event),
 // and once approved executes with every tool auto-accepted. `canUseTool` runs concurrently with the SDK
 // loop, so a queue bridges both into this generator.
+const noop = (): void => {};
+
 async function* runPlanTurn(request: AgentRequest, queryFn: QueryFn, abortController: AbortController): AsyncGenerator<AgentEvent> {
     const queue: AgentEvent[] = [];
-    let wake: () => void = () => {};
+    let wake: () => void = noop;
     let finished = false;
     const push = (event: AgentEvent): void => {
         queue.push(event);
@@ -273,7 +389,7 @@ async function* runPlanTurn(request: AgentRequest, queryFn: QueryFn, abortContro
             await new Promise<void>((resolve) => {
                 wake = resolve;
             });
-            wake = () => {};
+            wake = noop;
         }
     } finally {
         await pump;

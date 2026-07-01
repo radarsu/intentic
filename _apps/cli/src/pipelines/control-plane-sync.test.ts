@@ -10,8 +10,9 @@ import { syncControlPlaneSecrets } from "./control-plane-sync.js";
 
 // A minimal artifact whose forgejo node carries the admin identity, plus one $secret input per listed key so
 // `collectSecrets` discovers them. FORGEJO_ADMIN_PASSWORD is always present (the node's adminPassword).
+const secretInput = (source: SecretSource, key: string) => ({ $secret: { source, key } });
+
 const graph = (secrets: { readonly generated?: readonly string[]; readonly env?: readonly string[] }): DesiredStateGraph => {
-    const secretInput = (source: SecretSource, key: string) => ({ $secret: { source, key } });
     return {
         version: 1,
         resources: {
