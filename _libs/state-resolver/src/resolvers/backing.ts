@@ -4,6 +4,7 @@ import type { BackingCapability, BackingIntent, HostInput } from "@intentic/need
 import type { ResolvedNode, ResourceType } from "@intentic/resources";
 import { appSlug, backingPort, bindingId, bucketName, cacheUser, dbName, secretKey } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute, routeId } from "./route.js";
 
@@ -50,14 +51,6 @@ const envContract: Readonly<Record<BackingCapability, readonly (readonly [string
         ["S3_BUCKET", "bucket"],
     ],
 };
-
-// The SSH connection block from a HostInput (the backing instance + its binding nodes both deploy onto it).
-const sshOf = (input: HostInput): Record<string, unknown> => ({
-    address: input.address,
-    user: input.user,
-    sshKey: input.sshKey,
-    ...(input.port !== undefined ? { port: input.port } : {}),
-});
 
 // The generated admin secret key a backing instance and its binding nodes share (same key -> same value via
 // .secrets.json), so a binding can authenticate to the instance to mint per-app credentials. database/cache

@@ -1,14 +1,9 @@
 import type { EngineEvent } from "@intentic/engine";
 
 // How a command renders: human prose (default), one JSON document at the end, or a live NDJSON event
-// stream. Selected by INTENTIC_OUTPUT so a backend driving the CLI as a subprocess sets it once; humans
-// get `text` unchanged.
+// stream. Selected by the INTENTIC_OUTPUT env var (env.config.ts `intenticOutput`) so a backend driving the
+// CLI as a subprocess sets it once; humans get `text` unchanged.
 export type OutputMode = "text" | "json" | "ndjson";
-
-export const outputMode = (env: Readonly<Record<string, string | undefined>>): OutputMode => {
-    const value = env["INTENTIC_OUTPUT"];
-    return value === "json" || value === "ndjson" ? value : "text";
-};
 
 interface Sink {
     readonly write: (chunk: string) => void;

@@ -22,6 +22,7 @@ catalog:
   '@stricli/core': 1.2.8
   '@types/node': 24.13.2
   '@types/ssh2': 1.15.5
+  eta: 4.6.0
   hono: 4.12.27
   jose: 6.2.3
   knip: 6.23.0
@@ -35,6 +36,7 @@ catalog:
   turbo: 2.10.0
   typescript: 5.9.3
   vitest: 4.1.9
+  yaml: 2.9.0
   zod: 4.4.3
 
 overrides:

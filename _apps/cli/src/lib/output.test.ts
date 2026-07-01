@@ -1,6 +1,7 @@
 import type { EngineEvent } from "@intentic/engine";
-import { expect, test } from "vitest";
-import { createOutput, outputMode } from "./output.js";
+import { afterEach, expect, test } from "vitest";
+import { loadConfig } from "../env.config.js";
+import { createOutput } from "./output.js";
 
 const sink = () => {
     const chunks: string[] = [];
@@ -10,11 +11,19 @@ const sink = () => {
 const pruneDeleted: EngineEvent = { kind: "prune", state: "deleted", id: "old", type: "forgejo" };
 const nodeStart: EngineEvent = { kind: "node", phase: "apply", state: "start", id: "host", type: "host" };
 
-test("outputMode reads INTENTIC_OUTPUT and defaults to text", () => {
-    expect(outputMode({ INTENTIC_OUTPUT: "json" })).toBe("json");
-    expect(outputMode({ INTENTIC_OUTPUT: "ndjson" })).toBe("ndjson");
-    expect(outputMode({ INTENTIC_OUTPUT: "garbage" })).toBe("text");
-    expect(outputMode({})).toBe("text");
+afterEach(() => {
+    delete process.env["INTENTIC_OUTPUT"];
+});
+
+test("intenticOutput reads INTENTIC_OUTPUT and defaults to text", () => {
+    process.env["INTENTIC_OUTPUT"] = "json";
+    expect(loadConfig().intenticOutput).toBe("json");
+    process.env["INTENTIC_OUTPUT"] = "ndjson";
+    expect(loadConfig().intenticOutput).toBe("ndjson");
+    process.env["INTENTIC_OUTPUT"] = "garbage";
+    expect(loadConfig().intenticOutput).toBe("text");
+    delete process.env["INTENTIC_OUTPUT"];
+    expect(loadConfig().intenticOutput).toBe("text");
 });
 
 test("text mode renders prune/orphan events as the human strings and stays silent on progress events", () => {

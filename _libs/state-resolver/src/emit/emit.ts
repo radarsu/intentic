@@ -4,6 +4,7 @@ import { controlPlaneHostId } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { adminUsername, tunnelId, tunnelName } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 import { resolveApp } from "../resolvers/app.js";
 import { resolveBacking } from "../resolvers/backing.js";
 import { defaultBackupInput, resolveBackup } from "../resolvers/backup.js";
@@ -23,14 +24,6 @@ export interface Assignment {
 // The option set this emitter knows how to build. Today's only valid combination; once a second option
 // (e.g. Gitlab) lands, emit branches on the assignment instead of asserting it.
 const supportedOptions = new Set(["forgejo", "komodo", "ssh-linux", "cloudflare-tunnel"]);
-
-// Extract the SSH connection block from a HostInput (shared by every node deployed onto a host over SSH).
-const sshOf = (input: HostInput): Record<string, unknown> => ({
-    address: input.address,
-    user: input.user,
-    sshKey: input.sshKey,
-    ...(input.port !== undefined ? { port: input.port } : {}),
-});
 
 // Build the concrete RawNodes for one assignment. One shared control plane (Forgejo + Komodo + runner) is
 // derived onto the control-plane host (first declared host with apps). Worker hosts get Komodo Periphery

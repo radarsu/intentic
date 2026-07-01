@@ -17,6 +17,9 @@ export interface HostInput {
     sshKey: SecretRef;
     port?: number;
     updatePolicy?: UpdatePolicy;
+    // How the sandbox reaches this host's SSH: "direct" (default) dials address:port; "cloudflared" tunnels
+    // through the host's own Cloudflare SSH tunnel — for a NAT'd self-host the sandbox can't reach by IP.
+    via?: "direct" | "cloudflared";
 }
 
 // The Cloudflare account an app is exposed through. Only the API token is authored: the zone is discovered

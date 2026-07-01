@@ -1,4 +1,5 @@
 import { buildCommand, type CommandContext } from "@stricli/core";
+import { loadConfig } from "../env.config.js";
 import { createSandboxTunnel } from "./sandbox-tunnel.js";
 
 // Used by the sandbox bootstrap (connect.sh / the workspace provider), not operators directly: stand up the
@@ -29,15 +30,15 @@ export const sandboxTunnel = buildCommand<{ service: string; previewService?: st
         },
     },
     async func(this: CommandContext, flags: { service: string; previewService?: string; zone?: string }) {
-        const apiToken = process.env["CLOUDFLARE_API_TOKEN"];
-        const connectToken = process.env["CONNECT_TOKEN"];
-        if (apiToken === undefined || apiToken === "") {
+        const config = loadConfig();
+        const { cloudflareApiToken: apiToken, connectToken } = config;
+        if (apiToken === "") {
             throw new Error("set CLOUDFLARE_API_TOKEN");
         }
-        if (connectToken === undefined || connectToken === "") {
+        if (connectToken === "") {
             throw new Error("set CONNECT_TOKEN (the per-sandbox connection token)");
         }
-        const zone = flags.zone ?? process.env["ZONE"];
+        const zone = flags.zone ?? (config.zone !== "" ? config.zone : undefined);
         const { token, hostname } = await createSandboxTunnel({
             apiToken,
             connectToken,

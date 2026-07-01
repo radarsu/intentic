@@ -65,7 +65,7 @@ export const createServices = (config: Config, logger: Logger): Services => {
     const workspace = workspacePaths(config.workspaceRoot);
     const selfHost: SelfHost | undefined =
         config.selfHost.user !== "" && config.hostSshKey !== ""
-            ? { user: config.selfHost.user, address: config.selfHost.address, port: 22 }
+            ? { user: config.selfHost.user, address: config.selfHost.address, port: 22, via: config.selfHost.via }
             : undefined;
     const info = config.sandbox.name !== "" && config.sandbox.image !== "" ? { name: config.sandbox.name, image: config.sandbox.image } : undefined;
     const auth =

@@ -8,6 +8,14 @@ FROM node:24.18.0-bookworm@sha256:fdddfb3e688158251943d52eba361de991548f6814007a
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
+# Fetch the cloudflared binary (copied into the runtime image below) so the in-sandbox `intentic apply` can
+# run `cloudflared access tcp` to reach a NAT'd self-host's SSH over its Cloudflare tunnel (via:"cloudflared").
+# Pinned to the same version connect.sh runs as the tunnel sidecar.
+ARG CLOUDFLARED_VERSION=2026.6.1
+RUN arch="$(dpkg --print-architecture)" \
+    && curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${arch}" -o /usr/local/bin/cloudflared \
+    && chmod +x /usr/local/bin/cloudflared \
+    && /usr/local/bin/cloudflared --version
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile
@@ -34,6 +42,9 @@ RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 COPY --from=build /out/cli /opt/intentic-cli
 RUN chmod +x /opt/intentic-cli/dist/cli.js \
     && ln -s /opt/intentic-cli/dist/cli.js /usr/local/bin/intentic
+# cloudflared on PATH — `intentic apply` shells out to `cloudflared access tcp` to reach a self-host's SSH
+# through its Cloudflare tunnel when the host is registered with via:"cloudflared" (a NAT'd local machine).
+COPY --from=build /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 # The sandbox daemon.
 COPY --from=build /out/sandbox /opt/sandbox
 WORKDIR /work

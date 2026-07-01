@@ -5,9 +5,10 @@ import { dirname, join } from "node:path";
 import { applyMoves, createStore, type PruneOutcome, prune, reconcile, resolveInputs, rewriteGraphForMoves } from "@intentic/engine";
 import { createProviders, createSshExecutor, createSshProbe, hostTarget } from "@intentic/providers";
 import { buildCommand, type CommandContext, numberParser } from "@stricli/core";
+import { loadConfig } from "../env.config.js";
 import { ACCESS_FILE, ARTIFACT_PATH, LAST_APPLIED_FILE, loadEnvFile, readArtifact, STATUS_FILE, writeStatus } from "../lib/artifact.js";
 import { createKnownHostsStore } from "../lib/known-hosts.js";
-import { createOutput, outputMode } from "../lib/output.js";
+import { createOutput } from "../lib/output.js";
 import { ensureGeneratedSecrets } from "../secrets/generated-secrets.js";
 import { generatedSecretStore } from "../secrets/secret-store.js";
 import { collectSecrets } from "../secrets/secrets.js";
@@ -43,7 +44,7 @@ export const apply = buildCommand<ApplyFlags>({
         },
     },
     async func(this: CommandContext, flags: ApplyFlags) {
-        const out = createOutput(this.process.stdout, outputMode(process.env));
+        const out = createOutput(this.process.stdout, loadConfig().intenticOutput);
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const dir = dirname(artifact);
         loadEnvFile(dir);
@@ -84,7 +85,8 @@ export const apply = buildCommand<ApplyFlags>({
         );
         const lock = await acquireApplyLock(ssh, [...targets, ...oldMoveTargets], { log: out.log });
         const onSignal = (): void => {
-            void lock.release().finally(() => process.exit(130));
+            // Release the lock and tear down any cloudflared SSH forwarders before exiting on Ctrl-C.
+            void Promise.allSettled([lock.release(), ssh.dispose?.()]).finally(() => process.exit(130));
         };
         process.once("SIGINT", onSignal);
         process.once("SIGTERM", onSignal);
@@ -179,6 +181,8 @@ export const apply = buildCommand<ApplyFlags>({
             process.removeListener("SIGINT", onSignal);
             process.removeListener("SIGTERM", onSignal);
             await lock.release();
+            // Tear down any cloudflared SSH forwarders this run started (no-op for direct-only applies).
+            await ssh.dispose?.();
         }
     },
 });

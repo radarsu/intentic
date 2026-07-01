@@ -3,6 +3,7 @@ import type { BackupInput, HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { backupId, forgejoId, komodoId } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 
 // The default backup destination when the operator declares no i.have.backup(): a restic repo on a managed
 // on-host volume (the backup/restore providers mount intentic-restic-repo at this path, recognised as a
@@ -19,12 +20,7 @@ export const defaultBackupInput = (): BackupInput => ({ repo: DEFAULT_BACKUP_REP
 // actually declared (nothing to back up otherwise). Secrets (repo password + backend credentials) are
 // SecretRefs that serialize as $secret inputs, so collectSecrets carries them into .env.example / adopt.
 export const resolveBackup = (hostId: string, host: HostInput, input: BackupInput, signozServiceId: string | undefined): ResolvedNode => {
-    const ssh = {
-        address: host.address,
-        user: host.user,
-        sshKey: host.sshKey,
-        ...(host.port !== undefined ? { port: host.port } : {}),
-    };
+    const ssh = sshOf(host);
     const signoz = input.signoz === true && signozServiceId !== undefined;
     return {
         id: backupId(hostId),

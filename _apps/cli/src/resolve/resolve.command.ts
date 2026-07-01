@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { resolveState } from "@intentic/state-resolver";
 import { buildCommand, type CommandContext } from "@stricli/core";
+import { loadConfig } from "../env.config.js";
 import { ARTIFACT_PATH, CONFIG_PATH, ENV_FILE, readArtifact, writeArtifact } from "../lib/artifact.js";
-import { createOutput, outputMode } from "../lib/output.js";
+import { createOutput } from "../lib/output.js";
 import { version } from "../lib/version.js";
 import { GIT_TOKEN_ENV } from "../pipelines/adopt-pipelines.js";
 import { syncControlPlaneSecrets } from "../pipelines/control-plane-sync.js";
@@ -31,7 +32,7 @@ export const resolveCommand = buildCommand<ResolveFlags>({
         },
     },
     async func(this: CommandContext, flags: ResolveFlags) {
-        const out = createOutput(this.process.stdout, outputMode(process.env));
+        const out = createOutput(this.process.stdout, loadConfig().intenticOutput);
         const intent = await loadIntent(flags.config ?? CONFIG_PATH);
         const artifactOut = flags.out ?? ARTIFACT_PATH;
         const dir = dirname(artifactOut);

@@ -3,6 +3,7 @@ import { generated, httpOk, makeRef } from "@intentic/graph";
 import type { HostInput, ServiceIntent, ServiceKind } from "@intentic/need-resolver";
 import type { ResolvedNode, ResourceType } from "@intentic/resources";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
@@ -56,12 +57,7 @@ export const resolveService = (
     apiToken: SecretRef,
 ): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
     const spec = catalog[intent.kind];
-    const ssh = {
-        address: host.address,
-        user: host.user,
-        sshKey: host.sshKey,
-        ...(host.port !== undefined ? { port: host.port } : {}),
-    };
+    const ssh = sshOf(host);
     const exposure = exposeRoute(intent.expose, intent.on, intent.domain, spec.port, apiToken);
     const nodes: ResolvedNode[] = [
         {

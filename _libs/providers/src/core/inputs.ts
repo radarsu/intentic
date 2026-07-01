@@ -3,12 +3,16 @@ import { z } from "zod";
 import type { SshTarget } from "./ssh.js";
 
 // The SSH-creds block every host-deploying provider (host/tunnel/forgejo/forgejo-runner/komodo) shares;
-// port defaults to 22 when absent, matching the engine's resolved-input shape.
+// port defaults to 22 when absent, matching the engine's resolved-input shape. `via` selects the transport:
+// "direct" dials address:port over TCP; "cloudflared" reaches the host's SSH through its Cloudflare tunnel
+// (the sandbox runs `cloudflared access` to the host's ssh-<id>.<zone> hostname) — for a NAT'd self-host the
+// sandbox can't reach by IP. Defaults to "direct" so real servers are unaffected.
 export const sshSchema = z.object({
     address: z.string(),
     user: z.string(),
     sshKey: z.string(),
     port: z.number().default(22),
+    via: z.enum(["direct", "cloudflared"]).default("direct"),
 });
 
 const issues = (error: z.ZodError): string => error.issues.map((issue) => `${issue.path.join(".")} ${issue.message}`).join("; ");
@@ -42,6 +46,7 @@ export const sshTarget = (parsed: z.infer<typeof sshSchema>): SshTarget => ({
     user: parsed.user,
     privateKey: parsed.sshKey,
     port: parsed.port,
+    via: parsed.via,
 });
 
 // Split a Forgejo URL into the (domain, https) pair Komodo's git-provider model expects: the host[:port]

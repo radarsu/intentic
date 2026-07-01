@@ -29,7 +29,13 @@ export const createInventoryRoutes = (services: Services) => {
                 kind: "backend",
                 provider: "host",
                 name: SELF_HOST_NAME,
-                values: { address: services.selfHost.address, user: services.selfHost.user, port: services.selfHost.port },
+                values: {
+                    address: services.selfHost.address,
+                    user: services.selfHost.user,
+                    port: services.selfHost.port,
+                    // Only the non-default transport is written to deploy.config.ts; "direct" is the resolver default.
+                    ...(services.selfHost.via !== "direct" ? { via: services.selfHost.via } : {}),
+                },
             },
             ...entries,
         ];

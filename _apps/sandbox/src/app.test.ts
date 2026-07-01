@@ -55,7 +55,7 @@ const baseConfig: Config = {
     sandbox: { port: 8787, host: "0.0.0.0", publicUrl: "", name: "", image: "" },
     dev: { command: "", port: "" },
     google: { clientId: "" },
-    selfHost: { user: "", address: "host.docker.internal" },
+    selfHost: { user: "", address: "host.docker.internal", via: "direct" },
 };
 
 const services = (overrides: Partial<Services> = {}): Services => ({
@@ -123,7 +123,7 @@ test("system.preview returns the dev server status", async () => {
 
 test("system.selfHost reports null by default, and the host descriptor when wired", async () => {
     expect(await clientFor(createApp(services())).system.selfHost()).toEqual({ selfHost: null });
-    const wired: SelfHost = { user: "intentic", address: "host.docker.internal", port: 22 };
+    const wired: SelfHost = { user: "intentic", address: "ssh-4afccf5506ad.intentic.dev", port: 22, via: "cloudflared" };
     expect(await clientFor(createApp(services({ selfHost: wired }))).system.selfHost()).toEqual({ selfHost: wired });
 });
 

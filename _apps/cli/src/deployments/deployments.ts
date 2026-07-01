@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DesiredStateGraph } from "@intentic/graph";
 import { komodoApi } from "@intentic/providers";
+import { z } from "zod";
 import { loadEnvFile, readArtifact } from "../lib/artifact.js";
 import { readGeneratedSecrets } from "../secrets/generated-secrets.js";
 
@@ -21,29 +22,45 @@ export interface DeploymentView {
     readonly komodoDeploymentUrl?: string;
 }
 
-const asString = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
-const asNumber = (value: unknown): number | undefined => (typeof value === "number" ? value : undefined);
-
-// The env key for a `{$secret:{key}}` input — the resolver emits generated/admin passwords this way.
-const secretKey = (value: unknown): string | undefined => {
-    if (typeof value === "object" && value !== null && "$secret" in value) {
-        const secret = (value as { $secret?: { key?: unknown } }).$secret;
-        return typeof secret?.key === "string" ? secret.key : undefined;
-    }
-    return undefined;
-};
+// A scalar field is surfaced only when present with the right type; anything else (missing, wrong type, a
+// $ref/$secret object) reads as undefined — `.catch(undefined)` keeps the view best-effort instead of throwing.
+const optionalString = z.string().optional().catch(undefined);
+const optionalNumber = z.number().optional().catch(undefined);
 
 // A deployment node's `env` input is a serialized record; surface keys with their scalar values, blanking any
-// $ref/$secret value so a secret never leaves the sandbox.
-const envOf = (value: unknown): Record<string, string> => {
-    const env: Record<string, string> = {};
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-        for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-            env[key] = typeof val === "string" || typeof val === "number" || typeof val === "boolean" ? String(val) : "";
-        }
-    }
-    return env;
-};
+// $ref/$secret value so a secret never leaves the sandbox. Missing/invalid env reads as {}.
+const envInput = z
+    .record(z.string(), z.unknown())
+    .transform((record) =>
+        Object.fromEntries(
+            Object.entries(record).map(([key, value]) => [
+                key,
+                typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : "",
+            ]),
+        ),
+    )
+    .catch({});
+
+// The `{$secret:{key}}` shape the resolver emits for generated/admin passwords; the key is the env var holding
+// the value.
+const secretInput = z
+    .object({ $secret: z.object({ key: z.string() }) })
+    .optional()
+    .catch(undefined);
+
+// One deployment node's inputs, as the Apps view reads them.
+const deploymentInputs = z.object({
+    registry: optionalString,
+    owner: optionalString,
+    repoName: optionalString,
+    tag: optionalString,
+    domain: optionalString,
+    port: optionalNumber,
+    env: envInput,
+});
+
+// The komodo control-plane node's inputs needed to log in.
+const komodoInputs = z.object({ domain: optionalString, adminUser: optionalString, adminPassword: secretInput });
 
 // Resolve the Komodo control plane's public URL + admin login from the graph's `komodo` node. The admin
 // password is a generated secret: env-first (the apply pipeline injects it), else the local .secrets.json the
@@ -53,9 +70,8 @@ const komodoAccess = (graph: DesiredStateGraph, generated: Record<string, string
     if (node === undefined) {
         return undefined;
     }
-    const domain = asString(node.inputs["domain"]);
-    const user = asString(node.inputs["adminUser"]);
-    const key = secretKey(node.inputs["adminPassword"]);
+    const { domain, adminUser: user, adminPassword } = komodoInputs.parse(node.inputs);
+    const key = adminPassword?.$secret.key;
     const password = key !== undefined ? (process.env[key] ?? generated[key]) : undefined;
     if (domain === undefined || user === undefined || password === undefined || password === "") {
         return undefined;
@@ -92,20 +108,15 @@ export const collectDeployments = async (artifact: string, log: (message: string
     return Object.values(graph.resources)
         .filter((resource) => resource.type === "deployment")
         .map((node) => {
-            const registry = asString(node.inputs["registry"]) ?? "";
-            const owner = asString(node.inputs["owner"]) ?? "";
-            const repoName = asString(node.inputs["repoName"]) ?? "";
-            const tag = asString(node.inputs["tag"]) ?? "";
-            const domain = asString(node.inputs["domain"]);
-            const port = asNumber(node.inputs["port"]);
+            const { registry, owner, repoName, tag, domain, port, env } = deploymentInputs.parse(node.inputs);
             const komodoId = liveIds.get(node.id);
             return {
                 name: node.id,
-                image: `${registry}/${owner}/${repoName}:${tag}`,
-                tag,
+                image: `${registry ?? ""}/${owner ?? ""}/${repoName ?? ""}:${tag ?? ""}`,
+                tag: tag ?? "",
                 ...(domain !== undefined ? { domain, url: `https://${domain}` } : {}),
                 ...(port !== undefined ? { port } : {}),
-                env: envOf(node.inputs["env"]),
+                env,
                 live: komodoId !== undefined,
                 komodoUrl,
                 ...(komodoId !== undefined && komodoUrl !== "" ? { komodoDeploymentUrl: `${komodoUrl}/deployment/${komodoId}` } : {}),

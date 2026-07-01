@@ -2,9 +2,10 @@ import { dirname } from "node:path";
 import { plan } from "@intentic/engine";
 import { createProviders, createSshExecutor } from "@intentic/providers";
 import { buildCommand, type CommandContext } from "@stricli/core";
+import { loadConfig } from "../env.config.js";
 import { ARTIFACT_PATH, loadEnvFile, readArtifact } from "../lib/artifact.js";
 import { createKnownHostsStore } from "../lib/known-hosts.js";
-import { createOutput, outputMode } from "../lib/output.js";
+import { createOutput } from "../lib/output.js";
 import { ensureGeneratedSecrets } from "../secrets/generated-secrets.js";
 import { generatedSecretStore } from "../secrets/secret-store.js";
 import { collectSecrets } from "../secrets/secrets.js";
@@ -15,7 +16,7 @@ export const planCommand = buildCommand<{ artifact?: string }>({
         flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_PATH})` } },
     },
     async func(this: CommandContext, flags: { artifact?: string }) {
-        const out = createOutput(this.process.stdout, outputMode(process.env));
+        const out = createOutput(this.process.stdout, loadConfig().intenticOutput);
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const dir = dirname(artifact);
         loadEnvFile(dir);

@@ -554,3 +554,38 @@ test("a workspace without tools emits no tools input (preview-only sandboxes are
     };
     expect(emit(intent, assign(intent), "example.com").find((node) => node.id === "workspace")?.inputs["tools"]).toBeUndefined();
 });
+
+test('a host with via:"cloudflared" threads the transport onto every node deployed to it over SSH', () => {
+    const intent: IntentSet = {
+        hosts: [{ id: "host", input: { ...host.input, via: "cloudflared" } }],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        workspaces: [],
+        backings: [],
+        apps: [oneApp],
+    };
+    const nodes = emit(intent, assign(intent), "example.com");
+    // Every SSH-deploying node — not just the host — must carry via, so the executor tunnels to a NAT'd self
+    // host for the control plane, its runner, the backup job, and the tunnel connector alike.
+    for (const id of ["host", "host-git", "host-git-runner", "host-deploy", "host-backup", "host-tunnel"]) {
+        expect(nodes.find((node) => node.id === id)?.inputs["via"], id).toBe("cloudflared");
+    }
+});
+
+test("a host left at the default transport emits no via (the provider defaults it to direct)", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [],
+        workspaces: [],
+        backings: [],
+        apps: [oneApp],
+    };
+    const nodes = emit(intent, assign(intent), "example.com");
+    expect(nodes.find((node) => node.id === "host")?.inputs["via"]).toBeUndefined();
+    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["via"]).toBeUndefined();
+});

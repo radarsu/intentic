@@ -4,6 +4,7 @@ import type { HostInput } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { adminUsername, deployDomain, forgejoId, gitDomain, komodoId, registryAuthority, runnerId } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
@@ -49,12 +50,7 @@ export const resolvePlatform = (
     // The platform services are deployed ONTO the host over SSH (like the tunnel connector), so every
     // deploy-style node carries the host's SSH creds + its internal ip. internalUrl/readyWhen are keyed
     // to the host-internal address so they're reachable before the Cloudflare tunnel + DNS routes exist.
-    const ssh = {
-        address: host.address,
-        user: host.user,
-        sshKey: host.sshKey,
-        ...(host.port !== undefined ? { port: host.port } : {}),
-    };
+    const ssh = sshOf(host);
     const internalIp = makeRef<string>(hostId, "internalIp");
     const git = exposeRoute(cloudflareId, hostId, gitDomain(zone), FORGEJO_PORT, apiToken);
     const komodo = exposeRoute(cloudflareId, hostId, deployDomain(zone), KOMODO_PORT, apiToken);

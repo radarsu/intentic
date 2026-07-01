@@ -2,6 +2,8 @@ import { buildApplication, buildRouteMap, text_en } from "@stricli/core";
 import { adopt } from "./adopt/adopt.command.js";
 import { apply } from "./apply/apply.command.js";
 import { deploymentsCommand } from "./deployments/deployments.command.js";
+import { loadConfig } from "./env.config.js";
+import { hostSshTunnel } from "./host-ssh-tunnel/host-ssh-tunnel.command.js";
 import { init } from "./init/init.command.js";
 import { version } from "./lib/version.js";
 import { planCommand } from "./plan/plan.command.js";
@@ -15,7 +17,7 @@ import { sandboxTunnel } from "./sandbox-tunnel/sandbox-tunnel.command.js";
 // formatter, which prints `error.stack`.
 const formatException = (exc: unknown): string => {
     if (exc instanceof Error) {
-        return process.env["INTENTIC_DEBUG"] !== undefined ? (exc.stack ?? exc.message) : exc.message;
+        return loadConfig().intenticDebug ? (exc.stack ?? exc.message) : exc.message;
     }
     return String(exc);
 };
@@ -24,7 +26,17 @@ const formatException = (exc: unknown): string => {
 // them into the route map. Command names + their kebab flags are unchanged.
 export const app = buildApplication(
     buildRouteMap({
-        routes: { init, resolve: resolveCommand, plan: planCommand, apply, adopt, restore, deployments: deploymentsCommand, sandboxTunnel },
+        routes: {
+            init,
+            resolve: resolveCommand,
+            plan: planCommand,
+            apply,
+            adopt,
+            restore,
+            deployments: deploymentsCommand,
+            sandboxTunnel,
+            hostSshTunnel,
+        },
         docs: { brief: "intentic — intent-driven deployment" },
     }),
     {

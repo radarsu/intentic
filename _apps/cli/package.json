@@ -10,7 +10,8 @@
         "directory": "_apps/cli"
     },
     "files": [
-        "dist"
+        "dist",
+        "templates"
     ],
     "bin": {
         "intentic": "./dist/cli.js"
@@ -45,8 +46,11 @@
         "@intentic/need-resolver": "workspace:*",
         "@intentic/providers": "workspace:*",
         "@intentic/state-resolver": "workspace:*",
+        "@puristic/env": "catalog:",
         "@stricli/core": "catalog:",
-        "tslib": "catalog:"
+        "eta": "catalog:",
+        "tslib": "catalog:",
+        "zod": "catalog:"
     },
     "devDependencies": {
         "@intentic/sdk": "workspace:*",
@@ -56,6 +60,7 @@
         "ssh2": "catalog:",
         "testcontainers": "catalog:",
         "typescript": "catalog:",
-        "vitest": "catalog:"
+        "vitest": "catalog:",
+        "yaml": "catalog:"
     }
 }

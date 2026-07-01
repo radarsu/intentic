@@ -1,19 +1,12 @@
 import { makeRef } from "@intentic/graph";
-import type { HostInput, IntentSet } from "@intentic/need-resolver";
+import type { IntentSet } from "@intentic/need-resolver";
 import type { ResolvedNode } from "@intentic/resources";
 import { tunnelId, tunnelName } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 import { resolveAppGitHub } from "../resolvers/app-github.js";
 import type { IngressPair } from "../resolvers/route.js";
 import { resolveService } from "../resolvers/service.js";
-
-// Extract the SSH connection block from a HostInput.
-const sshOf = (input: HostInput): Record<string, unknown> => ({
-    address: input.address,
-    user: input.user,
-    sshKey: input.sshKey,
-    ...(input.port !== undefined ? { port: input.port } : {}),
-});
 
 // Build the concrete RawNodes for the GitHub path. Much simpler than the Forgejo emit: no Forgejo, no
 // Komodo, no runner. Each app gets a gh-repo + per-env gh-ci + gh-deployment. The host, cloudflare, tunnel,

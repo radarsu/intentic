@@ -1,8 +1,9 @@
 import { dirname, join } from "node:path";
 import { forgejoApi } from "@intentic/providers";
 import { buildCommand, type CommandContext } from "@stricli/core";
+import { loadConfig } from "../env.config.js";
 import { ARTIFACT_FILE, ARTIFACT_PATH, CONFIG_FILE, INTENT_DIR, loadEnvFile, readArtifact, TARGET_DIR } from "../lib/artifact.js";
-import { createOutput, outputMode } from "../lib/output.js";
+import { createOutput } from "../lib/output.js";
 import { version } from "../lib/version.js";
 import { GIT_TOKEN_SECRET, GIT_USER_SECRET, type PipelineInputs, setRepoSecrets, writeControlPlaneWorkflows } from "../pipelines/adopt-pipelines.js";
 import { forgejoIdentity } from "../pipelines/control-plane-sync.js";
@@ -16,7 +17,7 @@ export const adopt = buildCommand<{ artifact?: string }>({
         flags: { artifact: { kind: "parsed", parse: String, optional: true, brief: `Path to the artifact (default: ${ARTIFACT_PATH})` } },
     },
     async func(this: CommandContext, flags: { artifact?: string }) {
-        const out = createOutput(this.process.stdout, outputMode(process.env));
+        const out = createOutput(this.process.stdout, loadConfig().intenticOutput);
         const artifact = flags.artifact ?? ARTIFACT_PATH;
         const targetDir = dirname(artifact);
         // The scaffold layout: the intent repo is a sibling of the desired-state repo (`init` makes both).

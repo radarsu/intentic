@@ -1,6 +1,7 @@
 import { buildCommand, type CommandContext } from "@stricli/core";
+import { loadConfig } from "../env.config.js";
 import { CONFIG_FILE } from "../lib/artifact.js";
-import { createOutput, outputMode } from "../lib/output.js";
+import { createOutput } from "../lib/output.js";
 import { version } from "../lib/version.js";
 import { scaffold } from "./init.js";
 
@@ -24,7 +25,7 @@ export const init = buildCommand<{ dir?: string; link: boolean; app?: string; se
         },
     },
     async func(this: CommandContext, flags: { dir?: string; link: boolean; app?: string; selfHost: boolean; zone?: string }) {
-        const out = createOutput(this.process.stdout, outputMode(process.env));
+        const out = createOutput(this.process.stdout, loadConfig().intenticOutput);
         const { intentDir, targetDir, appDir } = await scaffold(flags.dir ?? ".", version, flags.link, flags.app, flags.selfHost, flags.zone);
         out.text(`initialized ${intentDir} (with ${CONFIG_FILE}), ${targetDir}, and ${appDir}`);
         out.result({ intentDir, targetDir, appDir });

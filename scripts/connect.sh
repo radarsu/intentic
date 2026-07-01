@@ -70,6 +70,10 @@ GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-481795963975-cq9msl6higcd91joidrfp8mjlkuq5
 WEB_ORIGIN="${WEB_ORIGIN:-}"
 ZONE="${ZONE:-}"
 CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.1}"
+# The cloudflared binary version installed natively on a self-host to run its SSH-tunnel connector (matches
+# the sidecar image tag). The connector must be native, not a container: under Docker Desktop a container's
+# localhost is the VM, not this machine, so it could not reach the host's sshd at localhost:22.
+CLOUDFLARED_VERSION="${CLOUDFLARED_VERSION:-2026.6.1}"
 TUNNEL_TOKEN=""
 SANDBOX_PUBLIC_URL=""
 
@@ -99,9 +103,9 @@ setup_self_host() {
         echo "error: useradd not found — intentic self-host expects a standard Linux server (Debian/Ubuntu/RHEL)." >&2
         exit 1
     fi
-    if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
-        echo "intentic: warning — no SSH server found; the sandbox can't deploy to this host until sshd is running." >&2
-    fi
+    # Ensure an SSH server is installed and running — the sandbox deploys to this host over SSH. (Was a
+    # warn-and-continue; a self-host with no sshd only failed later, deep inside `intentic apply`.)
+    ensure_sshd
 
     if ! id "$user" >/dev/null 2>&1; then
         echo "intentic: creating service user '$user'…"
@@ -134,6 +138,89 @@ setup_self_host() {
     # The sandbox reads HOST_SSH_KEY to authenticate as '$user' on host.docker.internal; ride it into the container.
     HOST_SSH_KEY="$($SUDO cat "$key")"
     echo "intentic: this server is registered as a deploy target (user '$user')."
+}
+
+# Ensure an SSH server is installed and listening on :22. The sandbox reaches it through this host's own
+# Cloudflare tunnel (the connector below dials localhost:22), so sshd need not be exposed on any interface.
+ensure_sshd() {
+    if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
+        echo "intentic: installing OpenSSH server…"
+        if command -v apt-get >/dev/null 2>&1; then
+            $SUDO apt-get update -qq >/dev/null 2>&1 || true
+            $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server >/dev/null
+        elif command -v dnf >/dev/null 2>&1; then
+            $SUDO dnf install -y -q openssh-server >/dev/null
+        elif command -v yum >/dev/null 2>&1; then
+            $SUDO yum install -y -q openssh-server >/dev/null
+        elif command -v apk >/dev/null 2>&1; then
+            $SUDO apk add --no-cache openssh >/dev/null
+        else
+            echo "error: no supported package manager (apt/dnf/yum/apk) to install openssh-server — install it and re-run." >&2
+            exit 1
+        fi
+    fi
+    # Host keys + the privilege-separation dir, then start sshd via whatever init is present.
+    $SUDO ssh-keygen -A >/dev/null 2>&1 || true
+    $SUDO mkdir -p /run/sshd 2>/dev/null || true
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        $SUDO systemctl enable --now ssh >/dev/null 2>&1 || $SUDO systemctl enable --now sshd >/dev/null 2>&1 || true
+    elif command -v service >/dev/null 2>&1; then
+        $SUDO service ssh start >/dev/null 2>&1 || $SUDO service sshd start >/dev/null 2>&1 || true
+    fi
+    # Force a listener on hosts without an init system (e.g. WSL without systemd): launch sshd directly.
+    if ! (ss -ltnH 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ':22 '; then
+        $SUDO /usr/sbin/sshd >/dev/null 2>&1 || true
+    fi
+    if ! (ss -ltnH 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ':22 '; then
+        echo "intentic: warning — sshd does not appear to be listening on :22; the sandbox may not be able to deploy here." >&2
+    fi
+}
+
+# Install the cloudflared binary natively on this host. Native (not a container) so its connector can reach
+# the host's own sshd at localhost:22 — a container's localhost is the VM under Docker Desktop.
+install_host_cloudflared() {
+    if command -v cloudflared >/dev/null 2>&1; then
+        return 0
+    fi
+    echo "intentic: installing cloudflared on this host…"
+    arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"
+    case "$arch" in
+        amd64 | x86_64) cf_arch="amd64" ;;
+        arm64 | aarch64) cf_arch="arm64" ;;
+        *)
+            echo "error: unsupported architecture '$arch' for cloudflared; install it manually and re-run." >&2
+            exit 1
+            ;;
+    esac
+    $SUDO curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${cf_arch}" -o /usr/local/bin/cloudflared
+    $SUDO chmod +x /usr/local/bin/cloudflared
+}
+
+# Run the host SSH-tunnel connector with its token. Prefer systemd for persistence (survives reboot);
+# otherwise run detached (survives this script but not a reboot — re-run connect.sh after a reboot).
+run_host_ssh_connector() {
+    hst_token="$1"
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        {
+            echo "[Unit]"
+            echo "Description=intentic host SSH cloudflared connector"
+            echo "After=network-online.target"
+            echo "Wants=network-online.target"
+            echo "[Service]"
+            echo "ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate run --token ${hst_token}"
+            echo "Restart=always"
+            echo "RestartSec=5"
+            echo "[Install]"
+            echo "WantedBy=multi-user.target"
+        } | $SUDO tee /etc/systemd/system/intentic-host-ssh-tunnel.service >/dev/null
+        $SUDO chmod 600 /etc/systemd/system/intentic-host-ssh-tunnel.service
+        $SUDO systemctl daemon-reload
+        $SUDO systemctl enable --now intentic-host-ssh-tunnel.service
+    else
+        $SUDO pkill -f "cloudflared tunnel --no-autoupdate run" >/dev/null 2>&1 || true
+        $SUDO sh -c "nohup cloudflared tunnel --no-autoupdate run --token '${hst_token}' >/var/log/intentic-host-ssh-tunnel.log 2>&1 &"
+        echo "intentic: the host SSH connector is running (detached; re-run connect.sh after a reboot to restore it)." >&2
+    fi
 }
 
 # Pull a published image. intentic's sandbox image is PUBLIC, so no login is needed. But if this host
@@ -273,10 +360,41 @@ if [ -z "$TUNNEL_TOKEN" ] || [ -z "$SANDBOX_HOSTNAME" ]; then
 fi
 SANDBOX_PUBLIC_URL="https://$SANDBOX_HOSTNAME"
 
+# When self-hosting, expose THIS machine's sshd over its own Cloudflare tunnel so the sandbox can deploy to it
+# through `cloudflared access` — a NAT'd local machine the sandbox can't reach by IP (e.g. Docker Desktop,
+# where the sandbox only reaches host.docker.internal, which has no sshd). The sandbox is told to reach the
+# self host this way via SELF_HOST_ADDRESS + SELF_HOST_VIA, set below and passed into its container.
+SELF_HOST_ADDRESS=""
+SELF_HOST_VIA=""
+if [ -n "$SELF_HOST" ]; then
+    echo "intentic: creating the host SSH tunnel…"
+    host_ssh_out="$(docker run --rm --entrypoint intentic \
+        -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
+        -e CONNECT_TOKEN="$CONNECT_TOKEN" \
+        $zone_env \
+        "$SANDBOX_IMAGE" host-ssh-tunnel)"
+    HOST_SSH_TUNNEL_TOKEN="$(printf '%s\n' "$host_ssh_out" | sed -n 's/^HOST_SSH_TUNNEL_TOKEN=//p')"
+    SELF_HOST_ADDRESS="$(printf '%s\n' "$host_ssh_out" | sed -n 's/^HOST_SSH_HOSTNAME=//p')"
+    if [ -z "$HOST_SSH_TUNNEL_TOKEN" ] || [ -z "$SELF_HOST_ADDRESS" ]; then
+        echo "error: failed to create the host SSH tunnel (see the output above)." >&2
+        exit 1
+    fi
+    SELF_HOST_VIA="cloudflared"
+    install_host_cloudflared
+    run_host_ssh_connector "$HOST_SSH_TUNNEL_TOKEN"
+    echo "intentic: this host's SSH is reachable through the tunnel at ${SELF_HOST_ADDRESS}."
+fi
+
 echo "intentic: starting sandbox…"
 # cloudflared (the sidecar below) reaches the sandbox by container name on this shared network; create it first.
 docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+# Tell the sandbox how to reach the self host: its tunnel hostname + transport. Unquoted so it expands to
+# nothing when not self-hosting (leaving the daemon's host.docker.internal/direct defaults intact); the
+# hostname has no spaces, so word-splitting is safe.
+self_host_addr_env=""
+[ -n "$SELF_HOST_ADDRESS" ] && self_host_addr_env="-e SELF_HOST_ADDRESS=$SELF_HOST_ADDRESS -e SELF_HOST_VIA=$SELF_HOST_VIA"
 
 # Runs UNPRIVILEGED: no --user root and no Docker-socket mount — the sandbox no longer manages other containers,
 # it IS the workspace. --add-host lets the sandbox reach the host it runs on at host.docker.internal (SSH
@@ -304,6 +422,7 @@ docker run -d --restart unless-stopped --name "$CONTAINER" \
     -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
     -e HOST_SSH_KEY="$HOST_SSH_KEY" \
     -e SELF_HOST_USER="$SELF_HOST_USER" \
+    $self_host_addr_env \
     "$SANDBOX_IMAGE" >/dev/null
 
 # Start the tunnel connector: cloudflared on the shared network routes sandbox-<id>.<zone> → the daemon and

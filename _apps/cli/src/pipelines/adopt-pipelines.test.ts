@@ -1,5 +1,6 @@
 import { fakeForgejoApi } from "@intentic/providers";
 import { expect, test } from "vitest";
+import { parse } from "yaml";
 import {
     applyWorkflowYaml,
     forgejoSecretName,
@@ -47,6 +48,32 @@ test("the apply workflow injects every secret, diffs against the applied tag, an
     expect(yaml).toContain("git tag -f intentic-applied HEAD");
     // The tag push authenticates with the Forgejo admin password secret (already in the apply env).
     expect(yaml).toContain("printf '%s:%s' 'intentic' \"$FORGEJO_ADMIN_PASSWORD\"");
+});
+
+// The workflows are rendered from .eta templates; a stray space or dropped newline would produce a file that
+// still "looks" right but no longer parses. Parse both as YAML and assert the structure the runner depends on —
+// this is the durability guard the templating switch is for.
+test("both rendered workflows are valid YAML with the expected job structure", () => {
+    const intent = parse(intentWorkflowYaml(inputs)) as {
+        on: { push: { branches: string[]; paths: string[] } };
+        jobs: { resolve: { "runs-on": string; env: Record<string, string>; steps: unknown[] } };
+    };
+    expect(intent.on.push.branches).toEqual(["main"]);
+    expect(intent.jobs.resolve["runs-on"]).toBe("docker");
+    // The env block's indentation must nest under the job — a mis-indented entry would land at the wrong level.
+    expect(intent.jobs.resolve.env["GIT_USER"]).toBe(`\${{ secrets.${GIT_USER_SECRET} }}`);
+    expect(intent.jobs.resolve.env["CLOUDFLARE_API_TOKEN"]).toBe(`\${{ secrets.CLOUDFLARE_API_TOKEN }}`);
+
+    const apply = parse(applyWorkflowYaml(inputs)) as {
+        on: { push: { paths: string[] } };
+        jobs: { apply: { env: Record<string, string>; steps: unknown[] } };
+    };
+    expect(apply.on.push.paths).toEqual(["desired-state.json"]);
+    // Every injected secret survived the loop at the right indentation.
+    for (const key of inputs.applySecretKeys) {
+        expect(apply.jobs.apply.env[key]).toBe(`\${{ secrets.${forgejoSecretName(key)} }}`);
+    }
+    expect(apply.jobs.apply.steps).toHaveLength(3);
 });
 
 test("setRepoSecrets PUTs each name/value onto the repo via the Forgejo API", async () => {

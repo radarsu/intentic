@@ -28,6 +28,9 @@ interface FieldSpec {
     readonly key: string;
     readonly source: "string" | "number" | "env";
     readonly envVar?: string;
+    // An optional field is emitted only when the entry actually carries a value — so a default like a host's
+    // "direct" transport isn't written as an empty literal that would fail the provider's enum on re-read.
+    readonly optional?: boolean;
 }
 interface ProviderSpec {
     readonly fields: readonly FieldSpec[];
@@ -40,6 +43,8 @@ const REGISTRY: Record<InventoryProvider, ProviderSpec> = {
             { key: `address`, source: `string` },
             { key: `user`, source: `string` },
             { key: `port`, source: `number` },
+            // SSH transport; only written when non-default (e.g. "cloudflared" for a NAT'd self-host).
+            { key: `via`, source: `string`, optional: true },
             { key: `sshKey`, source: `env`, envVar: `HOST_SSH_KEY` },
         ],
     },
@@ -59,11 +64,15 @@ const SERVICE_REGISTRY: Record<ServiceKind, ProviderSpec> = {
     signoz: { fields: [{ key: `domain`, source: `string` }] },
 };
 
-const renderOption = (entry: InventoryEntry, field: FieldSpec): string => {
+const renderOption = (entry: InventoryEntry, field: FieldSpec): string | undefined => {
     if (field.source === `env`) {
         return `${field.key}: env(${JSON.stringify(field.envVar ?? ``)})`;
     }
     const value = entry.values[field.key];
+    // An optional field with no value is omitted entirely rather than rendered as an empty literal.
+    if (field.optional && (value === undefined || value === ``)) {
+        return undefined;
+    }
     if (field.source === `number`) {
         return `${field.key}: ${typeof value === `number` ? value : Number(value ?? 0)}`;
     }
@@ -72,7 +81,10 @@ const renderOption = (entry: InventoryEntry, field: FieldSpec): string => {
 
 const renderBackendEntry = (entry: Extract<InventoryEntry, { kind: `backend` }>): string => {
     const spec = REGISTRY[entry.provider];
-    const options = spec.fields.map((field) => renderOption(entry, field)).join(`, `);
+    const options = spec.fields
+        .map((field) => renderOption(entry, field))
+        .filter((option): option is string => option !== undefined)
+        .join(`, `);
     return `${INDENT}const ${entry.name} = i.have.${entry.provider}(${JSON.stringify(entry.name)}, { ${options} });`;
 };
 
@@ -84,7 +96,7 @@ const renderServiceEntry = (entry: ServiceEntry): string => {
         `kind: ${JSON.stringify(entry.service)}`,
         `on: ${entry.on}`,
         `expose: ${entry.expose}`,
-        ...spec.fields.map((field) => renderOption(entry, field)),
+        ...spec.fields.map((field) => renderOption(entry, field)).filter((option): option is string => option !== undefined),
     ].join(`, `);
     return `${INDENT}const ${entry.name} = i.want.service(${JSON.stringify(entry.name)}, { ${options} });`;
 };

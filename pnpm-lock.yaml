@@ -49,6 +49,9 @@ catalogs:
     '@types/ssh2':
       specifier: 1.15.5
       version: 1.15.5
+    eta:
+      specifier: 4.6.0
+      version: 4.6.0
     hono:
       specifier: 4.12.27
       version: 4.12.27
@@ -88,6 +91,9 @@ catalogs:
     vitest:
       specifier: 4.1.9
       version: 4.1.9
+    yaml:
+      specifier: 2.9.0
+      version: 2.9.0
 
 overrides:
   zod: 4.4.3
@@ -141,12 +147,21 @@ importers:
       '@intentic/state-resolver':
         specifier: workspace:*
         version: link:../../_libs/state-resolver
+      '@puristic/env':
+        specifier: 'catalog:'
+        version: 1.4.1
       '@stricli/core':
         specifier: 'catalog:'
         version: 1.2.8
+      eta:
+        specifier: 'catalog:'
+        version: 4.6.0
       tslib:
         specifier: 'catalog:'
         version: 2.8.1
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@intentic/sdk':
         specifier: workspace:*
@@ -172,6 +187,9 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.9(@types/node@24.13.2)(vite@7.3.3(@types/node@24.13.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
 
   _apps/sandbox:
     dependencies:
@@ -2153,6 +2171,10 @@ packages:
 
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
+
+  eta@4.6.0:
+    resolution: {integrity: sha512-lW6is4T1NFOYnmqGZIfvixqj7A7sSvScF+DN8EK6K58xI5MZ5UvYe0GjopxOXQtZvUn4eDdVuZ8XSoYWTMEKwA==}
+    engines: {node: '>=20'}
 
   etag@1.8.1:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
@@ -5254,6 +5276,8 @@ snapshots:
   estree-walker@3.0.3:
     dependencies:
       '@types/estree': 1.0.9
+
+  eta@4.6.0: {}
 
   etag@1.8.1: {}
 

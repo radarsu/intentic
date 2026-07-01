@@ -147,7 +147,7 @@ export const InventoryListSchema = z.object({ entries: z.array(InventoryEntrySch
 // ---- system ----
 
 export const PreviewSchema = z.object({ running: z.boolean(), healthy: z.boolean(), port: z.number().optional() });
-export const SelfHostSchema = z.object({ user: z.string(), address: z.string(), port: z.number() });
+export const SelfHostSchema = z.object({ user: z.string(), address: z.string(), port: z.number(), via: z.enum(["direct", "cloudflared"]) });
 export type SelfHost = z.infer<typeof SelfHostSchema>;
 export const SelfHostResponseSchema = z.object({ selfHost: SelfHostSchema.nullable() });
 export const InfoSchema = z.object({ name: z.string().optional(), image: z.string().optional() });

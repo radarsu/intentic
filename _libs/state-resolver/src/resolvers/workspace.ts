@@ -4,6 +4,7 @@ import type { HostInput, ServiceKind, WorkspaceIntent } from "@intentic/need-res
 import type { ResolvedNode } from "@intentic/resources";
 import { previewDomain } from "../lib/ids.js";
 import { IMAGES } from "../lib/images.js";
+import { sshOf } from "../lib/ssh.js";
 import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 import { serviceMcp } from "./service.js";
@@ -37,12 +38,7 @@ export const resolveWorkspace = (
     apiToken: SecretRef,
     tools: readonly WorkspaceTool[],
 ): { nodes: ResolvedNode[]; ingress: IngressPair[] } => {
-    const ssh = {
-        address: host.address,
-        user: host.user,
-        sshKey: host.sshKey,
-        ...(host.port !== undefined ? { port: host.port } : {}),
-    };
+    const ssh = sshOf(host);
     const domain = previewDomain(zone);
     const exposure = exposeRoute(intent.expose, intent.on, domain, DEV_PORT, apiToken);
     // Each exposed service becomes a remote MCP endpoint at its routed domain, with an intentic-generated

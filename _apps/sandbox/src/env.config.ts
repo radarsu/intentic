@@ -59,8 +59,13 @@ const configSchema = z.object({
         .object({
             // SSH user of the wired deploy target; empty (or no host key) ⇒ this sandbox has no self-host target.
             user: z.string().default(""),
-            // Where the sandbox SSHes to deploy; the host it runs on (connect.sh adds the host-gateway mapping).
+            // Where the sandbox SSHes to deploy: with via "direct" the host it runs on (default
+            // host.docker.internal, the host-gateway connect.sh maps); with via "cloudflared" the host's SSH
+            // tunnel hostname (ssh-<id>.<zone>) connect.sh creates for a NAT'd self-host.
             address: z.string().default("host.docker.internal"),
+            // SSH transport for the self host: "cloudflared" reaches `address` through its Cloudflare tunnel
+            // (the sandbox runs `cloudflared access`), for a host it can't reach by IP (e.g. Docker Desktop).
+            via: z.enum(["direct", "cloudflared"]).default("direct"),
         })
         .prefault({}),
 });

@@ -6,6 +6,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { cloudflareApi, forgejoApi, sshExecutor } from "@intentic/providers";
 import { deploymentId, deploymentPort } from "@intentic/state-resolver";
+import { loadConfig } from "./env.config.js";
+import { renderTemplate } from "./lib/templates.js";
 import { readGeneratedSecrets } from "./secrets/generated-secrets.js";
 
 // ssh2 is CommonJS; under raw Node ESM `import { utils }` can't be resolved as a named export, so load it
@@ -36,12 +38,13 @@ const ENV = "production";
 const APP_BODY = "intentic-demo-live";
 const appPort = deploymentPort(deploymentId(APP, ENV));
 
-const zone = process.env["CLOUDFLARE_ZONE"] ?? "intentic.dev";
-const sshPort = Number(process.env["DEMO_SSH_PORT"] ?? "2222");
+const config = loadConfig();
+const zone = config.cloudflareZone;
+const sshPort = config.demo.sshPort;
 // Forgejo (3000) and Komodo (9120) are also published straight to localhost so the stack can be browsed
 // and the app repo seeded WITHOUT waiting on public DNS — the tunnel/public URLs come up alongside.
-const forgejoPort = Number(process.env["DEMO_FORGEJO_PORT"] ?? "3000");
-const komodoPort = Number(process.env["DEMO_KOMODO_PORT"] ?? "9120");
+const forgejoPort = config.demo.forgejoPort;
+const komodoPort = config.demo.komodoPort;
 
 const GIT_URL = `https://git.${zone}`;
 const KOMODO_URL = `https://deploy.${zone}`;
@@ -58,7 +61,7 @@ const dohHook = pathToFileURL(join(repoRoot, "_apps/cli/doh-lookup.mjs")).href;
 const cliEnv: NodeJS.ProcessEnv = {
     ...process.env,
     DEMO_DOH_ZONE: zone,
-    NODE_OPTIONS: `${process.env["NODE_OPTIONS"] ?? ""} --import=${dohHook}`.trim(),
+    NODE_OPTIONS: `${config.nodeOptions} --import=${dohHook}`.trim(),
 };
 
 // Stream a child's output so the operator watches the real apply progress; reject on non-zero exit.
@@ -85,9 +88,8 @@ const quiet = async (command: string, args: string[]): Promise<boolean> => {
 };
 
 const readToken = async (): Promise<string> => {
-    const fromEnv = process.env["CLOUDFLARE_API_TOKEN"];
-    if (fromEnv !== undefined && fromEnv !== "") {
-        return fromEnv.replace(/\\/g, "").trim();
+    if (config.cloudflareApiToken !== "") {
+        return config.cloudflareApiToken.replace(/\\/g, "").trim();
     }
     const envText = await readFile(join(repoRoot, "desired-state/.env"), "utf8");
     const match = /^CLOUDFLARE_API_TOKEN=(.*)$/m.exec(envText);
@@ -97,45 +99,15 @@ const readToken = async (): Promise<string> => {
     return match[1].replace(/\\/g, "").trim();
 };
 
-const deployConfig = (): string => `import { env } from "@intentic/graph";
-import { defineIntent } from "@intentic/sdk";
-
-export const intent = defineIntent((i) => {
-    const host = i.have.host("host", {
-        address: "127.0.0.1",
-        user: "root",
-        sshKey: env("HOST_SSH_KEY"),
-        port: ${sshPort},
-    });
-
-    const cf = i.have.cloudflare("cf", {
-        apiToken: env("CLOUDFLARE_API_TOKEN"),
-    });
-
-    i.want.app(${JSON.stringify(APP)}, {
-        on: host,
-        expose: cf,
-        environments: {
-            ${ENV}: { domain: ${JSON.stringify(`app.${zone}`)}, branch: "main", env: { PORT: ${JSON.stringify(String(appPort))} } },
-        },
-    });
-});
-`;
+const deployConfig = (): string =>
+    renderTemplate("demo/deploy.config.ts", { sshPort, app: APP, env: ENV, domain: `app.${zone}`, appPort: String(appPort) });
 
 // Only the externals intentic can't invent; the Forgejo/Komodo admin passwords are intentic-generated into
 // desired-state/.secrets.json by resolve/apply (we read them back below to sign in).
-const envFile = (privateKey: string, apiToken: string): string =>
-    `HOST_SSH_KEY="${privateKey}"
-CLOUDFLARE_API_TOKEN=${apiToken}
-`;
+const envFile = (privateKey: string, apiToken: string): string => renderTemplate("demo/env", { privateKey, apiToken });
 
 // A trivial buildable app: busybox httpd serving a known body on $PORT (Komodo sets PORT to appPort).
-const DOCKERFILE = `FROM busybox:1.37.0
-RUN mkdir -p /www && printf '%s' '${APP_BODY}' > /www/index.html
-ENV PORT=8080
-EXPOSE 8080
-CMD ["sh","-c","httpd -f -v -p \${PORT} -h /www"]
-`;
+const DOCKERFILE = renderTemplate("demo/Dockerfile", { appBody: APP_BODY });
 
 const ssh = async (command: string): Promise<string> => {
     const session = await sshExecutor.connect({ address: "127.0.0.1", port: sshPort, user: "root", privateKey });
