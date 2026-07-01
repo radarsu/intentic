@@ -89,6 +89,10 @@ export const WorkspaceTreeSchema = z.object({
 export type WorkspaceTree = z.infer<typeof WorkspaceTreeSchema>;
 export const WorkspaceFileQuerySchema = z.object({ path: z.string().min(1) });
 export const WorkspaceFileSchema = z.object({ path: z.string(), content: z.string() });
+// Direct file management over the /work tree (delete / new folder / rename+move / copy). Byte writes + the
+// editor's text save go through the plain POST /workspace/upload route (a body doesn't fit oRPC), not here.
+export const WorkspaceDirSchema = z.object({ path: z.string().min(1) });
+export const WorkspaceMoveSchema = z.object({ from: z.string().min(1), to: z.string().min(1) });
 
 // ---- workspace repos + external tools ----
 
@@ -149,6 +153,12 @@ export const InventoryListSchema = z.object({ entries: z.array(InventoryEntrySch
 // ---- system ----
 
 export const PreviewSchema = z.object({ running: z.boolean(), healthy: z.boolean(), port: z.number().optional() });
+// The dev command's captured stdout+stderr tail + how it last ended — the UI's "App preview log" panel, so a
+// failed `pnpm dev` (the `code: not found` that looked like a crash) is visible instead of buried in docker logs.
+export const DevLogsSchema = z.object({
+    output: z.string(),
+    lastExit: z.object({ code: z.number().optional(), signal: z.string().optional() }).optional(),
+});
 export const SelfHostSchema = z.object({ user: z.string(), address: z.string(), port: z.number(), via: z.enum(["direct", "cloudflared"]) });
 export type SelfHost = z.infer<typeof SelfHostSchema>;
 export const SelfHostResponseSchema = z.object({ selfHost: SelfHostSchema.nullable() });

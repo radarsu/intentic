@@ -12,7 +12,16 @@ import { createDevServer, type DevServer } from "./system/dev-server.js";
 import { type AgentTool, internalTools } from "./workspace/tools.js";
 import { fileToolsStore, type ToolsStore } from "./workspace/tools-store.js";
 import { type WorkspacePaths, workspacePaths } from "./workspace/workspace.js";
-import { readWorkspaceFile, readWorkspaceFileBytes, statWorkspaceFileSize, writeWorkspaceFile } from "./workspace/workspace-files.js";
+import {
+    copyWorkspacePath,
+    makeWorkspaceDir,
+    moveWorkspacePath,
+    readWorkspaceFile,
+    readWorkspaceFileBytes,
+    removeWorkspacePath,
+    statWorkspaceFileSize,
+    writeWorkspaceFile,
+} from "./workspace/workspace-files.js";
 import { walkWorkspaceTree } from "./workspace/workspace-tree.js";
 
 // The daemon's collaborators, wired once at boot and handed to the route factories — the injection seam the
@@ -44,9 +53,13 @@ export interface Services {
     };
     readonly files: {
         readonly read: (absPath: string) => Promise<string | undefined>;
-        readonly write: (absPath: string, content: string) => Promise<void>;
+        readonly write: (absPath: string, content: string | Uint8Array) => Promise<void>;
         readonly readBytes: (absPath: string) => Promise<Buffer | undefined>;
         readonly size: (absPath: string) => Promise<number | undefined>;
+        readonly mkdir: (absPath: string) => Promise<void>;
+        readonly remove: (absPath: string) => Promise<void>;
+        readonly move: (fromAbs: string, toAbs: string) => Promise<void>;
+        readonly copy: (fromAbs: string, toAbs: string) => Promise<void>;
     };
     readonly workspaceTree: (root: string) => Promise<WorkspaceTree>;
     readonly sessions: {
@@ -93,7 +106,16 @@ export const createServices = (config: Config, logger: Logger): Services => {
         agent: runAgent,
         intentic: runIntentic,
         git: { init: gitInit, status: gitStatus, listFiles: gitListFiles, commitAll: gitCommitAll, push: gitPush, clone: gitClone },
-        files: { read: readWorkspaceFile, write: writeWorkspaceFile, readBytes: readWorkspaceFileBytes, size: statWorkspaceFileSize },
+        files: {
+            read: readWorkspaceFile,
+            write: writeWorkspaceFile,
+            readBytes: readWorkspaceFileBytes,
+            size: statWorkspaceFileSize,
+            mkdir: makeWorkspaceDir,
+            remove: removeWorkspacePath,
+            move: moveWorkspacePath,
+            copy: copyWorkspacePath,
+        },
         workspaceTree: walkWorkspaceTree,
         sessions: { list: listWorkspaceSessions, read: readWorkspaceSession },
         auth,

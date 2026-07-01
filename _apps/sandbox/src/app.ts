@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { createRouter } from "./router.js";
+import { createTerminalRoute } from "./system/terminal.js";
 import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
 import { isDeniedWorkspacePath } from "./workspace/workspace-tree.js";
 
@@ -49,7 +50,9 @@ export const createApp = (services: Services): Hono => {
             }),
         );
         app.use("*", async (c, next) => {
-            if (c.req.path === "/health") {
+            // /system/terminal is a WebSocket upgrade: the browser can't set an Authorization header on it, so
+            // the terminal route authorizes the token from the query string itself (see createTerminalRoute).
+            if (c.req.path === "/health" || c.req.path === "/system/terminal") {
                 return next();
             }
             const header = c.req.header("authorization") ?? "";
@@ -92,6 +95,36 @@ export const createApp = (services: Services): Hono => {
         // ArrayBufferLike, which Hono's body type rejects); bounded by MAX_RAW_BYTES, so the copy is cheap.
         return c.body(new Uint8Array(bytes), 200, { "Content-Type": contentTypeForPath(target), "Content-Length": String(bytes.byteLength) });
     });
+
+    // Write raw bytes to any file under /work — the drag-drop upload AND the editor's text save both post here
+    // (bytes / utf8 body are the same to persist), so writes stay off oRPC like the raw read above. Parent dirs
+    // are auto-created, so a nested dropped-folder path materializes its tree. Same guards/order as the read:
+    // 400 on escape, 404 on the secret/`.git` denylist, 413 on oversize (checked from Content-Length first, then
+    // the actual body length in case the header lied).
+    app.post("/workspace/upload", async (c) => {
+        const path = c.req.query("path");
+        const target = path === undefined ? undefined : resolveWithin(services.workspace.root, path);
+        if (target === undefined) {
+            return c.json({ error: "invalid path" }, 400);
+        }
+        if (isDeniedWorkspacePath(path as string)) {
+            return c.json({ error: "not found" }, 404);
+        }
+        const declared = Number(c.req.header("content-length"));
+        if (Number.isFinite(declared) && declared > MAX_RAW_BYTES) {
+            return c.json({ error: "file too large" }, 413);
+        }
+        const bytes = new Uint8Array(await c.req.arrayBuffer());
+        if (bytes.byteLength > MAX_RAW_BYTES) {
+            return c.json({ error: "file too large" }, 413);
+        }
+        await services.files.write(target, bytes);
+        return c.json({ ok: true });
+    });
+
+    // Interactive PTY over a WebSocket. Paired with the `ws` server passed to serve() in main.ts (node-server's
+    // upgradeWebSocket drives it); registered before the oRPC catch-all so the upgrade matches here.
+    app.get("/system/terminal", createTerminalRoute(services));
 
     // Everything else flows through the oRPC OpenAPI handler, mounted at the root (its contract paths ARE the
     // daemon's routes). Registered last so /health + /workspace/raw match first.

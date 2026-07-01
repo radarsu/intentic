@@ -28,8 +28,10 @@ RUN pnpm --filter @intentic/cli deploy --prod /out/cli
 FROM node:24.18.0-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc AS runtime
 # Links the GHCR package to the repo (inherits its visibility/permissions, shows under its Packages).
 LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
+# procps gives the interactive terminal (system/terminal.ts) real process tools — `ps`, `top`, `kill` — so the
+# owner can see what's running in the sandbox and reap a stuck dev command.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates procps \
     && rm -rf /var/lib/apt/lists/*
 # The daemon runs the app's `pnpm dev` (dev-server.ts) — the build stage's corepack doesn't carry over, so
 # enable it here too and bake in the repo's pinned pnpm so the sandbox needs no first-run download or prompt.

@@ -38,6 +38,19 @@ const fakeDevServer = (status: Awaited<ReturnType<DevServer["status"]>>): DevSer
     status: async () => status,
 });
 
+// The files seam with every method a no-op by default; a test overrides just the ones it asserts on.
+const fakeFiles = (overrides: Partial<Services["files"]> = {}): Services["files"] => ({
+    read: async () => undefined,
+    write: async () => {},
+    readBytes: async () => undefined,
+    size: async () => undefined,
+    mkdir: async () => {},
+    remove: async () => {},
+    move: async () => {},
+    copy: async () => {},
+    ...overrides,
+});
+
 // All config fields at their schema defaults; the routes only read claudeCodeOauthToken / anthropicApiKey
 // (the agent guard) and the workspace paths (via services.workspace), so the rest are inert here.
 const baseConfig: Config = {
@@ -82,7 +95,7 @@ const services = (overrides: Partial<Services> = {}): Services => ({
         push: async () => {},
         clone: async () => {},
     },
-    files: { read: async () => undefined, write: async () => {}, readBytes: async () => undefined, size: async () => undefined },
+    files: fakeFiles(),
     workspaceTree: async () => ({ root: "/work", tree: [], truncated: false }),
     sessions: { list: async () => [], read: async () => [] },
     auth: undefined,
@@ -301,12 +314,7 @@ test("git.readFile reads a contained file, NOT_FOUNDs a missing one, and BAD_REQ
     const client = clientFor(
         createApp(
             services({
-                files: {
-                    read: async (absPath) => (absPath === "/work/intent/deploy.config.ts" ? "export const intent = 1;" : undefined),
-                    write: async () => {},
-                    readBytes: async () => undefined,
-                    size: async () => undefined,
-                },
+                files: fakeFiles({ read: async (absPath) => (absPath === "/work/intent/deploy.config.ts" ? "export const intent = 1;" : undefined) }),
             }),
         ),
     );
@@ -319,18 +327,15 @@ test("git.readFile reads a contained file, NOT_FOUNDs a missing one, and BAD_REQ
 });
 
 test("git.writeFile writes a contained file and rejects a path escape", async () => {
-    const writes: { path: string; content: string }[] = [];
+    const writes: { path: string; content: string | Uint8Array }[] = [];
     const client = clientFor(
         createApp(
             services({
-                files: {
-                    read: async () => undefined,
+                files: fakeFiles({
                     write: async (absPath, content) => {
                         writes.push({ path: absPath, content });
                     },
-                    readBytes: async () => undefined,
-                    size: async () => undefined,
-                },
+                }),
             }),
         ),
     );
@@ -350,13 +355,10 @@ test("workspace.file reads any contained file, denies secrets, NOT_FOUNDs missin
     const client = clientFor(
         createApp(
             services({
-                files: {
+                files: fakeFiles({
                     read: async (absPath) =>
                         absPath === "/work/app/src/index.ts" ? "console.log(1);" : absPath === "/work/desired-state/.env" ? "SECRET=1" : undefined,
-                    write: async () => {},
-                    readBytes: async () => undefined,
-                    size: async () => undefined,
-                },
+                }),
             }),
         ),
     );
@@ -373,9 +375,7 @@ test("GET /workspace/raw streams bytes with a content-type, denies secrets, 404s
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
     const app = createApp(
         services({
-            files: {
-                read: async () => undefined,
-                write: async () => {},
+            files: fakeFiles({
                 readBytes: async (absPath) => (absPath === "/work/app/logo.png" ? png : undefined),
                 size: async (absPath) =>
                     absPath === "/work/app/logo.png"
@@ -385,7 +385,7 @@ test("GET /workspace/raw streams bytes with a content-type, denies secrets, 404s
                           : absPath === "/work/desired-state/.env"
                             ? 10
                             : undefined,
-            },
+            }),
         }),
     );
     const ok = await app.request("/workspace/raw?path=app/logo.png");
@@ -398,6 +398,80 @@ test("GET /workspace/raw streams bytes with a content-type, denies secrets, 404s
     expect((await app.request("/workspace/raw?path=app/huge.png")).status).toBe(413);
     expect((await app.request("/workspace/raw?path=app/missing.png")).status).toBe(404);
     expect((await app.request("/workspace/raw?path=../../etc/passwd")).status).toBe(400);
+});
+
+test("POST /workspace/upload writes bytes, denies secrets/.git, 400s escape, 413s oversize", async () => {
+    const writes: { path: string; content: string | Uint8Array }[] = [];
+    const app = createApp(
+        services({
+            files: fakeFiles({
+                write: async (absPath, content) => {
+                    writes.push({ path: absPath, content });
+                },
+            }),
+        }),
+    );
+    const body = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
+    const ok = await app.request("/workspace/upload?path=app/assets/logo.png", { method: "POST", body });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ ok: true });
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.path).toBe("/work/app/assets/logo.png");
+    expect(new Uint8Array(writes[0]?.content as Uint8Array)).toEqual(body);
+
+    // Same guards as the read routes: the secret/.git denylist is 404, a climb-out is 400 — neither writes.
+    expect((await app.request("/workspace/upload?path=desired-state/.env", { method: "POST", body })).status).toBe(404);
+    expect((await app.request("/workspace/upload?path=.intentic/claude.json", { method: "POST", body })).status).toBe(404);
+    expect((await app.request("/workspace/upload?path=../../etc/passwd", { method: "POST", body })).status).toBe(400);
+
+    // Oversize is refused on the body length; nothing new is written.
+    const oversize = await app.request("/workspace/upload?path=app/huge.bin", { method: "POST", body: new Uint8Array(MAX_RAW_BYTES + 1) });
+    expect(oversize.status).toBe(413);
+    expect(writes).toHaveLength(1);
+});
+
+test("workspace.mkdir/delete/move/copy resolve within /work and guard escapes + secrets", async () => {
+    const calls: [string, ...string[]][] = [];
+    const client = clientFor(
+        createApp(
+            services({
+                files: fakeFiles({
+                    mkdir: async (p) => {
+                        calls.push(["mkdir", p]);
+                    },
+                    remove: async (p) => {
+                        calls.push(["remove", p]);
+                    },
+                    move: async (a, b) => {
+                        calls.push(["move", a, b]);
+                    },
+                    copy: async (a, b) => {
+                        calls.push(["copy", a, b]);
+                    },
+                }),
+            }),
+        ),
+    );
+
+    expect(await client.workspace.mkdir({ path: "app/new-dir" })).toEqual({ ok: true });
+    expect(await client.workspace.delete({ path: "app/old.ts" })).toEqual({ ok: true });
+    expect(await client.workspace.move({ from: "app/a.ts", to: "app/b.ts" })).toEqual({ ok: true });
+    expect(await client.workspace.copy({ from: "app/a.ts", to: "app/nested/c.ts" })).toEqual({ ok: true });
+    expect(calls).toEqual([
+        ["mkdir", "/work/app/new-dir"],
+        ["remove", "/work/app/old.ts"],
+        ["move", "/work/app/a.ts", "/work/app/b.ts"],
+        ["copy", "/work/app/a.ts", "/work/app/nested/c.ts"],
+    ]);
+
+    // Guards fire on either endpoint, before the fs is touched.
+    expect(await errorCode(client.workspace.mkdir({ path: "../evil" }))).toBe("BAD_REQUEST");
+    expect(await errorCode(client.workspace.delete({ path: "desired-state/.env" }))).toBe("NOT_FOUND");
+    expect(await errorCode(client.workspace.move({ from: "app/a.ts", to: "../escape" }))).toBe("BAD_REQUEST");
+    expect(await errorCode(client.workspace.move({ from: ".git/config", to: "app/x" }))).toBe("NOT_FOUND");
+    expect(await errorCode(client.workspace.copy({ from: "app/a.ts", to: "app/.env" }))).toBe("NOT_FOUND");
+    expect(calls).toHaveLength(4);
 });
 
 test("workspace.addRepo clones a repo, rejects reserved names + a bad body", async () => {

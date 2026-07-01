@@ -27,8 +27,10 @@
         "@puristic/env": "catalog:",
         "hono": "catalog:",
         "jose": "catalog:",
+        "node-pty": "catalog:",
         "pino": "catalog:",
         "tslib": "catalog:",
+        "ws": "catalog:",
         "zod": "catalog:"
     },
     "devDependencies": {
@@ -36,6 +38,7 @@
         "@orpc/client": "catalog:",
         "@orpc/openapi-client": "catalog:",
         "@types/node": "catalog:",
+        "@types/ws": "catalog:",
         "pino-pretty": "catalog:",
         "tsx": "catalog:",
         "typescript": "catalog:",

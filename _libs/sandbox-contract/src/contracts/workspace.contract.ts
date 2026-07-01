@@ -9,8 +9,10 @@ import {
     ToolInputSchema,
     ToolNameParamSchema,
     ToolsListSchema,
+    WorkspaceDirSchema,
     WorkspaceFileQuerySchema,
     WorkspaceFileSchema,
+    WorkspaceMoveSchema,
     WorkspaceTreeSchema,
 } from "../schemas.js";
 
@@ -20,6 +22,12 @@ import {
 export const workspaceContract = {
     tree: oc.route({ method: "GET", path: "/workspace/tree" }).output(WorkspaceTreeSchema),
     file: oc.route({ method: "GET", path: "/workspace/file" }).input(WorkspaceFileQuerySchema).output(WorkspaceFileSchema),
+    // Direct file management the browser drives against the /work tree (byte writes go through POST
+    // /workspace/upload). delete carries its path in the query (a DELETE has no body); the rest post a body.
+    mkdir: oc.route({ method: "POST", path: "/workspace/dir" }).input(WorkspaceDirSchema).output(OkSchema),
+    delete: oc.route({ method: "DELETE", path: "/workspace/entry" }).input(WorkspaceFileQuerySchema).output(OkSchema),
+    move: oc.route({ method: "POST", path: "/workspace/move" }).input(WorkspaceMoveSchema).output(OkSchema),
+    copy: oc.route({ method: "POST", path: "/workspace/copy" }).input(WorkspaceMoveSchema).output(OkSchema),
     repos: oc.route({ method: "GET", path: "/workspace/repos" }).output(ReposListSchema),
     addRepo: oc.route({ method: "POST", path: "/workspace/repos" }).input(CloneRepoSchema).output(CloneResultSchema),
     // Scaffold (or adopt) the deployable app at /work/app — the fixed app role, distinct from addRepo's sibling repos.

@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 
 // Resolve a repo-relative path to an absolute one, guarding against escaping the repo dir: the daemon serves
@@ -24,9 +24,33 @@ export const readWorkspaceFile = async (absPath: string): Promise<string | undef
     }
 };
 
-export const writeWorkspaceFile = async (absPath: string, content: string): Promise<void> => {
+// Write a file's contents, auto-creating parent dirs. Accepts bytes too, so the drag-drop upload route and the
+// editor's text save share one write path (uploaded bytes / edited utf8 text are both just a body to persist).
+export const writeWorkspaceFile = async (absPath: string, content: string | Uint8Array): Promise<void> => {
     await mkdir(dirname(absPath), { recursive: true });
     await writeFile(absPath, content);
+};
+
+// Create a directory (and any missing parents); idempotent when it already exists. Backs the "new folder" op.
+export const makeWorkspaceDir = async (absPath: string): Promise<void> => {
+    await mkdir(absPath, { recursive: true });
+};
+
+// Delete a file or directory (recursively); a no-op when absent. Backs delete + the move-away half of a rename.
+export const removeWorkspacePath = async (absPath: string): Promise<void> => {
+    await rm(absPath, { recursive: true, force: true });
+};
+
+// Move/rename a file or directory, creating the target's parent first. Backs rename, move, and cut→paste.
+export const moveWorkspacePath = async (fromAbs: string, toAbs: string): Promise<void> => {
+    await mkdir(dirname(toAbs), { recursive: true });
+    await rename(fromAbs, toAbs);
+};
+
+// Copy a file or directory (recursively), creating the target's parent first. Backs copy→paste.
+export const copyWorkspacePath = async (fromAbs: string, toAbs: string): Promise<void> => {
+    await mkdir(dirname(toAbs), { recursive: true });
+    await cp(fromAbs, toAbs, { recursive: true });
 };
 
 // The browser previews binary files (images, PDFs) by fetching their raw bytes from /workspace/raw — the text

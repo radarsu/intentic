@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { serve } from "@hono/node-server";
+import { serve, type WebSocketServerLike } from "@hono/node-server";
+import { WebSocketServer } from "ws";
 import { createApp } from "./app.js";
 import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
@@ -38,7 +39,12 @@ const main = async (): Promise<void> => {
     }
 
     const app = createApp(services);
-    const server = serve({ fetch: app.fetch, port: config.sandbox.port, hostname: config.sandbox.host });
+    // The interactive-terminal WebSocket (/system/terminal) rides node-server's native WS support: `ws` in
+    // noServer mode handles the upgrade, node-server routes it through Hono's upgradeWebSocket to the terminal.
+    // `ws`'s WebSocketServer types its options.noServer as `boolean | undefined`; node-server's WebSocketServerLike
+    // wants a plain boolean under exactOptionalPropertyTypes. The shapes match at runtime — assert the interface.
+    const terminalSockets = new WebSocketServer({ noServer: true }) as unknown as WebSocketServerLike;
+    const server = serve({ fetch: app.fetch, port: config.sandbox.port, hostname: config.sandbox.host, websocket: { server: terminalSockets } });
     logger.info({ host: config.sandbox.host, port: config.sandbox.port, workspace: config.workspaceRoot }, "intentic sandbox daemon listening");
 
     // Decentralized path: tell the platform where to reach this sandbox directly (best-effort, off the command

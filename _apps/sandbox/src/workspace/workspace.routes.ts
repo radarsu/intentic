@@ -16,21 +16,44 @@ import { isDeniedWorkspacePath } from "./workspace-tree.js";
 // /workspace/raw preview is a plain Hono route in app.ts (a streamed binary body doesn't fit oRPC).
 export const createWorkspaceRoutes = (services: Services) => {
     const i = implement(workspaceContract).$context<OrpcContext>();
+    // Resolve a root-relative path to an absolute one inside /work, applying the same two guards the read routes
+    // use: a `../`/absolute escape is BAD_REQUEST, a `.git`/secret path is NOT_FOUND (never served, never written).
+    const contained = (relPath: string): string => {
+        const target = resolveWithin(services.workspace.root, relPath);
+        if (target === undefined) {
+            throw new ORPCError("BAD_REQUEST", { message: "invalid path" });
+        }
+        if (isDeniedWorkspacePath(relPath)) {
+            throw new ORPCError("NOT_FOUND", { message: "not found" });
+        }
+        return target;
+    };
     return {
         tree: i.tree.handler(() => services.workspaceTree(services.workspace.root)),
         file: i.file.handler(async ({ input }) => {
-            const target = resolveWithin(services.workspace.root, input.path);
-            if (target === undefined) {
-                throw new ORPCError("BAD_REQUEST", { message: "invalid path" });
-            }
-            if (isDeniedWorkspacePath(input.path)) {
-                throw new ORPCError("NOT_FOUND", { message: "not found" });
-            }
-            const content = await services.files.read(target);
+            const content = await services.files.read(contained(input.path));
             if (content === undefined) {
                 throw new ORPCError("NOT_FOUND", { message: "not found" });
             }
             return { path: input.path, content };
+        }),
+        // Direct file management over /work (byte writes go through POST /workspace/upload). Both endpoints of a
+        // move/copy are guarded, so neither source nor target can escape or touch a secret/`.git` path.
+        mkdir: i.mkdir.handler(async ({ input }) => {
+            await services.files.mkdir(contained(input.path));
+            return { ok: true } as const;
+        }),
+        delete: i.delete.handler(async ({ input }) => {
+            await services.files.remove(contained(input.path));
+            return { ok: true } as const;
+        }),
+        move: i.move.handler(async ({ input }) => {
+            await services.files.move(contained(input.from), contained(input.to));
+            return { ok: true } as const;
+        }),
+        copy: i.copy.handler(async ({ input }) => {
+            await services.files.copy(contained(input.from), contained(input.to));
+            return { ok: true } as const;
         }),
         repos: i.repos.handler(async () => ({ repos: await listRepos(services.workspace.root) })),
         addRepo: i.addRepo.handler(async ({ input }) => {
