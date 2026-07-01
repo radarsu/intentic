@@ -19,7 +19,8 @@ export const workspaceContract = {
     tree: oc.route({ method: "GET", path: "/workspace/tree" }).output(WorkspaceTreeSchema),
     file: oc.route({ method: "GET", path: "/workspace/file" }).input(WorkspaceFileQuerySchema).output(WorkspaceFileSchema),
     // Direct file management the browser drives against the /work tree (byte writes go through POST
-    // /workspace/upload). delete carries its path in the query (a DELETE has no body); the rest post a body.
+    // /workspace/upload). oRPC's OpenAPI codec reads non-GET input from the JSON body, so delete sends {path}
+    // in the body too (not the query) — same as the POST routes.
     mkdir: oc.route({ method: "POST", path: "/workspace/dir" }).input(WorkspaceDirSchema).output(OkSchema),
     delete: oc.route({ method: "DELETE", path: "/workspace/entry" }).input(WorkspaceFileQuerySchema).output(OkSchema),
     move: oc.route({ method: "POST", path: "/workspace/move" }).input(WorkspaceMoveSchema).output(OkSchema),
