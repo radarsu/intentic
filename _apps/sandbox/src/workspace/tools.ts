@@ -14,10 +14,6 @@ export const agentToolSchema = z.object({
 });
 export type AgentTool = z.infer<typeof agentToolSchema>;
 
-// A valid MCP server name: surfaces to the model as `mcp__<name>__<tool>`, so keep it to a safe identifier
-// (alphanumeric start, then alphanumerics / `_` / `-`). Guards the external-tools route.
-export const isValidToolName = (name: string): boolean => /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name);
-
 // Decode the env-injected internal tools. connect.sh / the workspace provider base64-encode the JSON so
 // braces/quotes ride the `docker -e` value cleanly; absent/empty ⇒ no internal tools. A malformed value throws.
 export const internalTools = (encoded: string | undefined): AgentTool[] => {

@@ -8,12 +8,11 @@ import type { OrpcContext } from "../context.js";
 import { createConfigStore } from "../inventory/config-store.js";
 import { zoneFromPublicUrl } from "../system/zone.js";
 import { isValidRepoName, listRepos } from "./repos.js";
-import { isValidToolName } from "./tools.js";
 import { resolveWithin } from "./workspace-files.js";
 import { isDeniedWorkspacePath } from "./workspace-tree.js";
 
-// The full /work view + extra-repo cloning + the sandbox-owned external MCP tools store. The binary
-// /workspace/raw preview is a plain Hono route in app.ts (a streamed binary body doesn't fit oRPC).
+// The full /work view + extra-repo cloning. The binary /workspace/raw preview is a plain Hono route in app.ts
+// (a streamed binary body doesn't fit oRPC). External MCP tools moved to the unified capabilities manifest.
 export const createWorkspaceRoutes = (services: Services) => {
     const i = implement(workspaceContract).$context<OrpcContext>();
     // Resolve a root-relative path to an absolute one inside /work, applying the same two guards the read routes
@@ -92,24 +91,6 @@ export const createWorkspaceRoutes = (services: Services) => {
             }
             if (services.config.dev.command !== "" && services.config.dev.port !== "") {
                 services.devServer.start({ command: services.config.dev.command.split(" "), cwd: appDir, port: Number(services.config.dev.port) });
-            }
-            return { ok: true } as const;
-        }),
-        // GET never returns the token (it stays in the sandbox); the list only reports presence.
-        tools: i.tools.handler(async () => ({
-            tools: (await services.externalTools.list()).map((tool) => ({ name: tool.name, url: tool.url, hasToken: tool.token !== undefined })),
-        })),
-        addTool: i.addTool.handler(async ({ input }) => {
-            if (!isValidToolName(input.name)) {
-                throw new ORPCError("BAD_REQUEST", { message: "invalid tool name (use letters, digits, '-' or '_'; must start alphanumeric)" });
-            }
-            // Upsert by name: re-posting the same name edits its url/token.
-            await services.externalTools.add({ name: input.name, url: input.url, ...(input.token !== undefined ? { token: input.token } : {}) });
-            return { name: input.name };
-        }),
-        removeTool: i.removeTool.handler(async ({ input }) => {
-            if (!(await services.externalTools.remove(input.name))) {
-                throw new ORPCError("NOT_FOUND", { message: "no tool with that name" });
             }
             return { ok: true } as const;
         }),

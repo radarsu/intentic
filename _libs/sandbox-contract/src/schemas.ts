@@ -94,20 +94,13 @@ export const WorkspaceFileSchema = z.object({ path: z.string(), content: z.strin
 export const WorkspaceDirSchema = z.object({ path: z.string().min(1) });
 export const WorkspaceMoveSchema = z.object({ from: z.string().min(1), to: z.string().min(1) });
 
-// ---- workspace repos + external tools ----
+// ---- workspace repos ----
 
 export const ReposListSchema = z.object({ repos: z.array(z.string()) });
 export const CloneRepoSchema = z.object({ name: z.string().min(1), cloneUrl: z.string().min(1), branch: z.string().optional() });
 export const CloneResultSchema = z.object({ name: z.string(), path: z.string() });
 // Scaffold the deployable app at /work/app: a zero-config starter, or adopt an existing repo via `cloneUrl`.
 export const AppScaffoldSchema = z.object({ cloneUrl: z.string().url().optional() });
-// Add/edit an external MCP tool. `name` is validated more strictly in the handler (isValidToolName).
-export const ToolInputSchema = z.object({ name: z.string().min(1), url: z.string().url(), token: z.string().optional() });
-// The list never returns the token (it stays in the sandbox) — only its presence.
-export const ToolSummarySchema = z.object({ name: z.string(), url: z.string(), hasToken: z.boolean() });
-export const ToolsListSchema = z.object({ tools: z.array(ToolSummarySchema) });
-export const ToolAddResultSchema = z.object({ name: z.string() });
-export const ToolNameParamSchema = z.object({ name: z.string() });
 
 // ---- inventory: the i.have.* / i.want.service entries in deploy.config.ts's managed region ----
 // The daemon renders/parses these; the browser edits them through the inventory routes. Moved here from the
@@ -149,6 +142,56 @@ export const AddInventoryInputSchema = z.discriminatedUnion("kind", [
 export type AddInventoryInput = z.infer<typeof AddInventoryInputSchema>;
 export const InventoryNameParamSchema = z.object({ name: z.string() });
 export const InventoryListSchema = z.object({ entries: z.array(InventoryEntrySchema) });
+
+// ---- capabilities: the sandbox's unified capability manifest (.intentic/capabilities.json) ----
+// Everything a user adds to a sandbox is a capability with an idempotent apply + a status check. The manifest is
+// the source of truth for what's active; `mcp`-kind entries also feed the agent's MCP servers each turn. DevOps
+// is the capability that scaffolds the intent/desired-state repos — until it's active the sandbox is empty.
+
+export const CapabilityKindSchema = z.enum(["devops", "mcp", "service", "integration"]);
+export type CapabilityKind = z.infer<typeof CapabilityKindSchema>;
+export const CapabilityStateSchema = z.enum(["active", "pending", "error", "inactive"]);
+export type CapabilityState = z.infer<typeof CapabilityStateSchema>;
+
+// The manifest id — also the `mcp__<id>__…` server name for mcp capabilities, so it's a safe identifier.
+const capabilityId = z
+    .string()
+    .min(1)
+    .max(60)
+    .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
+
+// Per-kind config. Secrets (an mcp token) live here and are denylisted like tools.json.
+export const McpConfigSchema = z.object({ url: z.string().url(), token: z.string().optional() });
+export const ServiceConfigSchema = z.object({
+    service: ServiceKindSchema,
+    domain: z.string().min(1),
+    on: z.string().min(1),
+    expose: z.string().min(1),
+});
+export const IntegrationConfigSchema = z.object({ provider: z.enum(["stripe"]) });
+export type McpConfig = z.infer<typeof McpConfigSchema>;
+export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
+export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
+
+export const CapabilitySchema = z.discriminatedUnion("kind", [
+    z.object({ id: capabilityId, kind: z.literal("devops"), config: z.object({}) }),
+    z.object({ id: capabilityId, kind: z.literal("mcp"), config: McpConfigSchema }),
+    z.object({ id: capabilityId, kind: z.literal("service"), config: ServiceConfigSchema }),
+    z.object({ id: capabilityId, kind: z.literal("integration"), config: IntegrationConfigSchema }),
+]);
+export type Capability = z.infer<typeof CapabilitySchema>;
+
+export const CapabilityStatusSchema = z.object({ state: CapabilityStateSchema, detail: z.string().optional() });
+export type CapabilityStatus = z.infer<typeof CapabilityStatusSchema>;
+// The list row: manifest entry + live status. Secrets are never returned (an mcp token becomes hasToken).
+export const CapabilitySummarySchema = z.object({
+    id: z.string(),
+    kind: CapabilityKindSchema,
+    status: CapabilityStatusSchema,
+    config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+});
+export const CapabilitiesListSchema = z.object({ capabilities: z.array(CapabilitySummarySchema) });
+export const CapabilityIdParamSchema = z.object({ id: z.string() });
 
 // ---- system ----
 

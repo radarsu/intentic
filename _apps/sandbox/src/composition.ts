@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { AgentEvent, IntenticLine, SelfHost, WorkspaceTree } from "@intentic/sandbox-contract";
 import type { Logger } from "pino";
 import { type AgentRequest, runAgent } from "./agent/agent.js";
+import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/capabilities-store.js";
 import { createAuthorizer, createGoogleVerifier, fileOwnerStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
@@ -10,7 +11,6 @@ import { type IntenticRun, runIntentic } from "./intentic/intentic-runner.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions/sessions.js";
 import { createDevServer, type DevServer } from "./system/dev-server.js";
 import { type AgentTool, internalTools } from "./workspace/tools.js";
-import { fileToolsStore, type ToolsStore } from "./workspace/tools-store.js";
 import { type WorkspacePaths, workspacePaths } from "./workspace/workspace.js";
 import {
     copyWorkspacePath,
@@ -37,9 +37,10 @@ export interface Services {
     readonly selfHost: SelfHost | undefined;
     // This sandbox's identity for the platform's Connections card; undefined ⇒ /info returns {} (loopback/test).
     readonly info: { readonly name: string; readonly image: string } | undefined;
-    // Intent-declared internal MCP tools (constant for the sandbox), merged with the external store each turn.
+    // Intent-declared internal MCP tools (constant for the sandbox), merged with mcp-kind capabilities each turn.
     readonly tools: readonly AgentTool[];
-    readonly externalTools: ToolsStore;
+    // The unified capability manifest (.intentic/capabilities.json) — DevOps/mcp/service/integration.
+    readonly capabilities: CapabilitiesStore;
     readonly claudeStore: ClaudeStore;
     readonly agent: (request: AgentRequest) => AsyncGenerator<AgentEvent>;
     readonly intentic: (run: IntenticRun) => AsyncGenerator<IntenticLine>;
@@ -101,7 +102,7 @@ export const createServices = (config: Config, logger: Logger): Services => {
         selfHost,
         info,
         tools: internalTools(config.intenticAgentTools),
-        externalTools: fileToolsStore(join(workspace.root, ".intentic", "tools.json")),
+        capabilities: fileCapabilitiesStore(join(workspace.root, ".intentic", "capabilities.json")),
         claudeStore: fileClaudeStore(join(workspace.root, ".intentic", "claude.json")),
         agent: runAgent,
         intentic: runIntentic,

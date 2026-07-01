@@ -1,5 +1,6 @@
 import { type AgentEvent, type AgentTurn, agentContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
+import { mcpToolsOf } from "../capabilities/mcp-tools.js";
 import { ensureFreshToken } from "../claude/claude-credentials.js";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
@@ -23,9 +24,9 @@ async function* streamAgent(services: Services, input: AgentTurn, signal: AbortS
         yield { kind: "done" };
         return;
     }
-    // Internal (intent-declared, from env) tools first, then external (the sandbox's own store) — a same-named
+    // Internal (intent-declared, from env) tools first, then external mcp-kind capabilities — a same-named
     // external tool overrides, matching mcpServersOf's last-wins merge.
-    const tools = [...services.tools, ...(await services.externalTools.list())];
+    const tools = [...services.tools, ...mcpToolsOf(await services.capabilities.list())];
     const request: AgentRequest = {
         prompt: input.prompt,
         cwd: services.workspace.root,

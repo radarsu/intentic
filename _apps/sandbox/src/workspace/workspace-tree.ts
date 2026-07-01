@@ -17,7 +17,7 @@ const MAX_ENTRIES = 5000;
 // Files that hold secrets: the full-tree view must never list or read them (the tracked-git view never could,
 // since they aren't committed). `.env.example` is safe — placeholder values only.
 export const isSecretFile = (name: string): boolean =>
-    name === ".secrets.json" || name === "claude.json" || name === "tools.json" || (name.startsWith(".env") && name !== ".env.example");
+    name === ".secrets.json" || name === "claude.json" || name === "capabilities.json" || (name.startsWith(".env") && name !== ".env.example");
 
 // Guards the file route: reject reading anything under .git or any secret file, even when the path is asked for
 // directly (it is never listed, but the route must not serve it either).

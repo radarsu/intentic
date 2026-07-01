@@ -5,10 +5,6 @@ import {
     CloneResultSchema,
     OkSchema,
     ReposListSchema,
-    ToolAddResultSchema,
-    ToolInputSchema,
-    ToolNameParamSchema,
-    ToolsListSchema,
     WorkspaceDirSchema,
     WorkspaceFileQuerySchema,
     WorkspaceFileSchema,
@@ -16,9 +12,9 @@ import {
     WorkspaceTreeSchema,
 } from "../schemas.js";
 
-// The full /work view + extra-repo cloning + the sandbox-owned external MCP tools store. The binary preview
-// (/workspace/raw) is intentionally NOT here — it stays a plain Hono route serving raw bytes with a
-// Content-Type header (oRPC's request/response shape doesn't fit a streamed binary body).
+// The full /work view + extra-repo cloning. The binary preview (/workspace/raw) is intentionally NOT here — it
+// stays a plain Hono route serving raw bytes with a Content-Type header (oRPC's request/response shape doesn't
+// fit a streamed binary body). External MCP tools moved to the unified capabilities manifest (mcp kind).
 export const workspaceContract = {
     tree: oc.route({ method: "GET", path: "/workspace/tree" }).output(WorkspaceTreeSchema),
     file: oc.route({ method: "GET", path: "/workspace/file" }).input(WorkspaceFileQuerySchema).output(WorkspaceFileSchema),
@@ -32,7 +28,4 @@ export const workspaceContract = {
     addRepo: oc.route({ method: "POST", path: "/workspace/repos" }).input(CloneRepoSchema).output(CloneResultSchema),
     // Scaffold (or adopt) the deployable app at /work/app — the fixed app role, distinct from addRepo's sibling repos.
     addApp: oc.route({ method: "POST", path: "/workspace/app" }).input(AppScaffoldSchema).output(OkSchema),
-    tools: oc.route({ method: "GET", path: "/workspace/tools" }).output(ToolsListSchema),
-    addTool: oc.route({ method: "POST", path: "/workspace/tools" }).input(ToolInputSchema).output(ToolAddResultSchema),
-    removeTool: oc.route({ method: "DELETE", path: "/workspace/tools/{name}" }).input(ToolNameParamSchema).output(OkSchema),
 };
