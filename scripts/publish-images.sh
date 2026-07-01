@@ -3,11 +3,12 @@
 #   sandbox    the AI-agent workspace daemon + CLI
 #   dind-host  a Docker-in-Docker + sshd deploy-target "host" — connect.ps1 stands one up on Windows so a
 #              server-less user can deploy locally (the e2e harness + intentic-local.sh use the same recipe)
-# Used by CI — the Images workflow (latest + commit SHA on push to main) and the release (the version, via
-# semantic-release successCmd) — and runnable by hand:
+# Used by CI — the Images workflow (latest + commit SHA on push to main) and the release (the version + the
+# moving `stable` tag, via semantic-release successCmd) — and runnable by hand:
 #   docker login ghcr.io && TAGS=0.1.0 pnpm publish:images
-# TAGS is a space-separated tag list; every listed tag is pushed. The release version's digest is pinned into
-# _libs/state-resolver/src/images.ts (Renovate maintains it). The GHCR packages must be made public once so
+# TAGS is a space-separated tag list; every listed tag is pushed. On release the moving `stable` tag is pushed
+# onto the new version; _libs/state-resolver/src/lib/images.ts and the connect scripts reference `sandbox:stable`
+# (unpinned — always the latest release, no digest to maintain). The GHCR packages must be made public once so
 # tenant hosts can pull them unauthenticated.
 set -euo pipefail
 

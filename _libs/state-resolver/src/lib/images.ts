@@ -1,12 +1,14 @@
-// The single authority for every docker image intentic deploys. Each value is a fully immutable reference —
-// `repo:tag@sha256:digest` — so an upstream re-push of a tag can never silently change what runs; only a
+// The single authority for every docker image intentic deploys. Each third-party value is a fully immutable
+// reference — `repo:tag@sha256:digest` — so an upstream re-push of a tag can never silently change what runs; the
+// first-party `sandbox` (below) is the deliberate exception, tracking a moving `stable` release tag. Only a
 // commit that edits this file (by hand or a merged Renovate PR) moves a version. The resolver reads these
 // and emits them as resource INPUTS into the desired-state graph, so the deployed version is recorded in
 // desired-state.json: git-reviewable, diffable, and reconciled (a changed pin makes the provider's `diff`
 // report drift and `apply` recreate on the new image). Rollback is `git revert` + re-apply.
 //
 // Renovate is pointed at this file (see renovate.json5) with pinDigests on, so it bumps both the tag and the
-// `@sha256:` digest on each entry from the `renovate:` hint comment above it.
+// `@sha256:` digest on each pinned third-party entry from the `renovate:` hint comment above it. The first-party
+// `sandbox` carries no hint and no digest — it is unpinned (see its note below), so no manager touches it.
 //
 // SigNoz caveat: the SigNoz stack (signoz/clickhouse/otel/zookeeper) is an interdependent set whose compose +
 // collector + clickhouse configs in signoz.ts mirror SigNoz's reference deploy/docker. They are pinned to the
@@ -66,11 +68,13 @@ export const IMAGES = Object.freeze({
     // mints a per-app bucket + access key via `docker exec … garage`. renovate: datasource=docker depName=dxflrs/garage
     garage: "dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690",
     // The first-party intentic image built from _apps/sandbox (the AI-agent workspace), published to the repo's
-    // GHCR by scripts/publish-images.sh — continuously on push to main (latest + commit SHA) and version-tagged
-    // on release. The GHCR package must be public so tenant hosts can pull it. Pin a RELEASE version (tag +
-    // digest): its bundled CLI + @intentic/* are published to npm at that version, so `intentic init` resolves.
-    // Never :latest or a hand-tagged build — those carry internal version 0.0.0 (unpublished), so init's
-    // `pnpm install` of ~0.0.0 deps fails and resolve can't find @intentic/graph.
-    // renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
-    sandbox: "ghcr.io/radarsu/intentic/sandbox:1.32.1@sha256:8d53f67948f04f8770b812c56e0e6918e61d5db8389932a02c007c7ae85d0037",
+    // GHCR by scripts/publish-images.sh. Deliberately NOT digest-pinned like the entries above: it tracks the
+    // moving `stable` tag, which ONLY the release moves (semantic-release's successCmd pushes `<version> stable`),
+    // so it always resolves to the newest RELEASE image — our own component, always current, with no pin to bump.
+    // Never `:latest`: that tag is the continuous push-to-main build carrying internal version 0.0.0 (unpublished),
+    // so a scaffolded intent repo's `pnpm install` of ~0.0.0 deps fails and `intentic init` can't resolve
+    // @intentic/graph. `stable` only ever points at a published release, so init resolves. The GHCR package must be
+    // public so tenant hosts can pull it. (Trade-off of unpinning: a `stable` move is not a desired-state input
+    // change, so the graph-deployed workspace won't auto-recreate on it — connect.sh/ps1 pull `stable` fresh.)
+    sandbox: "ghcr.io/radarsu/intentic/sandbox:stable",
 } as const);

@@ -22,7 +22,7 @@
 #   GOOGLE_CLIENT_ID     the platform's PUBLIC Google web client id the daemon verifies sign-in against (default: hardcoded below)
 #
 # Optional env:
-#   SANDBOX_IMAGE   sandbox image to run (default: the pinned release ghcr.io/radarsu/intentic/sandbox:1.32.1)
+#   SANDBOX_IMAGE   sandbox image to run (default: the latest release ghcr.io/radarsu/intentic/sandbox:stable)
 #   DEV_COMMAND     the app's dev/watch command inside the sandbox (default: pnpm dev)
 #   DEV_PORT        the app's dev-server port, exposed at *.preview.<zone> (default: 5173)
 #   WEB_ORIGIN      scopes the daemon's CORS to the platform web app (default: open — the Google-token audience is the real gate)
@@ -40,13 +40,13 @@ set -eu
 # your host's platform there, not localhost) — this is never shown in the product UI.
 PLATFORM_URL="${PLATFORM_URL:-${1:-https://platform.intentic.dev}}"
 CONNECT_TOKEN="${CONNECT_TOKEN:-${2:-}}"
-# A version-pinned RELEASE image, never :latest: the release pipeline bumps every @intentic/* package to the
-# release version, publishes them to npm, THEN builds this image — so its bundled CLI is that version and the
-# intent repo `intentic init` scaffolds (~<version>) resolves from npm. The continuous :latest / hand-tagged
-# builds carry internal version 0.0.0 (unpublished), so init's `pnpm install` fails and resolve can't find
-# @intentic/graph. Renovate bumps the tag+digest on each release (see renovate.json5).
-# renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
-SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:1.32.1@sha256:8d53f67948f04f8770b812c56e0e6918e61d5db8389932a02c007c7ae85d0037}"
+# The latest RELEASE image via the moving `stable` tag (pulled fresh below), never :latest: the release pipeline
+# bumps every @intentic/* package to the release version, publishes them to npm, THEN builds this image and moves
+# `stable` onto it — so its bundled CLI is a published version and the intent repo `intentic init` scaffolds
+# (~<version>) resolves from npm. The continuous :latest / hand-tagged builds carry internal version 0.0.0
+# (unpublished), so init's `pnpm install` fails and resolve can't find @intentic/graph. Unpinned on purpose — the
+# release always moves `stable` to the newest release, so there's no tag+digest to bump here.
+SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:stable}"
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
 DEV_COMMAND="${DEV_COMMAND:-pnpm dev}"
 DEV_PORT="${DEV_PORT:-5173}"
@@ -332,7 +332,7 @@ if [ -n "$SELF_HOST" ]; then
     setup_self_host
 fi
 
-# Pull the pinned image up front (with visible progress) so a slow first-time pull doesn't look like a
+# Pull the sandbox image up front (with visible progress) so a slow first-time pull doesn't look like a
 # hang, a private/missing image surfaces as a clear error — and the tunnel step below, which runs this
 # same image via `--entrypoint intentic`, never executes a stale locally-cached tag (docker run reuses a
 # cached tag without re-pulling, so a republished image would otherwise be missed).

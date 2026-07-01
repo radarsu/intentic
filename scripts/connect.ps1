@@ -36,10 +36,10 @@ $PSNativeCommandUseErrorActionPreference = $false
 # (the sandbox container reaches your host's platform there) — never shown in the product UI.
 if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://platform.intentic.dev' } }
 if (-not $ConnectToken) { $ConnectToken = $env:CONNECT_TOKEN }
-# A version-pinned RELEASE image, never :latest — see connect.sh for why (the :latest/hand-tagged builds carry
-# internal version 0.0.0, whose @intentic/* deps are unpublished, so `intentic init` can't resolve them).
-# renovate: datasource=docker depName=ghcr.io/radarsu/intentic/sandbox
-$SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:1.32.1@sha256:8d53f67948f04f8770b812c56e0e6918e61d5db8389932a02c007c7ae85d0037' }
+# The latest RELEASE image via the moving `stable` tag (pulled fresh below), never :latest — see connect.sh for
+# why (the :latest/hand-tagged builds carry internal version 0.0.0, whose @intentic/* deps are unpublished, so
+# `intentic init` can't resolve them; the release only ever moves `stable` onto a published release image).
+$SandboxImage = if ($env:SANDBOX_IMAGE) { $env:SANDBOX_IMAGE } else { 'ghcr.io/radarsu/intentic/sandbox:stable' }
 # The app's dev/watch command + port the sandbox daemon runs; the port is exposed at *.preview.<zone>.
 $DevCommand = if ($env:DEV_COMMAND) { $env:DEV_COMMAND } else { 'pnpm dev' }
 $DevPort    = if ($env:DEV_PORT)    { $env:DEV_PORT }    else { '5173' }
@@ -110,6 +110,21 @@ try {
 if (-not $cfVerify -or -not $cfVerify.success -or $cfVerify.result.status -ne 'active') {
     Write-Error 'the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens.'
     exit 1
+}
+
+# Pull the sandbox image up front so the moving `stable` tag always runs the newest release (docker run reuses a
+# cached tag without re-pulling). The image is PUBLIC; if a stale Docker Desktop `docker login ghcr.io` makes the
+# pull "denied", clear it and retry anonymously (mirrors connect.sh's pull_image).
+Write-Host "intentic: pulling sandbox image $SandboxImage (first run can take a minute)..."
+docker pull $SandboxImage
+if ($LASTEXITCODE -ne 0) {
+    Write-Host 'intentic: pull failed - clearing a stale ghcr.io login and retrying anonymously...'
+    docker logout ghcr.io *> $null
+    docker pull $SandboxImage
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'failed to pull the sandbox image (see the docker output above).'
+        exit 1
+    }
 }
 
 # Create/refresh this sandbox's own Cloudflare tunnel + DNS via the intentic CLI bundled in the sandbox image
