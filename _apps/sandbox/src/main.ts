@@ -6,8 +6,6 @@ import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
 import { createLogger } from "./logger.js";
 import { registerWithPlatform } from "./system/register.js";
-import { ensureIntentInstallable } from "./workspace/ensure-intent.js";
-import { scaffoldNeutralLedger } from "./workspace/scaffold-ledger.js";
 
 // The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
 // the workspace provider (a server); the workspace (the repos) and agent credentials are injected there,
@@ -18,22 +16,9 @@ const main = async (): Promise<void> => {
     const services = createServices(config, logger);
     const { workspace } = services;
 
-    // First start with an empty workspace: scaffold a NEUTRAL ledger (intent + desired-state, no app) so chat,
-    // inventory, and source-control have something to read. Setup is reachability-only — nothing is provisioned
-    // and no deploy target is wired; the app repo + a deploy target arrive later via "Deploy on this machine".
-    // Idempotent — skipped once the repos exist.
-    if (!existsSync(workspace.repos.intent)) {
-        logger.info("empty workspace — scaffolding a neutral ledger…");
-        await scaffoldNeutralLedger(services);
-    }
-
-    // A sandbox wired as a deploy target (SELF_HOST=1) needs the intent repo's @intentic deps installed so
-    // `resolve`/`apply` can import deploy.config.ts; the reachability-only boot leaves it uninstalled. Idempotent.
-    if (services.selfHost !== undefined) {
-        await ensureIntentInstallable(services);
-    }
-
-    // The app repo only exists once the user opts to build/deploy an app; skip the preview until then.
+    // The sandbox boots physically empty — no intent/desired-state repos. They're scaffolded on demand when the
+    // user activates the DevOps capability (see capabilities/handlers/devops.ts). The app repo likewise only
+    // exists once an app is built/deployed; skip the preview until then.
     if (config.dev.command !== "" && config.dev.port !== "" && existsSync(workspace.repos.app)) {
         services.devServer.start({ command: config.dev.command.split(" "), cwd: workspace.repos.app, port: Number(config.dev.port) });
     }

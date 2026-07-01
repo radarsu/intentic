@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { gitContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
 import type { Services } from "../composition.js";
@@ -14,7 +15,13 @@ export const createGitRoutes = (services: Services) => {
         if (!(REPO_ROLES as readonly string[]).includes(repo)) {
             throw new ORPCError("NOT_FOUND", { message: "unknown repo" });
         }
-        return services.workspace.repos[repo as RepoRole];
+        const dir = services.workspace.repos[repo as RepoRole];
+        // The sandbox boots empty; intent/desired-state exist only after DevOps is activated. A read against an
+        // absent repo is NOT_FOUND (the web treats that as "no state yet"), not a 500 out of git.
+        if (!existsSync(dir)) {
+            throw new ORPCError("NOT_FOUND", { message: "repo not initialized" });
+        }
+        return dir;
     };
     return {
         status: i.status.handler(({ input }) => services.git.status(repoDir(input.repo))),
