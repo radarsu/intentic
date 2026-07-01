@@ -8,6 +8,7 @@
         "url": "git+https://github.com/radarsu/intentic.git"
     },
     "scripts": {
+        "dev": "WORKSPACE_ROOT=\"${WORKSPACE_ROOT:-$PWD/.cache/workspace}\" DEV_COMMAND=\"${DEV_COMMAND:-pnpm dev}\" DEV_PORT=\"${DEV_PORT:-5173}\" turbo run dev --filter './_apps/*'",
         "build": "turbo run build",
         "lint": "oxlint --deny-warnings",
         "lint:fix": "oxlint --fix",

@@ -22,6 +22,11 @@
                 "KOMODO_WEBHOOK_SECRET"
             ]
         },
+        "dev": {
+            "cache": false,
+            "persistent": true,
+            "passThroughEnv": ["WORKSPACE_ROOT", "DEV_COMMAND", "DEV_PORT"]
+        },
         "watch": {
             "cache": false,
             "persistent": true
