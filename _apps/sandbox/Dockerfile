@@ -31,7 +31,7 @@ LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 # procps gives the interactive terminal (system/terminal.ts) real process tools — `ps`, `top`, `kill` — so the
 # owner can see what's running in the sandbox and reap a stuck dev command. zsh is the terminal's shell (below).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates procps zsh \
+    && apt-get install -y --no-install-recommends git ca-certificates procps zsh ncurses-term \
     && rm -rf /var/lib/apt/lists/*
 # The terminal (system/terminal.ts) launches zsh with the oh-my-zsh "bira" theme + zsh-autosuggestions, so the
 # owner gets a real prompt and history autocomplete. Installed into root's home (the daemon/terminal run as
@@ -44,6 +44,7 @@ RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /root/.oh-my-zsh 
         'ZSH_DISABLE_COMPFIX=true' \
         "zstyle ':omz:update' mode disabled" \
         'plugins=(git zsh-autosuggestions)' \
+        "ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=245'" \
         'source $ZSH/oh-my-zsh.sh' \
         > /root/.zshrc
 # The daemon runs the app's `pnpm dev` (dev-server.ts) — the build stage's corepack doesn't carry over, so
