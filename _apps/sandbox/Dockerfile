@@ -30,8 +30,10 @@ FROM node:24.18.0-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f106
 LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 # procps gives the interactive terminal (system/terminal.ts) real process tools — `ps`, `top`, `kill` — so the
 # owner can see what's running in the sandbox and reap a stuck dev command. zsh is the terminal's shell (below).
+# curl + jq back the CLI-tool integrations (e.g. the Discord `cli` capability's skill has the agent call
+# Discord's REST API with `curl … | jq`); neither is in the slim base and the build stage's curl doesn't carry over.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates procps zsh ncurses-term \
+    && apt-get install -y --no-install-recommends git ca-certificates procps zsh ncurses-term curl jq \
     && rm -rf /var/lib/apt/lists/*
 # The terminal (system/terminal.ts) launches zsh with the oh-my-zsh "bira" theme + zsh-autosuggestions, so the
 # owner gets a real prompt and history autocomplete. Installed into root's home (the daemon/terminal run as

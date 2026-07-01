@@ -1,5 +1,6 @@
 import { type AgentEvent, type AgentTurn, agentContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
+import { cliEnvOf } from "../capabilities/cli-env.js";
 import { mcpToolsOf } from "../capabilities/mcp-tools.js";
 import { ensureFreshToken } from "../claude/claude-credentials.js";
 import type { Services } from "../composition.js";
@@ -25,12 +26,16 @@ async function* streamAgent(services: Services, input: AgentTurn, signal: AbortS
         return;
     }
     // Internal (intent-declared, from env) tools first, then external mcp-kind capabilities — a same-named
-    // external tool overrides, matching mcpServersOf's last-wins merge.
-    const tools = [...services.tools, ...mcpToolsOf(await services.capabilities.list())];
+    // external tool overrides, matching mcpServersOf's last-wins merge. cli-kind capabilities contribute env
+    // vars (their stored credentials) so the agent's shell can run their CLI tools.
+    const capabilities = await services.capabilities.list();
+    const tools = [...services.tools, ...mcpToolsOf(capabilities)];
+    const cliEnv = cliEnvOf(capabilities);
     const request: AgentRequest = {
         prompt: input.prompt,
         cwd: services.workspace.root,
         signal: signal ?? new AbortController().signal,
+        ...(Object.keys(cliEnv).length > 0 ? { cliEnv } : {}),
         ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
         ...(oauthToken !== undefined ? { oauthToken } : {}),
         ...(input.model !== undefined ? { model: input.model } : {}),

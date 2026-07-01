@@ -1,5 +1,6 @@
 import type { CapabilityKind } from "@intentic/sandbox-contract";
 import type { CapabilityHandler } from "./capability.js";
+import { cliHandler } from "./handlers/cli.js";
 import { devopsHandler } from "./handlers/devops.js";
 import { integrationHandler } from "./handlers/integration.js";
 import { mcpHandler } from "./handlers/mcp.js";
@@ -11,4 +12,5 @@ export const registry: Record<CapabilityKind, CapabilityHandler> = {
     mcp: mcpHandler,
     service: serviceHandler,
     integration: integrationHandler,
+    cli: cliHandler,
 };

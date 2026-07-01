@@ -60,6 +60,8 @@ export const echoConfig = (capability: Capability): Record<string, string | numb
             };
         case "integration":
             return { provider: capability.config.provider };
+        case "cli":
+            return { provider: capability.config.provider, hasToken: true };
         case "devops":
             return {};
     }

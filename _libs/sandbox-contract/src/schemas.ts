@@ -161,7 +161,7 @@ export type EnrollHostInput = z.infer<typeof EnrollHostInputSchema>;
 // the source of truth for what's active; `mcp`-kind entries also feed the agent's MCP servers each turn. DevOps
 // is the capability that scaffolds the intent/desired-state repos — until it's active the sandbox is empty.
 
-export const CapabilityKindSchema = z.enum(["devops", "mcp", "service", "integration"]);
+export const CapabilityKindSchema = z.enum(["devops", "mcp", "service", "integration", "cli"]);
 export type CapabilityKind = z.infer<typeof CapabilityKindSchema>;
 export const CapabilityStateSchema = z.enum(["active", "pending", "error", "inactive"]);
 export type CapabilityState = z.infer<typeof CapabilityStateSchema>;
@@ -189,15 +189,24 @@ export const IntegrationConfigSchema = z.discriminatedUnion("provider", [
     z.object({ provider: z.literal("outline"), url: z.string().url() }),
     z.object({ provider: z.literal("imap"), host: z.string().min(1), port: z.coerce.number(), username: z.string().min(1) }),
 ]);
+// Per-provider CLI-tool config. A `cli` capability gives the AGENT an authenticated command-line tool (not a
+// deployed-app credential like `integration`): the secret is stored here and injected into the agent's env each
+// turn (see cliEnvOf), and a .claude/skills/<id> cheatsheet teaches the agent to use it. Discriminated by
+// provider so each provider's credential fields are typed and future providers slot in.
+export const CliConfigSchema = z.discriminatedUnion("provider", [
+    z.object({ provider: z.literal("discord"), botToken: z.string().min(1) }),
+]);
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
 export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
+export type CliConfig = z.infer<typeof CliConfigSchema>;
 
 export const CapabilitySchema = z.discriminatedUnion("kind", [
     z.object({ id: capabilityId, kind: z.literal("devops"), config: z.object({}) }),
     z.object({ id: capabilityId, kind: z.literal("mcp"), config: McpConfigSchema }),
     z.object({ id: capabilityId, kind: z.literal("service"), config: ServiceConfigSchema }),
     z.object({ id: capabilityId, kind: z.literal("integration"), config: IntegrationConfigSchema }),
+    z.object({ id: capabilityId, kind: z.literal("cli"), config: CliConfigSchema }),
 ]);
 export type Capability = z.infer<typeof CapabilitySchema>;
 

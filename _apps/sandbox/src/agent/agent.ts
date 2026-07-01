@@ -37,6 +37,9 @@ export interface AgentRequest {
     // platform-configured external integrations. Each becomes a remote `http` MCP server. The daemon merges
     // both sources before calling; absent ⇒ the agent runs with no MCP tools (its plain autonomous posture).
     readonly tools?: readonly AgentTool[];
+    // Env vars for the agent's shell from cli-kind capabilities (e.g. DISCORD_BOT_TOKEN) — the stored
+    // credentials their CLI tools read. Merged into the SDK `env` each turn; absent ⇒ no extra env.
+    readonly cliEnv?: Record<string, string>;
 }
 
 // The SDK `query` is injected so tests drive a fake message stream — no API calls, no bundled binary.
@@ -241,6 +244,9 @@ const baseOptions = (request: AgentRequest, abortController: AbortController, pe
     enableFileCheckpointing: true,
     env: {
         ...process.env,
+        // cli-kind capability credentials (e.g. DISCORD_BOT_TOKEN) the agent's shell reads. Rebuilt every turn,
+        // so a newly-added CLI capability is picked up on the next message with no restart.
+        ...request.cliEnv,
         // We run with --dangerously-skip-permissions (bypassPermissions) because the container IS the
         // isolation boundary. Claude Code refuses that flag under root (the sandbox runs as root) unless
         // IS_SANDBOX marks the environment as already-sandboxed — which this container is.
