@@ -38,6 +38,9 @@ test("apply writes the provider's SKILL.md; status flips inactive -> active", as
     expect(skill).toContain("name: discord");
     expect(skill).toContain("$DISCORD_BOT_TOKEN");
     expect(skill).toContain("https://discord.com/api/v10/channels/<CHANNEL_ID>/messages");
+    // The guided-invite section and the react example must be present.
+    expect(skill).toContain("https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot&permissions=68672");
+    expect(skill).toContain("/reactions/");
     expect(await cliHandler.status(ctx, "discord", discord.config)).toEqual({ state: "active" });
 });
 
