@@ -5,6 +5,7 @@ import type { Services } from "./composition.js";
 import { createGitRoutes } from "./git/git.routes.js";
 import { createIntenticRoutes } from "./intentic/intentic.routes.js";
 import { createInventoryRoutes } from "./inventory/inventory.routes.js";
+import { createSecretsRoutes } from "./secrets/secrets.routes.js";
 import { createSessionsRoutes } from "./sessions/sessions.routes.js";
 import { createSystemRoutes } from "./system/system.routes.js";
 import { createWorkspaceRoutes } from "./workspace/workspace.routes.js";
@@ -20,5 +21,6 @@ export const createRouter = (services: Services) => ({
     git: createGitRoutes(services),
     workspace: createWorkspaceRoutes(services),
     inventory: createInventoryRoutes(services),
+    secrets: createSecretsRoutes(services),
     system: createSystemRoutes(services),
 });

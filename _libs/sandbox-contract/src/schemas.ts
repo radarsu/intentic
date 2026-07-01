@@ -193,6 +193,19 @@ export const CapabilitySummarySchema = z.object({
 export const CapabilitiesListSchema = z.object({ capabilities: z.array(CapabilitySummarySchema) });
 export const CapabilityIdParamSchema = z.object({ id: z.string() });
 
+// ---- secrets: user-supplied env-var secrets the daemon writes to repositories/desired-state/.env ----
+// The web posts a Cloudflare token / GitHub PAT / another-host SSH key straight to the sandbox daemon (never
+// through the platform); `apply` reloads .env each run so a new secret is picked up with NO restart. `list`
+// returns KEYS ONLY — the values never leave the sandbox.
+export const SecretSetSchema = z.object({
+    key: z
+        .string()
+        .regex(/^[A-Z][A-Z0-9_]*$/)
+        .max(128),
+    value: z.string().min(1),
+});
+export const SecretKeysSchema = z.object({ keys: z.array(z.string()) });
+
 // ---- system ----
 
 export const PreviewSchema = z.object({ running: z.boolean(), healthy: z.boolean(), port: z.number().optional() });

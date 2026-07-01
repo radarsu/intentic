@@ -45,6 +45,7 @@ RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /root/.oh-my-zsh 
         "zstyle ':omz:update' mode disabled" \
         'plugins=(git zsh-autosuggestions)' \
         "ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=245'" \
+        "PROMPT_EOL_MARK=''" \
         'source $ZSH/oh-my-zsh.sh' \
         > /root/.zshrc
 # The daemon runs the app's `pnpm dev` (dev-server.ts) — the build stage's corepack doesn't carry over, so

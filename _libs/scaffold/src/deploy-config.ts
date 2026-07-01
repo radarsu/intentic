@@ -36,7 +36,8 @@ interface ProviderSpec {
     readonly fields: readonly FieldSpec[];
 }
 
-// v1 assumes a single host + single cloudflare, matching the original scaffold's fixed env-var names.
+// Cloudflare/github/stripe use fixed env-var names (a single account each). Hosts get a PER-NAME ssh-key var (see
+// hostSshKeyEnvVar) so multiple deploy targets don't collide; the `envVar` here is the `self` fallback.
 const REGISTRY: Record<InventoryProvider, ProviderSpec> = {
     host: {
         fields: [
@@ -64,9 +65,19 @@ const SERVICE_REGISTRY: Record<ServiceKind, ProviderSpec> = {
     signoz: { fields: [{ key: `domain`, source: `string` }] },
 };
 
+// Each host's SSH key rides its OWN env var so multiple hosts don't collide: `self` keeps HOST_SSH_KEY (what
+// connect.sh's SELF_HOST=1 injects), any other host `<name>` reads env("<NAME>_SSH_KEY") (name upper-cased, set
+// via the secrets route). Returns undefined for non-host / non-sshKey fields so they use their static envVar.
+const hostSshKeyEnvVar = (entry: InventoryEntry, field: FieldSpec): string | undefined => {
+    if (entry.kind !== `backend` || entry.provider !== `host` || field.key !== `sshKey`) {
+        return undefined;
+    }
+    return entry.name === `self` ? `HOST_SSH_KEY` : `${entry.name.toUpperCase()}_SSH_KEY`;
+};
+
 const renderOption = (entry: InventoryEntry, field: FieldSpec): string | undefined => {
     if (field.source === `env`) {
-        return `${field.key}: env(${JSON.stringify(field.envVar ?? ``)})`;
+        return `${field.key}: env(${JSON.stringify(hostSshKeyEnvVar(entry, field) ?? field.envVar ?? ``)})`;
     }
     const value = entry.values[field.key];
     // An optional field with no value is omitted entirely rather than rendered as an empty literal.

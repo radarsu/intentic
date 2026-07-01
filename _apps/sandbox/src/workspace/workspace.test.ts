@@ -1,10 +1,15 @@
 import { expect, test } from "vitest";
 import { REPO_ROLES, workspacePaths } from "./workspace.js";
 
-test("workspacePaths lays each repo out under <root>/<role>", () => {
+test("workspacePaths lays each repo out under <root>/repositories/<role>", () => {
     const paths = workspacePaths("/work");
     expect(paths.root).toBe("/work");
-    expect(paths.repos).toEqual({ intent: "/work/intent", "desired-state": "/work/desired-state", app: "/work/app" });
+    expect(paths.repositories).toBe("/work/repositories");
+    expect(paths.repos).toEqual({
+        intent: "/work/repositories/intent",
+        "desired-state": "/work/repositories/desired-state",
+        app: "/work/repositories/app",
+    });
 });
 
 test("every declared repo role has a derived path", () => {

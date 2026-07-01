@@ -7,6 +7,9 @@ import type { DesiredStateGraph } from "@intentic/graph";
 // `desired-state` repo (holds the artifact `resolve` writes and the status `apply` writes beside it), and an
 // `app` repo (the application code the agent edits + previews, mounted at /work/app in the sandbox). `init`
 // scaffolds all three.
+// Role names, used BOTH as the on-disk dir (relative to cwd) and as the control-plane repo name — so they stay
+// bare ("desired-state", not "repositories/desired-state"). In the sandbox the CLI runs with cwd=<root>/repositories
+// so these resolve under it; standalone (init/demo) they resolve against the caller's cwd.
 export const INTENT_DIR = "intent";
 export const TARGET_DIR = "desired-state";
 export const APP_DIR = "app";

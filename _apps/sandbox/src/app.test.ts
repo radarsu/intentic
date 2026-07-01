@@ -208,6 +208,12 @@ test("capabilities.list reports each capability with its status; devops can't be
     expect(await errorCode(client.capabilities.remove({ id: "ghost" }))).toBe("NOT_FOUND");
 });
 
+test("secrets.set / list refuse until DevOps is active (the desired-state repo is absent under test)", async () => {
+    const client = clientFor(createApp(services()));
+    expect(await errorCode(client.secrets.set({ key: "CLOUDFLARE_API_TOKEN", value: "x" }))).toBe("PRECONDITION_FAILED");
+    expect(await errorCode(client.secrets.list())).toBe("PRECONDITION_FAILED");
+});
+
 test("agent.run surfaces a connect-your-account error (not an opaque CLI failure) when no account and no env creds", async () => {
     let agentCalled = false;
     const client = clientFor(
@@ -282,7 +288,7 @@ test("git.status resolves the repo dir, and rejects an unknown repo", async () =
         ),
     );
     expect(await client.git.status({ repo: "app" })).toEqual({ branch: "main", dirty: false, files: [] });
-    expect(seen).toEqual(["/work/app"]);
+    expect(seen).toEqual(["/work/repositories/app"]);
     expect(await errorCode(client.git.status({ repo: "nope" }))).toBe("NOT_FOUND");
 });
 
@@ -293,7 +299,7 @@ test("git.files lists the repo's tracked files", async () => {
                 git: {
                     init: async () => {},
                     status: async () => ({ branch: "main", dirty: false, files: [] }),
-                    listFiles: async (dir) => (dir === "/work/intent" ? ["deploy.config.ts", "package.json"] : []),
+                    listFiles: async (dir) => (dir === "/work/repositories/intent" ? ["deploy.config.ts", "package.json"] : []),
                     commitAll: async () => false,
                     push: async () => {},
                     clone: async () => {},
@@ -308,7 +314,7 @@ test("git.readFile reads a contained file, NOT_FOUNDs a missing one, and BAD_REQ
     const client = clientFor(
         createApp(
             services({
-                files: fakeFiles({ read: async (absPath) => (absPath === "/work/intent/deploy.config.ts" ? "export const intent = 1;" : undefined) }),
+                files: fakeFiles({ read: async (absPath) => (absPath === "/work/repositories/intent/deploy.config.ts" ? "export const intent = 1;" : undefined) }),
             }),
         ),
     );
@@ -334,7 +340,7 @@ test("git.writeFile writes a contained file and rejects a path escape", async ()
         ),
     );
     expect(await client.git.writeFile({ repo: "intent", path: "deploy.config.ts", content: "next" })).toEqual({ ok: true });
-    expect(writes).toEqual([{ path: "/work/intent/deploy.config.ts", content: "next" }]);
+    expect(writes).toEqual([{ path: "/work/repositories/intent/deploy.config.ts", content: "next" }]);
     expect(await errorCode(client.git.writeFile({ repo: "intent", path: "../escape", content: "x" }))).toBe("BAD_REQUEST");
     expect(writes).toHaveLength(1);
 });
@@ -486,7 +492,7 @@ test("workspace.addRepo clones a repo, rejects reserved names + a bad body", asy
         ),
     );
     expect(await client.workspace.addRepo({ name: "extra", cloneUrl: "https://example.com/extra.git" })).toEqual({ name: "extra", path: "extra" });
-    expect(clones).toEqual([{ parentDir: "/work", name: "extra", cloneUrl: "https://example.com/extra.git" }]);
+    expect(clones).toEqual([{ parentDir: "/work/repositories", name: "extra", cloneUrl: "https://example.com/extra.git" }]);
     // A reserved role (one of the three fixed repos) cannot be clobbered, and a path-escape name is rejected.
     expect(await errorCode(client.workspace.addRepo({ name: "intent", cloneUrl: "https://example.com/x.git" }))).toBe("BAD_REQUEST");
     expect(await errorCode(client.workspace.addRepo({ name: "../evil", cloneUrl: "https://example.com/x.git" }))).toBe("BAD_REQUEST");

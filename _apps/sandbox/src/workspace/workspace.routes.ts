@@ -54,15 +54,17 @@ export const createWorkspaceRoutes = (services: Services) => {
             await services.files.copy(contained(input.from), contained(input.to));
             return { ok: true } as const;
         }),
-        repos: i.repos.handler(async () => ({ repos: await listRepos(services.workspace.root) })),
+        repos: i.repos.handler(async () => ({ repos: await listRepos(services.workspace.repositories) })),
         addRepo: i.addRepo.handler(async ({ input }) => {
             if (!isValidRepoName(input.name)) {
                 throw new ORPCError("BAD_REQUEST", { message: "invalid or reserved repo name" });
             }
-            if ((await listRepos(services.workspace.root)).includes(input.name)) {
+            if ((await listRepos(services.workspace.repositories)).includes(input.name)) {
                 throw new ORPCError("CONFLICT", { message: `a repo named "${input.name}" already exists` });
             }
-            await services.git.clone(services.workspace.root, input.name, input.cloneUrl, input.branch);
+            // The repositories/ dir may not exist yet on a fresh sandbox; git clone needs its parent present.
+            await services.files.mkdir(services.workspace.repositories);
+            await services.git.clone(services.workspace.repositories, input.name, input.cloneUrl, input.branch);
             return { name: input.name, path: input.name };
         }),
         // Scaffold (or adopt) the deployable app at /work/app. The neutral workspace has none until the user opts
@@ -73,7 +75,7 @@ export const createWorkspaceRoutes = (services: Services) => {
             if (existsSync(appDir)) {
                 throw new ORPCError("CONFLICT", { message: "an app already exists" });
             }
-            const args = ["add-app", "--dir", services.workspace.root, ...(input.cloneUrl !== undefined ? ["--app", input.cloneUrl] : [])];
+            const args = ["add-app", "--dir", services.workspace.repositories, ...(input.cloneUrl !== undefined ? ["--app", input.cloneUrl] : [])];
             if (spawnSync("intentic", args, { stdio: "inherit" }).status !== 0) {
                 throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "failed to scaffold the app" });
             }

@@ -12,8 +12,8 @@ export const serviceHandler: CapabilityHandler = {
         const entry: InventoryEntry = { kind: "service", service, name: id, on, expose, values: { domain } };
         await upsertManagedEntry(ctx.config, entry, `chore(intentic): add ${service} "${id}"`);
         yield { kind: "log", message: `Declared ${service} "${id}". Provisioning…` };
-        yield* ctx.intentic({ args: ["resolve"], cwd: ctx.workspace.root });
-        yield* ctx.intentic({ args: ["apply"], cwd: ctx.workspace.root });
+        yield* ctx.intentic({ args: ["resolve"], cwd: ctx.workspace.repositories });
+        yield* ctx.intentic({ args: ["apply"], cwd: ctx.workspace.repositories });
         yield { kind: "log", message: `${service} "${id}" provisioned.` };
     },
     status: async (ctx, id) => ((await hasManagedEntry(ctx.config, id)) ? { state: "active" } : { state: "inactive" }),

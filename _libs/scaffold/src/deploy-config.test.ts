@@ -39,6 +39,14 @@ describe("deploy-config managed region", () => {
         ]);
     });
 
+    test("a non-self host reads its OWN ssh-key env var (<NAME>_SSH_KEY); self keeps HOST_SSH_KEY", () => {
+        const prod = { kind: "backend", provider: "host", name: "prod", values: { address: "203.0.113.10", user: "deploy", port: 22 } } as const;
+        const src = scaffoldDeployConfig([prod]);
+        expect(src).toContain(`sshKey: env("PROD_SSH_KEY")`);
+        expect(src).not.toContain(`HOST_SSH_KEY`);
+        expect(readManagedRegion(src)).toEqual([prod]);
+    });
+
     test("round-trips a service losslessly (on/expose stay bare-name refs, domain stays a value)", () => {
         const src = scaffoldDeployConfig([signozEntry]);
         expect(src).toContain(`on: self`);
