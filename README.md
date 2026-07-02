@@ -209,8 +209,11 @@ A pnpm + Turbo monorepo (`_*/*` workspaces). The libraries form the intent → n
 | `@intentic/sdk` | [_libs/sdk](_libs/sdk) | The authoring surface: `defineIntent`/`defineStack`, `i.have`/`i.want`. |
 | `@intentic/engine` | [_libs/engine](_libs/engine) | Stateless `plan`/`apply`/`reconcile` over the Provider SPI. |
 | `@intentic/providers` | [_libs/providers](_libs/providers) | Real SPI impls: SSH/Docker, Cloudflare, Forgejo, Komodo, Authentik. |
+| `@intentic/sandbox-contract` | [_libs/sandbox-contract](_libs/sandbox-contract) | oRPC wire contract for the sandbox daemon, shared by the daemon and its browser client. |
+| `@intentic/scaffold` | [_libs/scaffold](_libs/scaffold) | Intent-repo skeleton + deploy.config managed-region render/parse, used by `init` and the sandbox daemon. |
 | `@intentic/cli` | [_apps/cli](_apps/cli) | The `intentic` CLI — `init`/`resolve`/`plan`/`apply`/`adopt`/`restore`. |
 | `@intentic/sandbox` | [_apps/sandbox](_apps/sandbox) | Per-project AI-agent dev daemon image (Claude Agent SDK); the browser drives it directly over its own Cloudflare tunnel. |
+| `@intentic/sync` | [_apps/sync](_apps/sync) | Local background agent keeping a directory bidirectionally in sync with a remote sandbox over its HTTP API. |
 | `@intentic/tsconfig` | [_tools/tsconfig](_tools/tsconfig) | Shared TypeScript base configs. |
 
 ## Working in this repo (for agents)

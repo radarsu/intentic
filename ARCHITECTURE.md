@@ -16,7 +16,7 @@ flowchart TB
     operator(["Operator (browser)"])
 
     subgraph cloud["Intentic Platform — identity + sandbox-URL store"]
-        web["Web UI · Angular (SPA)"]
+        web["Web UI · Vue (SPA)"]
         api["API · Hono / oRPC"]
         db[("Postgres<br/>account + connection token + sandbox URL")]
         web --> api --> db
@@ -41,7 +41,7 @@ flowchart TB
     cli ==>|reconcile| appplane
 ```
 
-- **Platform (identity + sandbox-URL store)** — Angular SPA + Hono/oRPC API. Persists only the
+- **Platform (identity + sandbox-URL store)** — Vue SPA + Hono/oRPC API. Persists only the
   operator's account, one secret-free per-user connection token, and the sandbox's public `daemonUrl`
   (which the **browser** derives and writes); it never probes the sandbox or tracks liveness, owns no
   infrastructure, no secrets, and sits **off the command path**.
@@ -110,7 +110,7 @@ Why a tunnel, rather than "just use SSH and make Cloudflare optional":
 
 This is enforced in code, not just convention: the SDK types require `expose: Cloudflare`, and both
 `resolveNeeds` ([needs.ts](_libs/need-resolver/src/needs.ts)) and `emit`
-([emit.ts](_libs/state-resolver/src/emit.ts)) throw when it is missing — there is no alternative ingress.
+([emit.ts](_libs/state-resolver/src/emit/emit.ts)) throw when it is missing — there is no alternative ingress.
 The Cloudflare API token is supplied at **connect** time (it rides `connect.sh` into the sandbox) and consumed
 at **provision** time by `intentic apply`. It never reaches the platform except for one request-scoped call at
 setup — the platform lists the token's zones so the user can pick which one the sandbox tunnel uses (the browser
@@ -133,10 +133,10 @@ Intent ──► NeedResolver ──► Needs ──► StateResolver ──► 
    satisfy them; one option may cover several (Forgejo provides both source-control and docker-registry).
    The intent fully determines the result — there is no choice to make, so the catalog offers exactly one
    option per capability. (`resolveState` in [_libs/state-resolver/src/state.ts](_libs/state-resolver/src/state.ts),
-   over `defaultCatalog` in [catalog.ts](_libs/state-resolver/src/catalog.ts) and the nodes emitted by
-   [emit.ts](_libs/state-resolver/src/emit.ts))
+   over `defaultCatalog` in [catalog.ts](_libs/state-resolver/src/lib/catalog.ts) and the nodes emitted by
+   [emit.ts](_libs/state-resolver/src/emit/emit.ts))
 4. **Execute** — apply the desired state and re-read it, looping until a plan reads all-noop ("state reads
-   true"). (`reconcile` in [_libs/engine/src/reconcile-loop.ts](_libs/engine/src/reconcile-loop.ts), over
+   true"). (`reconcile` in [_libs/engine/src/reconcile/reconcile-loop.ts](_libs/engine/src/reconcile/reconcile-loop.ts), over
    `apply`/`plan` and the Provider SPI)
 
 A `DesiredStateGraph` is the central data structure: a serializable, dependency-ordered set of resource
@@ -148,7 +148,7 @@ The engine separates two seams on `EngineConfig`: `log` carries providers' free-
 `onEvent` emits structured `EngineEvent`s for lifecycle progress — `node` (apply/plan, start/done with
 the action), `readiness`, `iteration`, `prune`, and `orphan`
 ([types.ts](_libs/engine/src/types.ts)). The CLI selects a renderer from `INTENTIC_OUTPUT`
-(`text` | `json` | `ndjson`) in [output.ts](_apps/cli/src/output.ts): `text` is the human default
+(`text` | `json` | `ndjson`) in [output.ts](_apps/cli/src/lib/output.ts): `text` is the human default
 (unchanged), `json` serializes the command's returned outcome once, and `ndjson` streams each event as
 a line then a terminal `result`. The final result is built from the engine's return values
 (`PlanOutcome`/`ConvergeResult`/`PruneOutcome` and `collectAccess`), never from events — so a control
@@ -163,11 +163,11 @@ Every need carries a `plane` — its role, independent of where it runs ([needs.
   (`deploy.config.ts`) and `desired-state` repo (the artifact + execution status) drive it: `intentic
   resolve` runs the flow above and writes the artifact, `intentic apply` executes it. A remote, PR-managed
   control plane (a standalone Forgejo watching the intent repo) is a planned later evolution of this same
-  flow. ([_apps/cli/src/resolve.ts](_apps/cli/src/resolve.ts), [artifact.ts](_apps/cli/src/artifact.ts),
+  flow. ([_apps/cli/src/resolve/resolve.ts](_apps/cli/src/resolve/resolve.ts), [artifact.ts](_apps/cli/src/lib/artifact.ts),
   [app.ts](_apps/cli/src/app.ts))
 - **Application plane** — what actually serves an app: its `deployment-target` (the app's runtime on the
   host) and its `domain` (the Cloudflare tunnel + DNS routes). Both are *derived from* `i.want.app` and
-  emitted alongside the control-plane stack. ([_libs/state-resolver/src/platform.ts](_libs/state-resolver/src/platform.ts),
+  emitted alongside the control-plane stack. ([_libs/state-resolver/src/resolvers/platform.ts](_libs/state-resolver/src/resolvers/platform.ts),
   [_libs/providers/](_libs/providers/src/))
 
 The whole per-host support stack is self-contained: its control-plane Forgejo is just another reconciled
@@ -194,14 +194,17 @@ graph ──► resources ──► engine ──► providers
 | [`@intentic/sdk`](_libs/sdk) | lib | Authoring surface (`i.have.host` / `i.have.cloudflare` + `i.want.app`); `defineIntent` (→ `IntentSet`) and `defineStack` (one graph). |
 | [`@intentic/engine`](_libs/engine) | lib | Stateless reconcile engine: `plan`/`apply`, the Provider SPI, and the `reconcile` loop. |
 | [`@intentic/providers`](_libs/providers) | lib | Real Provider SPI impls over SSH/Docker, Cloudflare, Forgejo, Komodo. |
+| [`@intentic/sandbox-contract`](_libs/sandbox-contract) | lib | oRPC wire contract for the sandbox daemon — shared by the daemon and its browser client (the platform consumes it from npm). |
+| [`@intentic/scaffold`](_libs/scaffold) | lib | Shared workspace scaffold: the intent-repo skeleton + deploy.config managed-region render/parse, used by the CLI's `init` and the sandbox daemon. |
 | [`@intentic/cli`](_apps/cli) | **app** | The runnable product: `init` local repos, `resolve` intent → artifact, `apply` it. CLI `bin: intentic`. |
 | [`@intentic/sandbox`](_apps/sandbox) | **app** (image) | The per-project AI-agent dev workspace daemon (the Claude agent on the repos + watch-mode preview), reached by the browser directly over its own Cloudflare tunnel. |
+| [`@intentic/sync`](_apps/sync) | **app** | Local background agent keeping a directory bidirectionally in sync with a remote sandbox over its HTTP API. |
 
 The libs + the CLI publish to npm; **`sandbox` ships as a Docker image** to the repo's GHCR
 (`ghcr.io/radarsu/intentic/sandbox`, linked to the repo via the image's `org.opencontainers.image.source`
 label) — published by [scripts/publish-images.sh](scripts/publish-images.sh) continuously on push to main
 (`latest` + commit SHA) and version-tagged on release, and recorded in
-[`images.ts`](_libs/state-resolver/src/images.ts) like every other deployed image. The GHCR package is
+[`images.ts`](_libs/state-resolver/src/lib/images.ts) like every other deployed image. The GHCR package is
 public so tenant hosts pull it unauthenticated; both `connect.sh` (your PC) and the `workspace` provider
 (a server) run this image directly.
 
@@ -209,7 +212,7 @@ public so tenant hosts pull it unauthenticated; both `connect.sh` (your PC) and 
 
 A local `deploy.config.ts` (see [/examples/deploy.config.ts](examples/deploy.config.ts)) must
 `export const intent = defineIntent(...)`; `resolve` derives the desired state from it
-([resolve.ts](_apps/cli/src/resolve.ts)). `defineStack(...)` is the one-shot,
+([resolve.ts](_apps/cli/src/resolve/resolve.ts)). `defineStack(...)` is the one-shot,
 single-graph form used when a single deterministic graph is wanted directly.
 
 ## Conventions (so the layout is predictable)

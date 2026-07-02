@@ -9,4 +9,4 @@
 - Use early returns – handle edge cases first.
 
 ---
-For more context, check related platform repo: /home/radarsu/radarsu/repositories/intentic-platform
+For more context, check related platform repo: /home/radarsu/radarsu/repositories/intentic-workspace/intentic-app
