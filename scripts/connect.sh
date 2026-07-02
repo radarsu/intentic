@@ -36,6 +36,10 @@
 #                   machine as a deploy target; this is what the platform's "Deploy on this machine" action runs.
 #   SELF_HOST_USER  the service user to create/use for self-host (default: intentic).
 #   INSTALL_DOCKER  set to 1 to install Docker without the interactive consent prompt when it's missing.
+#   SYNC_DIR + SYNC_PAIR_TOKEN  desktop sync chosen at setup: both normally arrive via the setup-code claim
+#                   (never on the command line); when present, after the sandbox is up this script also runs the
+#                   standard sync bootstrap (SYNC_SCRIPT_URL, default https://intentic.dev/sync) as the invoking
+#                   user, so the one pasted command covers folder sync too. Never fatal to sandbox setup.
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
 
@@ -98,6 +102,11 @@ CLOUDFLARED_VERSION="${CLOUDFLARED_VERSION:-2026.6.1}"
 TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
 SANDBOX_HOSTNAME="${SANDBOX_HOSTNAME:-}"
 SUBDOMAIN="${SUBDOMAIN:-}"
+# Desktop sync chosen at setup (both ride the claim; env works for headless runs). The pair token is seeded into
+# the sandbox at boot as a single-use pairing, then handed to the sync bootstrap fetched from SYNC_SCRIPT_URL.
+SYNC_DIR="${SYNC_DIR:-}"
+SYNC_PAIR_TOKEN="${SYNC_PAIR_TOKEN:-}"
+SYNC_SCRIPT_URL="${SYNC_SCRIPT_URL:-https://intentic.dev/sync}"
 SANDBOX_PUBLIC_URL=""
 # The stable name the tunnel ingress dials. The workspace answers to it via a --network-alias on its own per-sandbox
 # network, so the real container name stays unique (coexistence) while BOTH the platform-provisioned tunnel (whose
@@ -258,6 +267,31 @@ pull_image() {
     docker pull "$image"
 }
 
+# Desktop sync (opted into at setup): wait for the sandbox to answer over its PUBLIC url (tunnel + DNS can take
+# a minute), then run the standard sync bootstrap AS THE INVOKING USER — the agent is per-user state
+# (~/.intentic, ~/.ssh/config, the user's Mutagen daemon) and this script usually runs under sudo. The caller
+# wraps this in `if !` so any failure warns instead of killing a setup whose sandbox is already up.
+run_desktop_sync() {
+    if [ "$(id -u)" = 0 ]; then
+        if [ -z "${SUDO_USER:-}" ]; then
+            echo "intentic: skipping desktop sync — running as root with no invoking user to sync for." >&2
+            return 1
+        fi
+        sync_user="sudo -u $SUDO_USER -H"
+    else
+        sync_user=""
+    fi
+    echo "intentic: waiting for your sandbox to come online to set up desktop sync…"
+    i=0
+    until curl -fsS --max-time 5 "${SANDBOX_PUBLIC_URL}/health" >/dev/null 2>&1; do
+        i=$((i + 1))
+        [ "$i" -ge 60 ] && return 1
+        sleep 3
+    done
+    # $sync_user word-splits into `sudo -u <user> -H` on purpose (empty when not under sudo).
+    curl -fsSL "$SYNC_SCRIPT_URL" | $sync_user env SANDBOX_URL="$SANDBOX_PUBLIC_URL" PAIR_TOKEN="$SYNC_PAIR_TOKEN" SYNC_DIR="$SYNC_DIR" sh
+}
+
 # Consent gate for installing Docker: a root-level system change beyond the sandbox itself, so never silent.
 # INSTALL_DOCKER=1 pre-consents (headless runs); otherwise ask on /dev/tty (the human is at a terminal even
 # under `curl … | sh` — stdin is the script), and fail with the remedy when there is no terminal to ask.
@@ -389,6 +423,8 @@ if [ -n "$SETUP_CODE" ]; then
     SANDBOX_HOSTNAME="$(printf '%s\n' "$claim" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
     ZONE="$(printf '%s\n' "$claim" | sed -n 's/^ZONE=//p')"
     SUBDOMAIN="$(printf '%s\n' "$claim" | sed -n 's/^SUBDOMAIN=//p')"
+    SYNC_DIR="$(printf '%s\n' "$claim" | sed -n 's/^SYNC_DIR=//p')"
+    SYNC_PAIR_TOKEN="$(printf '%s\n' "$claim" | sed -n 's/^SYNC_PAIR_TOKEN=//p')"
 fi
 PROVIDED_TUNNEL=""
 if [ -n "$TUNNEL_TOKEN" ] && [ -n "$SANDBOX_HOSTNAME" ]; then
@@ -630,6 +666,7 @@ docker run -d --restart unless-stopped --name "$CONTAINER" \
     -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
     -e HOST_SSH_KEY="$HOST_SSH_KEY" \
     -e SELF_HOST_USER="$SELF_HOST_USER" \
+    -e SYNC_PAIR_TOKEN="$SYNC_PAIR_TOKEN" \
     $self_host_addr_env \
     "$SANDBOX_IMAGE" >/dev/null
 
@@ -643,6 +680,15 @@ docker run -d --restart unless-stopped --name "$TUNNEL_CONTAINER" --network "$NE
 echo "intentic sandbox started and registering with ${PLATFORM_URL}."
 echo "Your sandbox will be reachable at ${SANDBOX_PUBLIC_URL} (DNS may take a few seconds to propagate)."
 echo "Return to the platform — setup will continue automatically once it connects."
+
+# Desktop sync chosen at setup: the same paste covers it. Runs after the "return to the platform" lines — the
+# wizard's live gate flips on the sandbox itself, independent of this stage — and never fails the setup.
+if [ -n "$SYNC_PAIR_TOKEN" ]; then
+    if ! run_desktop_sync; then
+        echo "intentic: warning — desktop sync didn't finish. Your sandbox is fine; enable sync any time from the workspace's Desktop sync card." >&2
+    fi
+fi
+
 if [ -z "$SELF_HOST" ]; then
     echo "Reachable only — no deploy target. To deploy an app onto this machine later, re-run with SELF_HOST=1 (needs sudo)."
 fi

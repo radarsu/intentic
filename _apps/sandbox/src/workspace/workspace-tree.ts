@@ -8,8 +8,9 @@ import type { WorkspaceTree, WorkspaceTreeEntry } from "@intentic/sandbox-contra
 // straight back to the file route.
 
 // Directories never worth surfacing — huge or machine-generated; the agent ignores them too. `.git` is also
-// excluded because it can hold remote URLs with embedded tokens.
-const IGNORED_DIRS = new Set([".git", "node_modules", "dist", ".cache", ".turbo", ".next", ".angular"]);
+// excluded because it can hold remote URLs with embedded tokens. Shared with the content-search walk so both
+// views cover exactly the same files.
+export const IGNORED_DIRS = new Set([".git", "node_modules", "dist", ".cache", ".turbo", ".next", ".angular"]);
 
 const MAX_DEPTH = 12;
 const MAX_ENTRIES = 5000;

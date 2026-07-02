@@ -13,7 +13,9 @@
   "ready". Setup is reachability-only. To later deploy an app onto this PC, the platform's "Deploy on
   this machine" action re-runs with $env:SELF_HOST='1', which stands up a Docker-in-Docker "host"
   container the sandbox deploys onto over SSH (Windows can't be a native SSH+Docker target). Requires
-  Docker Desktop in Linux-containers mode (the sandbox image is Linux).
+  Docker Desktop in Linux-containers mode (the sandbox image is Linux). Desktop sync chosen at setup
+  rides the setup-code claim as SYNC_DIR + SYNC_PAIR_TOKEN: once the sandbox is up, this also runs the
+  standard sync bootstrap (never fatal to sandbox setup).
 
 .EXAMPLE
   $env:SETUP_CODE='<code>'; irm https://intentic.dev/connect.ps1 | iex                        # intentic-provided tunnel
@@ -77,6 +79,10 @@ $CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else 
 $TunnelToken = $env:TUNNEL_TOKEN
 $SandboxHostname = $env:SANDBOX_HOSTNAME
 $Subdomain = $env:SUBDOMAIN
+# Desktop sync chosen at setup (both normally ride the claim; env works for headless runs). The pair token is
+# seeded into the sandbox at boot as a single-use pairing, then handed to the sync bootstrap below.
+$SyncDir = $env:SYNC_DIR
+$SyncPairToken = $env:SYNC_PAIR_TOKEN
 $SandboxPublicUrl = ''
 
 Write-Host 'intentic: checking Docker...'
@@ -152,6 +158,8 @@ if ($SetupCode) {
         elseif ($line -like 'SANDBOX_HOSTNAME=*') { $SandboxHostname = $line.Substring('SANDBOX_HOSTNAME='.Length) }
         elseif ($line -like 'ZONE=*') { $Zone = $line.Substring('ZONE='.Length) }
         elseif ($line -like 'SUBDOMAIN=*') { $Subdomain = $line.Substring('SUBDOMAIN='.Length) }
+        elseif ($line -like 'SYNC_DIR=*') { $SyncDir = $line.Substring('SYNC_DIR='.Length) }
+        elseif ($line -like 'SYNC_PAIR_TOKEN=*') { $SyncPairToken = $line.Substring('SYNC_PAIR_TOKEN='.Length) }
     }
 }
 $ProvidedTunnel = [bool]$TunnelToken -and [bool]$SandboxHostname
@@ -243,7 +251,7 @@ if ($ProvidedTunnel) {
     # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
     $tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CfToken", '-e', "CONNECT_TOKEN=$ConnectToken")
     if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
-    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${OriginHost}:8787", '--preview-service', "http://${OriginHost}:$DevPort")
+    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${OriginHost}:8787", '--preview-service', "http://${OriginHost}:$DevPort", '--ssh-service', "ssh://${OriginHost}:22")
     if ($Subdomain) { $tunnelArgs += @('--subdomain', $Subdomain) }
     $tunnelOut = & docker $tunnelArgs
     $TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
@@ -322,6 +330,7 @@ docker run -d --restart unless-stopped --name $Container `
     -e "SELF_HOST_ADDRESS=$SelfHostAddress" `
     -e "SELF_HOST_USER=$SelfHostUser" `
     -e "HOST_SSH_KEY=$HostSshKey" `
+    -e "SYNC_PAIR_TOKEN=$SyncPairToken" `
     $SandboxImage | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Error 'failed to start the sandbox container (see the docker output above).'
@@ -340,6 +349,37 @@ if ($SelfHost) { $StopList += " $DindContainer" }
 Write-Host "intentic sandbox started and registering with $PlatformUrl."
 Write-Host "Your sandbox will be reachable at $SandboxPublicUrl (DNS may take a few seconds to propagate)."
 Write-Host 'Return to the platform — setup will continue automatically once it connects.'
+
+# Desktop sync chosen at setup: the same paste covers it. Wait for the sandbox over its PUBLIC url (tunnel +
+# DNS can take a minute), then run the standard sync bootstrap — never fatal, the sandbox is already up.
+# sync.ps1's Write-Error calls throw under Stop (caught here); the agent's own failures land in $LASTEXITCODE.
+if ($SyncPairToken) {
+    Write-Host 'intentic: waiting for your sandbox to come online to set up desktop sync...'
+    $syncOk = $false
+    for ($i = 0; $i -lt 60; $i++) {
+        try {
+            Invoke-RestMethod -Uri "$SandboxPublicUrl/health" -TimeoutSec 5 | Out-Null
+            $syncOk = $true
+            break
+        } catch {
+            Start-Sleep -Seconds 3
+        }
+    }
+    if ($syncOk) {
+        $env:SANDBOX_URL = $SandboxPublicUrl; $env:PAIR_TOKEN = $SyncPairToken; $env:SYNC_DIR = $SyncDir
+        $SyncScriptUrl = if ($env:SYNC_SCRIPT_URL) { $env:SYNC_SCRIPT_URL } else { 'https://intentic.dev/sync.ps1' }
+        try {
+            irm $SyncScriptUrl | iex
+            if ($LASTEXITCODE -ne 0) { $syncOk = $false }
+        } catch {
+            $syncOk = $false
+        }
+    }
+    if (-not $syncOk) {
+        Write-Warning "desktop sync didn't finish. Your sandbox is fine — enable sync any time from the workspace's Desktop sync card."
+    }
+}
+
 if (-not $SelfHost) {
     Write-Host 'Reachable only — no deploy target. To deploy an app onto this PC later, re-run with $env:SELF_HOST=''1''.'
 }

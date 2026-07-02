@@ -9,6 +9,8 @@ import {
     WorkspaceFileQuerySchema,
     WorkspaceFileSchema,
     WorkspaceMoveSchema,
+    WorkspaceSearchQuerySchema,
+    WorkspaceSearchSchema,
     WorkspaceTreeSchema,
 } from "../schemas.js";
 
@@ -18,6 +20,7 @@ import {
 export const workspaceContract = {
     tree: oc.route({ method: "GET", path: "/workspace/tree" }).output(WorkspaceTreeSchema),
     file: oc.route({ method: "GET", path: "/workspace/file" }).input(WorkspaceFileQuerySchema).output(WorkspaceFileSchema),
+    search: oc.route({ method: "GET", path: "/workspace/search" }).input(WorkspaceSearchQuerySchema).output(WorkspaceSearchSchema),
     // Direct file management the browser drives against the /work tree (byte writes go through POST
     // /workspace/upload). oRPC's OpenAPI codec reads non-GET input from the JSON body, so delete sends {path}
     // in the body too (not the query) — same as the POST routes.

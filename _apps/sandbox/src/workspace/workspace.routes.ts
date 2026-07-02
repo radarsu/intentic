@@ -10,6 +10,7 @@ import { createConfigStore } from "../inventory/config-store.js";
 import { zoneFromPublicUrl } from "../system/zone.js";
 import { isValidRepoName, listRepos } from "./repos.js";
 import { resolveWithin } from "./workspace-files.js";
+import { searchWorkspaceFiles } from "./workspace-search.js";
 import { isDeniedWorkspacePath } from "./workspace-tree.js";
 
 // The full /work view + extra-repo cloning. The binary /workspace/raw preview is a plain Hono route in app.ts
@@ -37,6 +38,7 @@ export const createWorkspaceRoutes = (services: Services) => {
             }
             return { path: input.path, content };
         }),
+        search: i.search.handler(({ input }) => searchWorkspaceFiles(services.workspace.root, input.query)),
         // Direct file management over /work (byte writes go through POST /workspace/upload). Both endpoints of a
         // move/copy are guarded, so neither source nor target can escape or touch a secret/`.git` path. Every
         // mutation pings history so it lands as a user-authored snapshot (debounced per gesture).

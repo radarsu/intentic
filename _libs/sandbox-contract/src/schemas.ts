@@ -131,6 +131,19 @@ export const WorkspaceFileSchema = z.object({ path: z.string(), content: z.strin
 // editor's text save go through the plain POST /workspace/upload route (a body doesn't fit oRPC), not here.
 export const WorkspaceDirSchema = z.object({ path: z.string().min(1) });
 export const WorkspaceMoveSchema = z.object({ from: z.string().min(1), to: z.string().min(1) });
+// Content search over /work: case-insensitive literal substring, one match per matching line. `start`/`end` are
+// char offsets of the match within `text` — `text` may be a window of a long line, so the client highlights
+// exactly without re-finding the needle.
+export const WorkspaceSearchQuerySchema = z.object({ query: z.string().min(2).max(256) });
+export const WorkspaceSearchMatchSchema = z.object({ line: z.number(), text: z.string(), start: z.number(), end: z.number() });
+export const WorkspaceSearchFileSchema = z.object({ path: z.string(), matches: z.array(WorkspaceSearchMatchSchema) });
+export type WorkspaceSearchFile = z.infer<typeof WorkspaceSearchFileSchema>;
+export const WorkspaceSearchSchema = z.object({
+    files: z.array(WorkspaceSearchFileSchema),
+    // True when a per-file/total/scan cap cut the results short.
+    truncated: z.boolean(),
+});
+export type WorkspaceSearch = z.infer<typeof WorkspaceSearchSchema>;
 
 // ---- workspace repos ----
 
