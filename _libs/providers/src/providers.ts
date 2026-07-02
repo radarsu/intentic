@@ -50,6 +50,8 @@ import type { CloudflareApi } from "./network/cloudflare-api.js";
 import { cloudflareApi } from "./network/cloudflare-api.js";
 import { createTunnelProvider } from "./network/tunnel.js";
 import { createSignozProvider } from "./observability/signoz.js";
+import { createInfisicalProvider } from "./services/infisical.js";
+import { createInvoiceninjaProvider } from "./services/invoiceninja.js";
 import { createOpenprojectProvider } from "./services/openproject.js";
 import { createOutlineProvider } from "./services/outline.js";
 import { createPaperlessProvider } from "./services/paperless.js";
@@ -104,6 +106,8 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         outline: createOutlineProvider(ssh),
         paperless: createPaperlessProvider(ssh),
         openproject: createOpenprojectProvider(ssh),
+        invoiceninja: createInvoiceninjaProvider(ssh),
+        infisical: createInfisicalProvider(ssh),
         backup: createBackupProvider(ssh),
         postgres: createPostgresProvider(ssh),
         "postgres-database": createPostgresDatabaseProvider(ssh),

@@ -67,6 +67,8 @@ const SERVICE_REGISTRY: Record<ServiceKind, ProviderSpec> = {
     outline: { fields: [{ key: `domain`, source: `string` }] },
     paperless: { fields: [{ key: `domain`, source: `string` }] },
     openproject: { fields: [{ key: `domain`, source: `string` }] },
+    invoiceninja: { fields: [{ key: `domain`, source: `string` }] },
+    infisical: { fields: [{ key: `domain`, source: `string` }] },
 };
 
 // The env var a host's SSH private key rides. `self` keeps HOST_SSH_KEY (legacy); any other host `<name>` reads

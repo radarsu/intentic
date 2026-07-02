@@ -72,6 +72,17 @@ export type AgentEvent = z.infer<typeof AgentEventSchema>;
 export const IntenticLineSchema = z.looseObject({ kind: z.string() });
 export type IntenticLine = z.infer<typeof IntenticLineSchema>;
 
+// One frame from a script run. stdout/stderr are separate kinds so the UI can tint stderr; `exit` is the
+// terminal frame carrying the process's exit code (a non-zero exit is a NORMAL frame, not a stream error —
+// the run history records it; only spawn/kill failures surface as `error`).
+export const ScriptLineSchema = z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("stdout"), text: z.string() }),
+    z.object({ kind: z.literal("stderr"), text: z.string() }),
+    z.object({ kind: z.literal("exit"), code: z.number() }),
+    z.object({ kind: z.literal("error"), message: z.string() }),
+]);
+export type ScriptLine = z.infer<typeof ScriptLineSchema>;
+
 // The daemon's liveness heartbeat frame: the browser holds the events stream open and trips a watchdog if the
 // frames stop (the tunnel drops the proxied response when the origin dies).
 export const HeartbeatSchema = z.object({ kind: z.literal("heartbeat") });

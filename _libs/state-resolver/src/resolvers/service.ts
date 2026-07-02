@@ -67,6 +67,19 @@ const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
         readyTimeout: "600s",
         images: { openprojectImage: IMAGES.openproject },
     },
+    invoiceninja: {
+        type: "invoiceninja",
+        // 8000/8080/8082 are taken (paperless/signoz/openproject); Invoice Ninja publishes on 8083.
+        port: 8083,
+        // First boot runs the full Laravel migration + seed before /health answers.
+        readyTimeout: "600s",
+        images: { invoiceninjaImage: IMAGES.invoiceninja, mariadbImage: IMAGES.mariadb, valkeyImage: IMAGES.valkey },
+    },
+    infisical: {
+        type: "infisical",
+        port: 8084,
+        images: { infisicalImage: IMAGES.infisical, postgresImage: IMAGES.postgres, valkeyImage: IMAGES.valkey },
+    },
 };
 
 // The MCP endpoint descriptor for a service kind, or undefined when the kind exposes no agent tool. The

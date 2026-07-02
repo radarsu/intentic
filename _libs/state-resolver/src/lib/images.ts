@@ -61,6 +61,19 @@ export const IMAGES = Object.freeze({
     // The OIDC identity provider bundled into the Outline stack (Outline has no local password auth); one
     // static intentic user. renovate: datasource=docker depName=ghcr.io/dexidp/dex
     dex: "ghcr.io/dexidp/dex:v2.41.1@sha256:bc7cfce7c17f52864e2bb2a4dc1d2f86a41e3019f6d42e81d92a301fad0c8a1d",
+    // Invoice Ninja (i.want.service kind "invoiceninja"): invoicing. The Octane/FrankenPHP image is
+    // self-serving (the -debian variant is php-fpm behind an nginx sidecar); one image runs the app, worker
+    // and scheduler roles. MySQL/MariaDB only (no Postgres) — backed by the mariadb below + the valkey
+    // below. renovate: datasource=docker depName=invoiceninja/invoiceninja-octane
+    invoiceninja:
+        "invoiceninja/invoiceninja-octane:5.13.26@sha256:5cb4d04646e2e554de82f6f07d1e4bcd4c343ba6361207958097ba2eae77879a",
+    // The MariaDB backing Invoice Ninja (upstream's sanctioned mysql alternative, LTS line).
+    // renovate: datasource=docker depName=mariadb
+    mariadb: "mariadb:11.8.8@sha256:efb4959ef2c835cd735dbc388eb9ad6aab0c78dd64febcd51bc17481111890c4",
+    // Infisical (i.want.service kind "infisical"): secrets management. The standalone image (frontend +
+    // backend in one; DB migrations run on boot) on the postgres + valkey below.
+    // renovate: datasource=docker depName=infisical/infisical
+    infisical: "infisical/infisical:v0.161.11@sha256:efe2d4fe5f37fb250ce5956ecc4734cc9ab1b50629d97cf7793d54200a18642b",
     // The scheduled-backup container: alpine-based, carries restic + busybox crond. It has no docker CLI, so
     // the backup provider bind-mounts the host's docker binary (the forgejo-runner pattern) for the
     // app-consistent `docker exec` dumps. renovate: datasource=docker depName=restic/restic

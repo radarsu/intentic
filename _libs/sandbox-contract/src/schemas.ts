@@ -159,7 +159,7 @@ export const AppScaffoldSchema = z.object({ cloneUrl: z.string().url().optional(
 
 export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe"]);
 export type InventoryProvider = z.infer<typeof InventoryProviderSchema>;
-export const ServiceKindSchema = z.enum(["signoz", "outline", "paperless", "openproject"]);
+export const ServiceKindSchema = z.enum(["signoz", "outline", "paperless", "openproject", "invoiceninja", "infisical"]);
 export type ServiceKind = z.infer<typeof ServiceKindSchema>;
 // Non-secret option values the user provides; secret options (sshKey, apiToken, apiKey) are emitted as env()
 // references and never travel over the wire.
@@ -353,6 +353,88 @@ export const AutomationSummarySchema = AutomationSchema.extend({
 });
 export const AutomationsListSchema = z.object({ automations: z.array(AutomationSummarySchema) });
 export const AutomationIdParamSchema = z.object({ id: z.string() });
+
+// ---- scripts: user-authored runnable commands (.intentic/scripts.json) ----
+// The manifest is files-only (agent-written or hand-edited in the file editor) — the daemon never writes it,
+// so there are no upsert/remove routes. Run history lives in a SEPARATE daemon-owned file
+// (.intentic/script-runs.json) so daemon writes never fight user edits to scripts.json.
+
+// Env vars that would hijack how `sh -c` resolves/loads the command itself — a param may not shadow them.
+const SCRIPT_ENV_DENYLIST = new Set(["PATH", "HOME", "SHELL", "IFS", "ENV", "LD_PRELOAD", "LD_LIBRARY_PATH", "NODE_OPTIONS"]);
+
+// A script param's name IS the environment variable the run receives (no mapping layer, injection-safe —
+// values are never interpolated into the command). POSIX-style uppercase so it's unambiguous in `$FOO` usage.
+const scriptParamName = z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Z][A-Z0-9_]*$/)
+    .refine((name) => !SCRIPT_ENV_DENYLIST.has(name), { message: "param name shadows a critical environment variable" });
+
+// One form field + one env var. Discriminated by `type` so `default`/`options` are typed per kind (the
+// CliConfigSchema convention). Booleans arrive in the env as the strings "true"/"false"; numbers as decimal
+// strings — the shell only ever sees strings.
+const scriptParamBase = {
+    name: scriptParamName,
+    label: z.string().min(1).optional(),
+    description: z.string().optional(),
+    required: z.boolean().optional(),
+    placeholder: z.string().optional(),
+};
+export const ScriptParamSchema = z.discriminatedUnion("type", [
+    z.object({ ...scriptParamBase, type: z.literal("string"), default: z.string().optional() }),
+    z.object({ ...scriptParamBase, type: z.literal("number"), default: z.number().optional() }),
+    z.object({ ...scriptParamBase, type: z.literal("boolean"), default: z.boolean().optional() }),
+    // Options are plain strings: the option IS the value sent and the env value injected. Hand-authored JSON
+    // stays minimal; a label/value split is speculative until a script needs it.
+    z.object({ ...scriptParamBase, type: z.literal("select"), options: z.array(z.string().min(1)).min(1), default: z.string().optional() }),
+]);
+export type ScriptParam = z.infer<typeof ScriptParamSchema>;
+
+export const ScriptSchema = z.object({
+    id: entryId,
+    label: z.string().min(1).optional(),
+    description: z.string().optional(),
+    // Run via `spawn("sh", ["-c", command])` with params as env vars — never string-interpolated (the
+    // automations-guard precedent), so a value can't inject into the command.
+    command: z.string().min(1),
+    // Workspace-root-relative working directory; absent = the workspace root. resolveWithin-guarded at run
+    // time, so a hand-authored `../..` can't escape the workspace.
+    cwd: z.string().min(1).optional(),
+    // Wall-clock cap; the process is killed past it and the run records as "error". Absent = 10 minutes.
+    timeoutMs: z.number().int().positive().max(3_600_000).optional(),
+    params: z.array(ScriptParamSchema).optional(),
+});
+export type Script = z.infer<typeof ScriptSchema>;
+
+export const ScriptRunSchema = z.object({
+    at: z.number(),
+    outcome: z.enum(["completed", "error"]),
+    // Absent when the run died without an exit code (spawn failure, timeout/signal kill).
+    exitCode: z.number().optional(),
+    // Trailing stdout+stderr (interleaved, capped) for the history row — the live stream is not replayable.
+    outputTail: z.string().optional(),
+});
+export type ScriptRun = z.infer<typeof ScriptRunSchema>;
+
+// The list row: manifest entry + its daemon-recorded recent runs (joined from script-runs.json).
+export const ScriptSummarySchema = ScriptSchema.extend({ runs: z.array(ScriptRunSchema) });
+export const ScriptsListSchema = z.object({
+    scripts: z.array(ScriptSummarySchema),
+    // scripts.json is hand-authored: when it exists but is malformed (bad JSON / schema / duplicate id) the
+    // list ships the error instead of a silently empty page, so the UI can say "fix the manifest".
+    manifestError: z.string().optional(),
+});
+export type ScriptsList = z.infer<typeof ScriptsListSchema>;
+
+// POST /scripts/{id}/run body. `id` stays a bare string (RepoParamSchema precedent: unknown id is a handler
+// NOT_FOUND, not input rejection). Values keep their native JSON types; the handler validates them against
+// the script's declared params (required / type / select membership) and stringifies into the env.
+export const ScriptRunInputSchema = z.object({
+    id: z.string(),
+    values: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+export type ScriptRunValues = z.infer<typeof ScriptRunInputSchema>["values"];
 
 // ---- secrets: user-supplied env-var secrets the daemon writes to repositories/desired-state/.env ----
 // The web posts a Cloudflare token / GitHub PAT / another-host SSH key straight to the sandbox daemon (never

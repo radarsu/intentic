@@ -6,6 +6,7 @@ import { gitContract } from "./contracts/git.contract.js";
 import { historyContract } from "./contracts/history.contract.js";
 import { intenticContract } from "./contracts/intentic.contract.js";
 import { inventoryContract } from "./contracts/inventory.contract.js";
+import { scriptsContract } from "./contracts/scripts.contract.js";
 import { secretsContract } from "./contracts/secrets.contract.js";
 import { sessionsContract } from "./contracts/sessions.contract.js";
 import { systemContract } from "./contracts/system.contract.js";
@@ -19,6 +20,7 @@ export { gitContract } from "./contracts/git.contract.js";
 export { historyContract } from "./contracts/history.contract.js";
 export { intenticContract } from "./contracts/intentic.contract.js";
 export { inventoryContract } from "./contracts/inventory.contract.js";
+export { scriptsContract } from "./contracts/scripts.contract.js";
 export { secretsContract } from "./contracts/secrets.contract.js";
 export { sessionsContract } from "./contracts/sessions.contract.js";
 export { systemContract } from "./contracts/system.contract.js";
@@ -40,6 +42,7 @@ export const sandboxContract = {
     history: historyContract,
     workspace: workspaceContract,
     inventory: inventoryContract,
+    scripts: scriptsContract,
     secrets: secretsContract,
     system: systemContract,
 };

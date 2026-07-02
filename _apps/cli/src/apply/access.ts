@@ -12,6 +12,8 @@ const SERVICE_LABELS: Readonly<Record<string, string>> = {
     outline: "Outline (wiki)",
     paperless: "Paperless-ngx (documents)",
     openproject: "OpenProject (projects)",
+    invoiceninja: "Invoice Ninja (invoicing)",
+    infisical: "Infisical (secrets)",
 };
 
 export interface AccessEntry {

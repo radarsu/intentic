@@ -41,6 +41,8 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     outline: ["url", "internalUrl"],
     paperless: ["url", "internalUrl"],
     openproject: ["url", "internalUrl"],
+    invoiceninja: ["url", "internalUrl"],
+    infisical: ["url", "internalUrl"],
     // The per-host workspace sandbox: its host-internal daemon url, the daemon's /health url for readiness,
     // and the `preview.<zone>` base its dev-server preview sits under.
     workspace: ["internalUrl", "healthUrl", "previewBase"],

@@ -30,6 +30,8 @@ export type ResourceType =
     | "outline"
     | "paperless"
     | "openproject"
+    | "invoiceninja"
+    | "infisical"
     | "workspace"
     | "backup"
     | "postgres"

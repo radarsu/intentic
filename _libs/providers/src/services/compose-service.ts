@@ -37,6 +37,9 @@ export interface ComposeServiceSpec<S extends z.ZodType> {
     // The long-running compose services' desired images by compose service name; diff drives an update on a
     // pin bump, which `up -d` turns into an in-place recreate of just the changed service.
     readonly images: (parsed: z.infer<S>) => Record<string, string>;
+    // Runs after the stack reports healthy on apply — the seam for signoz-style admin seeding via the
+    // service's own API from the host. Must tolerate an already-seeded instance (apply re-runs).
+    readonly seed?: (session: SshSession, parsed: z.infer<S>, log: (message: string) => void) => Promise<void>;
 }
 
 const READY_INTERVAL_MS = 4_000;
@@ -144,7 +147,7 @@ export const createComposeServiceProvider = <S extends typeof serviceSchema>(
             }
             return { action: "noop" };
         },
-        apply: async (inputs, _observed, _ctx) => {
+        apply: async (inputs, _observed, ctx) => {
             const parsed = parse(inputs);
             const session = await executor.connect(sshTarget(parsed));
             try {
@@ -156,6 +159,7 @@ export const createComposeServiceProvider = <S extends typeof serviceSchema>(
                     throw new Error(`failed to bring up ${spec.kind} stack: exited ${up.code}: ${up.stderr.trim()}`);
                 }
                 await waitHealthy(session, parsed);
+                await spec.seed?.(session, parsed, ctx.log);
                 return outputsFor(parsed);
             } finally {
                 await session.dispose();

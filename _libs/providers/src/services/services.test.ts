@@ -1,6 +1,8 @@
 import type { Provider } from "@intentic/engine";
 import { expect, test } from "vitest";
 import type { SshExecutor, SshResult, SshSession } from "../core/ssh.js";
+import { createInfisicalProvider } from "./infisical.js";
+import { createInvoiceninjaProvider } from "./invoiceninja.js";
 import { createOpenprojectProvider } from "./openproject.js";
 import { createOutlineProvider } from "./outline.js";
 import { createPaperlessProvider } from "./paperless.js";
@@ -112,6 +114,42 @@ const cases: {
         envKeys: ["SECRET_KEY", "UTILS_SECRET", "POSTGRES_PASSWORD", "OIDC_CLIENT_SECRET", "DEX_ADMIN_PASSWORD_HASH"],
         extraFiles: ["dex-config.yaml"],
     },
+    {
+        kind: "invoiceninja",
+        make: createInvoiceninjaProvider,
+        inputs: {
+            ...base,
+            domain: "invoices.example.com",
+            invoiceninjaImage: "invoiceninja@sha256:aaaa",
+            mariadbImage: "mariadb@sha256:1111",
+            valkeyImage: "valkey@sha256:bbbb",
+        },
+        outputs: { url: "https://invoices.example.com", internalUrl: "http://10.0.0.5:8083" },
+        images: {
+            mariadb: "mariadb@sha256:1111",
+            redis: "valkey@sha256:bbbb",
+            app: "invoiceninja@sha256:aaaa",
+            worker: "invoiceninja@sha256:aaaa",
+            scheduler: "invoiceninja@sha256:aaaa",
+        },
+        envKeys: ["APP_KEY", "DB_PASSWORD", "DB_ROOT_PASSWORD", "IN_PASSWORD"],
+        extraFiles: [],
+    },
+    {
+        kind: "infisical",
+        make: createInfisicalProvider,
+        inputs: {
+            ...base,
+            domain: "secrets.example.com",
+            infisicalImage: "infisical@sha256:2222",
+            postgresImage: "postgres@sha256:eeee",
+            valkeyImage: "valkey@sha256:bbbb",
+        },
+        outputs: { url: "https://secrets.example.com", internalUrl: "http://10.0.0.5:8084" },
+        images: { postgres: "postgres@sha256:eeee", redis: "valkey@sha256:bbbb", infisical: "infisical@sha256:2222" },
+        envKeys: ["ENCRYPTION_KEY", "AUTH_SECRET", "POSTGRES_PASSWORD"],
+        extraFiles: [],
+    },
 ];
 
 for (const svc of cases) {
@@ -188,4 +226,27 @@ test("outline: the dex config wires the auth domain, the outline callback, and t
     const env = ssh.commands.find((c) => c.includes("test -f /opt/intentic/outline/.env"));
     expect(env).toMatch(/DEX_ADMIN_PASSWORD_HASH=%s\\n' '\$2[aby]\$/);
     expect(env).not.toContain("'pw'");
+});
+
+test("invoiceninja: the .env carries a Laravel base64: APP_KEY and the admin seed identity", async () => {
+    const svc = cases[3]!;
+    const ssh = fakeSsh({ healthy: true });
+    await svc.make(ssh.executor).apply(svc.inputs, undefined, ctx());
+    const env = ssh.commands.find((c) => c.includes("test -f /opt/intentic/invoiceninja/.env"));
+    expect(env).toMatch(/APP_KEY=%s\\n' 'base64:/);
+    expect(env).toContain("IN_PASSWORD=%s\\n' 'pw'");
+    const compose = ssh.commands.find((c) => c.includes("cat > /opt/intentic/invoiceninja/compose.yaml"));
+    expect(compose).toContain("IN_USER_EMAIL: intentic@example.com");
+});
+
+test("infisical: apply bootstraps the instance admin via the one-shot API and tolerates non-200", async () => {
+    const svc = cases[4]!;
+    const logs: string[] = [];
+    const ssh = fakeSsh({ healthy: true });
+    await svc.make(ssh.executor).apply(svc.inputs, undefined, ctx((message) => logs.push(message)));
+    const seed = ssh.commands.find((c) => c.includes("/api/v1/admin/bootstrap"));
+    expect(seed).toContain("http://10.0.0.5:8084/api/v1/admin/bootstrap");
+    expect(seed).toContain('"email":"intentic@example.com"');
+    // The fake answers the curl with no status — the seed logs and the apply still succeeds.
+    expect(logs.some((message) => message.includes("bootstrap returned"))).toBe(true);
 });
