@@ -364,10 +364,26 @@ fi
 # Docker step so a docker-missing failure never burns time against the code's TTL.
 if [ -n "$SETUP_CODE" ]; then
     echo "intentic: redeeming the setup code…"
-    if ! claim="$(curl -fsS "$PLATFORM_URL/setup/claim" -d "code=$SETUP_CODE")"; then
-        echo "error: the setup code is invalid or expired — refresh the platform's setup page and copy a fresh command." >&2
+    # LOCAL DEV ONLY: PLATFORM_URL may point at host.docker.internal (how the sandbox CONTAINER reaches a
+    # platform on this machine) — but THIS script runs on the host, where that alias doesn't resolve; the host
+    # reaches its own platform at localhost. The container env below still gets PLATFORM_URL unchanged. The dev
+    # platform's cert is a repo CA the system doesn't trust, so localhost claims skip TLS verification —
+    # never for real domains.
+    claim_url="$(printf '%s' "$PLATFORM_URL" | sed 's/host\.docker\.internal/localhost/')"
+    claim_opts=""
+    case "$claim_url" in
+        *//localhost* | *//127.0.0.1*) claim_opts="-k" ;;
+    esac
+    claim="$(curl -fsS $claim_opts "$claim_url/setup/claim" -d "code=$SETUP_CODE")" || {
+        status=$?
+        # Under -f, exit 22 is an HTTP error (the platform answered: bad/expired code); anything else is transport.
+        if [ "$status" -eq 22 ]; then
+            echo "error: the setup code is invalid or expired — refresh the platform's setup page and copy a fresh command." >&2
+        else
+            echo "error: could not reach the platform at $claim_url to redeem the setup code (curl exit $status)." >&2
+        fi
         exit 1
-    fi
+    }
     CONNECT_TOKEN="$(printf '%s\n' "$claim" | sed -n 's/^CONNECT_TOKEN=//p')"
     TUNNEL_TOKEN="$(printf '%s\n' "$claim" | sed -n 's/^TUNNEL_TOKEN=//p')"
     SANDBOX_HOSTNAME="$(printf '%s\n' "$claim" | sed -n 's/^SANDBOX_HOSTNAME=//p')"

@@ -132,10 +132,17 @@ if ($LASTEXITCODE -ne 0) {
 # never burns time against the code's TTL.
 if ($SetupCode) {
     Write-Host 'intentic: redeeming the setup code...'
+    # LOCAL DEV ONLY: PLATFORM_URL may point at host.docker.internal (the container-facing alias) — this script
+    # runs on the host, which reaches its own platform at localhost; the container env below keeps PLATFORM_URL
+    # unchanged. The dev platform's cert is a repo CA the system doesn't trust, so localhost claims skip TLS
+    # verification — never for real domains.
+    $ClaimUrl = $PlatformUrl -replace 'host\.docker\.internal', 'localhost'
+    $claimArgs = @{ Method = 'Post'; Uri = "$ClaimUrl/setup/claim"; Body = @{ code = $SetupCode } }
+    if ($ClaimUrl -match '^https?://(localhost|127\.0\.0\.1)') { $claimArgs.SkipCertificateCheck = $true }
     try {
-        $claim = Invoke-RestMethod -Method Post -Uri "$PlatformUrl/setup/claim" -Body @{ code = $SetupCode }
+        $claim = Invoke-RestMethod @claimArgs
     } catch {
-        Write-Error 'the setup code is invalid or expired — refresh the platform''s setup page and copy a fresh command.'
+        Write-Error "could not redeem the setup code at $ClaimUrl ($($_.Exception.Message)) — refresh the platform's setup page and copy a fresh command."
         exit 1
     }
     foreach ($line in ($claim -split "`n")) {
