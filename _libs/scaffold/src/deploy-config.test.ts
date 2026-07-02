@@ -54,6 +54,18 @@ describe("deploy-config managed region", () => {
         expect(readManagedRegion(src)).toEqual([signozEntry]);
     });
 
+    test("round-trips every catalog service kind, not just signoz", () => {
+        const entries: InventoryEntry[] = ([`outline`, `paperless`, `openproject`] as const).map((service) => ({
+            kind: `service`,
+            service,
+            name: service,
+            on: `self`,
+            expose: `cf`,
+            values: { domain: `${service}.example.com` },
+        }));
+        expect(readManagedRegion(scaffoldDeployConfig(entries))).toEqual(entries);
+    });
+
     test("writeManagedRegion replaces the region in place and is stable across repeated writes", () => {
         const once = writeManagedRegion(scaffoldDeployConfig([]), [hostEntry, cfEntry, signozEntry]);
         const twice = writeManagedRegion(once, readManagedRegion(once));

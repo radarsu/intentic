@@ -9,6 +9,9 @@ const SERVICE_LABELS: Readonly<Record<string, string>> = {
     forgejo: "Forgejo (git)",
     komodo: "Komodo (deploys)",
     signoz: "SignOz (observability)",
+    outline: "Outline (wiki)",
+    paperless: "Paperless-ngx (documents)",
+    openproject: "OpenProject (projects)",
 };
 
 export interface AccessEntry {

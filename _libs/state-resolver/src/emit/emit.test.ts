@@ -589,3 +589,64 @@ test("a host left at the default transport emits no via (the provider defaults i
     expect(nodes.find((node) => node.id === "host")?.inputs["via"]).toBeUndefined();
     expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["via"]).toBeUndefined();
 });
+
+test("an outline service emits its dashboard route AND a second auth.<domain> route for the bundled Dex", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [{ id: "wiki", kind: "outline", on: "host", expose: "cf", domain: "wiki.example.com" }],
+        workspaces: [],
+        backings: [],
+        apps: [],
+    };
+
+    const nodes = emit(intent, assign(intent), "example.com");
+    expect(nodes.map((node) => node.id)).toEqual(["host", "cf", "wiki", "cf-wiki-example-com", "cf-auth-wiki-example-com", "host-tunnel"]);
+    const wiki = nodes.find((node) => node.id === "wiki");
+    expect(wiki?.type).toBe("outline");
+    expect(wiki?.inputs["authDomain"]).toBe("auth.wiki.example.com");
+    // The password secret key is per-kind, and the images come from the catalog's pins.
+    expect(wiki?.inputs["adminPassword"]).toEqual({ kind: "secret", source: "generated", key: "OUTLINE_ADMIN_PASSWORD" });
+    expect(wiki?.inputs["adminUser"]).toBe("intentic@example.com");
+    expect(wiki?.inputs["dexImage"]).toBe(IMAGES.dex);
+    // Both hostnames land on the host tunnel's ingress: the dashboard and the Dex login.
+    expect(nodes.find((node) => node.id === "host-tunnel")?.inputs["ingress"]).toEqual([
+        { hostname: "wiki.example.com", port: 3210 },
+        { hostname: "auth.wiki.example.com", port: 5556 },
+    ]);
+});
+
+test("an openproject service logs in with the fixed admin username, not the email convention", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [{ id: "pm", kind: "openproject", on: "host", expose: "cf", domain: "pm.example.com" }],
+        workspaces: [],
+        backings: [],
+        apps: [],
+    };
+
+    const pm = emit(intent, assign(intent), "example.com").find((node) => node.id === "pm");
+    expect(pm?.inputs["adminUser"]).toBe("admin");
+    expect(pm?.inputs["adminPassword"]).toEqual({ kind: "secret", source: "generated", key: "OPENPROJECT_ADMIN_PASSWORD" });
+    expect(pm?.inputs["authDomain"]).toBeUndefined();
+});
+
+test("observing a non-signoz service is rejected (only signoz produces an otlpEndpoint)", () => {
+    const intent: IntentSet = {
+        hosts: [host],
+        cloudflare,
+        users: [],
+        teams: [],
+        services: [{ id: "wiki", kind: "outline", on: "host", expose: "cf", domain: "wiki.example.com" }],
+        workspaces: [],
+        backings: [],
+        apps: [{ id: "app", on: "host", expose: "cf", observe: "wiki", environments: { prod: { domain: "app.example.com", branch: "main" } } }],
+    };
+
+    expect(() => emit(intent, assign(intent), "example.com")).toThrow(/not a signoz service/);
+});

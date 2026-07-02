@@ -50,6 +50,9 @@ import type { CloudflareApi } from "./network/cloudflare-api.js";
 import { cloudflareApi } from "./network/cloudflare-api.js";
 import { createTunnelProvider } from "./network/tunnel.js";
 import { createSignozProvider } from "./observability/signoz.js";
+import { createOpenprojectProvider } from "./services/openproject.js";
+import { createOutlineProvider } from "./services/outline.js";
+import { createPaperlessProvider } from "./services/paperless.js";
 
 // The four side-effecting dependencies every provider is built over: SSH transport to the host and the
 // three external HTTP surfaces. Each defaults to its real implementation; pass a fake to drive the whole
@@ -98,6 +101,9 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "forgejo-notify": createForgejoNotifyProvider(forgejo),
         "komodo-notify": createKomodoNotifyProvider(komodo),
         signoz: createSignozProvider(ssh),
+        outline: createOutlineProvider(ssh),
+        paperless: createPaperlessProvider(ssh),
+        openproject: createOpenprojectProvider(ssh),
         backup: createBackupProvider(ssh),
         postgres: createPostgresProvider(ssh),
         "postgres-database": createPostgresDatabaseProvider(ssh),
