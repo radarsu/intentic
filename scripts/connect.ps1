@@ -75,16 +75,28 @@ $Subdomain = $env:SUBDOMAIN
 $ProvidedTunnel = [bool]$TunnelToken -and [bool]$SandboxHostname
 $SandboxPublicUrl = ''
 
-# One sandbox per machine; the name is fixed so the tunnel ingress + cloudflared sidecar resolve it by DNS on
-# the shared network, and the workspace volume persists the cloned repos across re-runs.
-$Container = 'intentic-sandbox-workspace'
-$WorkspaceVolume = 'intentic-workspace-workspace'
-$Network   = 'intentic-workspace'
-# The Docker-in-Docker deploy target (when self-host is on): its own dockerd + sshd, reached by the sandbox at
-# this container name on the shared network. The data volume persists the deployed stack across re-runs.
-$DindContainer = 'intentic-dind-host'
+# Per-sandbox identity, so several sandboxes coexist on one machine. The slug is the same key the public hostname
+# uses: an explicit SUBDOMAIN, else a platform-provided hostname's leftmost label, else the connect-token digest
+# that forms sandbox-<id>. So distinct tokens get distinct container/volume/network (which persist the cloned repos
+# and let the tunnel ingress + cloudflared sidecar resolve by DNS), while re-running with the same token replaces
+# just that one.
+if ($Subdomain) {
+    $Slug = $Subdomain
+} elseif ($ProvidedTunnel) {
+    $Slug = $SandboxHostname.Split('.')[0]
+} else {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $Slug = ([System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($ConnectToken))) -replace '-', '').Substring(0, 12).ToLower()
+}
+$Container = "intentic-sandbox-$Slug"
+$WorkspaceVolume = "intentic-workspace-$Slug"
+$Network   = "intentic-workspace-$Slug"
+$TunnelContainer = "intentic-sandbox-tunnel-$Slug"
+# The Docker-in-Docker deploy target (when self-host is on): its own dockerd + sshd, reached by the sandbox at this
+# container name on the per-sandbox network. Per-slug too, so self-hosting sandboxes don't fight over one target.
+$DindContainer = "intentic-dind-host-$Slug"
 $DindImage = if ($env:DIND_IMAGE) { $env:DIND_IMAGE } else { 'ghcr.io/radarsu/intentic/dind-host:latest' }
-$DindVolume = 'intentic-dind-docker'
+$DindVolume = "intentic-dind-docker-$Slug"
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Error 'docker is not installed. Install Docker Desktop (Linux containers), then re-run.'
@@ -238,11 +250,11 @@ if ($LASTEXITCODE -ne 0) {
 # Start the tunnel connector: cloudflared on the shared network routes sandbox-<id>.<zone> → the daemon and
 # *.preview.<zone> → the app preview. It retries until the sandbox is up, so ordering is not critical.
 Write-Host 'intentic: starting the sandbox tunnel connector...'
-docker rm -f intentic-sandbox-tunnel *> $null
-docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network $Network `
+docker rm -f $TunnelContainer *> $null
+docker run -d --restart unless-stopped --name $TunnelContainer --network $Network `
     $CloudflaredImage tunnel --no-autoupdate run --token $TunnelToken | Out-Null
 
-$StopList = "$Container intentic-sandbox-tunnel"
+$StopList = "$Container $TunnelContainer"
 if ($SelfHost) { $StopList += " $DindContainer" }
 Write-Host "intentic sandbox started and registering with $PlatformUrl."
 Write-Host "Your sandbox will be reachable at $SandboxPublicUrl (DNS may take a few seconds to propagate)."
@@ -252,4 +264,4 @@ if (-not $SelfHost) {
 }
 Write-Host "Logs: docker logs -f $Container"
 Write-Host "Stop (keeps your /work): docker stop $StopList"
-Write-Host 'Reset (also removes the persistent /work volume): irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.ps1 | iex'
+Write-Host "Reset this sandbox (also removes its /work volume): & ([scriptblock]::Create((irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.ps1))) -Slug $Slug"

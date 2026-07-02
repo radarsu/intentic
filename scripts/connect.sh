@@ -90,11 +90,22 @@ if [ -n "$TUNNEL_TOKEN" ] && [ -n "$SANDBOX_HOSTNAME" ]; then
     PROVIDED_TUNNEL=1
 fi
 
-# One sandbox per machine; the name is fixed so the tunnel ingress + cloudflared sidecar resolve it by DNS on
-# the shared network, and the workspace volume persists the cloned repos across re-runs.
-CONTAINER="intentic-sandbox-workspace"
-WORKSPACE_VOLUME="intentic-workspace-workspace"
-NETWORK="intentic-workspace"
+# Per-sandbox identity, so several sandboxes coexist on one machine. The slug is the same key the public hostname
+# uses: an explicit SUBDOMAIN, else a platform-provided hostname's leftmost label, else the connect-token digest
+# that forms sandbox-<id>. So distinct tokens get distinct container/volume/network (which persist the cloned repos
+# and let the tunnel ingress + cloudflared sidecar resolve by DNS), while re-running with the same token replaces
+# just that one. sha256sum is coreutils on the Linux/WSL targets; shasum -a 256 is the macOS fallback.
+if [ -n "$SUBDOMAIN" ]; then
+    SLUG="$SUBDOMAIN"
+elif [ -n "$PROVIDED_TUNNEL" ]; then
+    SLUG="${SANDBOX_HOSTNAME%%.*}"
+else
+    SLUG="$(printf '%s' "$CONNECT_TOKEN" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)"
+fi
+CONTAINER="intentic-sandbox-${SLUG}"
+WORKSPACE_VOLUME="intentic-workspace-${SLUG}"
+NETWORK="intentic-workspace-${SLUG}"
+TUNNEL_CONTAINER="intentic-sandbox-tunnel-${SLUG}"
 
 # Wire THIS machine as a deployable host: a dedicated service user in the docker group with a generated SSH key
 # the sandbox uses to reach the host back over host.docker.internal. Idempotent — an existing user/key is reused
@@ -465,8 +476,8 @@ docker run -d --restart unless-stopped --name "$CONTAINER" \
 # Start the tunnel connector: cloudflared on the shared network routes sandbox-<id>.<zone> → the daemon and
 # *.preview.<zone> → the app preview. It retries until the sandbox is up, so ordering is not critical.
 echo "intentic: starting the sandbox tunnel connector…"
-docker rm -f intentic-sandbox-tunnel >/dev/null 2>&1 || true
-docker run -d --restart unless-stopped --name intentic-sandbox-tunnel --network "$NETWORK" \
+docker rm -f "$TUNNEL_CONTAINER" >/dev/null 2>&1 || true
+docker run -d --restart unless-stopped --name "$TUNNEL_CONTAINER" --network "$NETWORK" \
     "$CLOUDFLARED_IMAGE" tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" >/dev/null
 
 echo "intentic sandbox started and registering with ${PLATFORM_URL}."
@@ -476,5 +487,5 @@ if [ -z "$SELF_HOST" ]; then
     echo "Reachable only — no deploy target. To deploy an app onto this machine later, re-run with SELF_HOST=1 (needs sudo)."
 fi
 echo "Logs: docker logs -f ${CONTAINER}"
-echo "Stop (keeps your /work): docker stop ${CONTAINER} intentic-sandbox-tunnel"
-echo "Reset (also removes the persistent /work volume): curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.sh | sh"
+echo "Stop (keeps your /work): docker stop ${CONTAINER} ${TUNNEL_CONTAINER}"
+echo "Reset this sandbox (also removes its /work volume): curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.sh | sh -s -- ${SLUG}"
