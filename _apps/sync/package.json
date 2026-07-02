@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "description": "Local background agent that keeps a directory bidirectionally in sync with a remote intentic sandbox over its HTTP API",
     "license": "MIT",
-    "private": true,
+    "private": false,
     "type": "module",
     "repository": {
         "type": "git",
