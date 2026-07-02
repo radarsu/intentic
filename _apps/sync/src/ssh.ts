@@ -5,13 +5,18 @@ import { join } from "node:path";
 import { baseDir, sshConfigPath, sshKeyPath } from "./config.js";
 
 // Paths Mutagen syncs but shouldn't: machine-generated dirs + secret files (mirrors the daemon's ignore set).
-// Passed to `mutagen sync create --ignore`; .git is covered by --ignore-vcs.
-export const IGNORES = ["node_modules", "dist", ".turbo", ".cache", ".next", ".angular", ".env", ".secrets.json", "claude.json", "capabilities.json"];
+// Passed to `mutagen sync create --ignore`; .git is covered by --ignore-vcs. `.intentic` is the daemon's own
+// state (owner/members/automations/credentials) — it must never leave the sandbox, and two-way sync would let
+// a local deletion clobber it.
+export const IGNORES = ["node_modules", "dist", ".turbo", ".cache", ".next", ".angular", ".env", ".secrets.json", "claude.json", "capabilities.json", ".intentic"];
 
 // A sandbox id safe for an ssh-config alias / Mutagen session name (letters, digits, dashes).
 export const sanitizeId = (raw: string): string => raw.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 export const sshAlias = (sandboxId: string): string => `intentic-sync-${sanitizeId(sandboxId)}`;
+
+// OpenSSH globs/parses config paths POSIX-style: backslashes are escapes, so Windows paths must use "/".
+const slashPath = (path: string): string => path.replaceAll("\\", "/");
 
 // The ssh-config stanza Mutagen's `ssh` uses to reach the sandbox: routed through the Cloudflare tunnel via
 // cloudflared's ProxyCommand, authed by our dedicated key, with an isolated known_hosts so first-connect
@@ -27,16 +32,16 @@ export const sshConfigBlock = (args: {
         `Host ${args.alias}`,
         `    HostName ${args.hostname}`,
         "    User root",
-        `    IdentityFile "${args.identityFile}"`,
+        `    IdentityFile "${slashPath(args.identityFile)}"`,
         "    IdentitiesOnly yes",
-        `    UserKnownHostsFile "${args.knownHostsFile}"`,
+        `    UserKnownHostsFile "${slashPath(args.knownHostsFile)}"`,
         "    StrictHostKeyChecking accept-new",
         // Paths are quoted: Windows profile paths often contain spaces (C:\Users\First Last\…).
-        `    ProxyCommand "${args.cloudflaredPath}" access ssh --hostname %h`,
+        `    ProxyCommand "${slashPath(args.cloudflaredPath)}" access ssh --hostname %h`,
         "",
     ].join("\n");
 
-export const INCLUDE_MARKER = `Include "${sshConfigPath}"`;
+export const INCLUDE_MARKER = `Include "${slashPath(sshConfigPath)}"`;
 
 // Generate the ed25519 keypair on first setup; return the public key line to enroll on the daemon.
 export const ensureSshKey = async (): Promise<string> => {

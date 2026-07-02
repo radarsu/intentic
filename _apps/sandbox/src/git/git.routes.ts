@@ -45,6 +45,7 @@ export const createGitRoutes = (services: Services) => {
                 throw new ORPCError("BAD_REQUEST", { message: "invalid path" });
             }
             await services.files.write(target, input.content);
+            services.history.notifyUserWrite();
             return { ok: true } as const;
         }),
     };

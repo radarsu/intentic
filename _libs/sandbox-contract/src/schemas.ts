@@ -69,7 +69,7 @@ export const CommitResultSchema = z.object({ committed: z.boolean() });
 // The daemon snapshots /work into bare git dirs on /history (outside the agent's reach) after every turn and on
 // an interval. A "snapshot" groups one commit per scope (root + each nested repo) under a shared id.
 
-export const SnapshotTriggerSchema = z.enum(["turn", "interval", "manual", "pre-restore", "restore"]);
+export const SnapshotTriggerSchema = z.enum(["turn", "interval", "manual", "pre-restore", "restore", "user"]);
 export type SnapshotTrigger = z.infer<typeof SnapshotTriggerSchema>;
 export const SnapshotSchema = z.object({
     id: z.string(),

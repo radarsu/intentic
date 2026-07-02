@@ -66,6 +66,19 @@ const fakeDevServer = (status: Awaited<ReturnType<DevServer["status"]>>): DevSer
     status: async () => status,
 });
 
+// Inert history — no snapshots recorded, every id unknown; a test overrides just the members it asserts on.
+const fakeHistory = (overrides: Partial<Services["history"]> = {}): Services["history"] => ({
+    start: () => {},
+    stop: () => {},
+    snapshot: async () => undefined,
+    notifyUserWrite: () => {},
+    list: async () => [],
+    diff: async () => undefined,
+    fileDiff: async () => undefined,
+    restore: async () => false,
+    ...overrides,
+});
+
 // The files seam with every method a no-op by default; a test overrides just the ones it asserts on.
 const fakeFiles = (overrides: Partial<Services["files"]> = {}): Services["files"] => ({
     read: async () => undefined,
@@ -110,16 +123,7 @@ const services = (overrides: Partial<Services> = {}): Services => ({
     // A connected account by default, so the /agent guard (no token + no env creds) doesn't short-circuit
     // turns under test. Tests that exercise the disconnected path override this.
     claudeStore: { read: async () => ({ accessToken: "tok-xyz" }), write: async () => {}, clear: async () => {} },
-    // Inert history: no snapshots recorded, every id unknown — route tests that need history override this.
-    history: {
-        start: () => {},
-        stop: () => {},
-        snapshot: async () => undefined,
-        list: async () => [],
-        diff: async () => undefined,
-        fileDiff: async () => undefined,
-        restore: async () => false,
-    },
+    history: fakeHistory(),
     agent: async function* () {
         yield { kind: "done" };
     },
@@ -241,11 +245,18 @@ test("POST /automations/:id/fire skips bearer auth, enforces the automation toke
     expect((await store.get("deploy"))?.runs[0]?.outcome).toBe("completed");
 });
 
-test("agent.run streams the agent events", async () => {
+test("agent.run streams the agent events, fenced by a user snapshot before and a turn snapshot after", async () => {
     const events: AgentEvent[] = [{ kind: "session", sessionId: "s1" }, { kind: "delta", text: "hi" }, { kind: "done" }];
+    const triggers: string[] = [];
     const client = clientFor(
         createApp(
             services({
+                history: fakeHistory({
+                    snapshot: async (trigger) => {
+                        triggers.push(trigger);
+                        return undefined;
+                    },
+                }),
                 agent: async function* () {
                     yield* events;
                 },
@@ -253,6 +264,19 @@ test("agent.run streams the agent events", async () => {
         ),
     );
     expect(await collect(await client.agent.run({ prompt: "do it" }))).toEqual(events);
+    // Attribution: pending user changes are captured BEFORE the agent runs, so the turn snapshot is agent-only.
+    expect(triggers).toEqual(["user", "turn"]);
+});
+
+test("user file mutations ping history for a user-authored snapshot", async () => {
+    let pings = 0;
+    const app = createApp(services({ history: fakeHistory({ notifyUserWrite: () => pings++ }) }));
+    const client = clientFor(app);
+    await client.workspace.mkdir({ path: "notes" });
+    expect(pings).toBe(1);
+    const uploaded = await app.request("/workspace/upload?path=notes/todo.txt", { method: "POST", body: "hi" });
+    expect(uploaded.status).toBe(200);
+    expect(pings).toBe(2);
 });
 
 test("agent.run resolves the oauth token from the sandbox store (not the body) and forwards model/session", async () => {

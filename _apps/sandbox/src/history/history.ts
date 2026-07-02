@@ -19,6 +19,8 @@ import { REPO_ROLES, type WorkspacePaths } from "../workspace/workspace.js";
 const exec = promisify(execFile);
 
 const SNAPSHOT_INTERVAL_MS = 60_000;
+// Trailing debounce for user-write pings — long enough to coalesce a sequential multi-file drop into one snapshot.
+const USER_WRITE_DEBOUNCE_MS = 2_000;
 // git's well-known empty tree — the diff base for a scope's first snapshot.
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 // File contents above this are flagged `truncated` instead of shipped to the diff UI.
@@ -50,6 +52,9 @@ export interface WorkspaceHistory {
     readonly stop: () => void;
     // Returns the snapshot id, or undefined when nothing changed anywhere since the last snapshot.
     readonly snapshot: (trigger: SnapshotTrigger) => Promise<string | undefined>;
+    // Ping from a user-initiated write route (upload / mkdir / delete / move / copy / clone). Trailing-debounced
+    // into one snapshot("user") per user gesture, so a 100-file drop is one timeline entry, not a hundred.
+    readonly notifyUserWrite: () => void;
     readonly list: () => Promise<Snapshot[]>;
     // undefined ⇒ unknown snapshot id (routes map it to NOT_FOUND).
     readonly diff: (id: string) => Promise<SnapshotChange[] | undefined>;
@@ -330,6 +335,7 @@ export const createWorkspaceHistory = (
     };
 
     let timer: NodeJS.Timeout | undefined;
+    let userWriteTimer: NodeJS.Timeout | undefined;
     const snapshot = (trigger: SnapshotTrigger): Promise<string | undefined> => serialize(() => snapshotAll(trigger));
 
     return {
@@ -348,8 +354,22 @@ export const createWorkspaceHistory = (
                 clearInterval(timer);
                 timer = undefined;
             }
+            if (userWriteTimer !== undefined) {
+                clearTimeout(userWriteTimer);
+                userWriteTimer = undefined;
+            }
         },
         snapshot,
+        notifyUserWrite: () => {
+            if (userWriteTimer !== undefined) {
+                clearTimeout(userWriteTimer);
+            }
+            userWriteTimer = setTimeout(() => {
+                userWriteTimer = undefined;
+                void snapshot("user").catch((error: unknown) => logger.warn({ err: error }, "history: user snapshot failed"));
+            }, USER_WRITE_DEBOUNCE_MS);
+            userWriteTimer.unref();
+        },
         list: async () => (await groups()).map(({ id, at, trigger, scopes }) => ({ id, at, trigger, scopes })),
         diff: async (id) => {
             const group = await findGroup(id);

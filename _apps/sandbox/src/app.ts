@@ -152,6 +152,7 @@ export const createApp = (services: Services): Hono => {
             return c.json({ error: "file too large" }, 413);
         }
         await services.files.write(target, bytes);
+        services.history.notifyUserWrite();
         return c.json({ ok: true });
     });
 

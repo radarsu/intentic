@@ -52,7 +52,9 @@ const setup = buildCommand<SetupFlags>({
         out(`enrolled SSH key; sandbox reachable at ${sshHostname}`);
 
         const sandboxId = flags.sandboxId ?? sanitizeId(new URL(flags.url).host);
-        const localDir = resolve(flags.dir ?? join(homedir(), "intentic", sandboxId));
+        // A `~` prefix can reach us verbatim (SYNC_DIR travels as data from the setup wizard's claim payload —
+        // no shell ever expands it), so expand it here where every entry path converges.
+        const localDir = resolve(flags.dir === undefined ? join(homedir(), "intentic", sandboxId) : flags.dir.replace(/^~(?=[\\/]|$)/, homedir()));
         // Create the local root up front — Mutagen only materializes it once content propagates, and an
         // immediately-visible folder is the user's anchor that setup worked.
         await mkdir(localDir, { recursive: true });

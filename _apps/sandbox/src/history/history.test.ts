@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { createLogger } from "../logger.js";
 import { workspacePaths } from "../workspace/workspace.js";
 import { createWorkspaceHistory, type HistoryGitRunner, repoGitDir } from "./history.js";
@@ -110,6 +110,25 @@ test("snapshot commits parentless first, skips an unchanged tree, then parents o
     expect(await history.snapshot("interval")).toBeDefined();
     expect(commitCalls()).toHaveLength(2);
     expect(commitCalls()[1]?.join(" ")).toContain("-p c1");
+});
+
+test("notifyUserWrite debounces a burst of pings into ONE user-triggered snapshot", async () => {
+    const { history, calls } = await fakeHistory();
+    // Fake timers only to fire the debounce deterministically; the snapshot chain itself awaits real fs IO, so
+    // restore real timers and use a follow-up snapshot as the serialization barrier (it skips — same tree).
+    vi.useFakeTimers();
+    try {
+        history.notifyUserWrite();
+        history.notifyUserWrite();
+        history.notifyUserWrite();
+        await vi.advanceTimersByTimeAsync(2_100);
+    } finally {
+        vi.useRealTimers();
+    }
+    await history.snapshot("manual");
+    const commits = calls.filter((call) => call.includes("commit-tree"));
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.join(" ")).toMatch(/snapshot \S+ user/);
 });
 
 test("restore runs read-tree → clean → checkout-index in order, with a safety snapshot first", async () => {

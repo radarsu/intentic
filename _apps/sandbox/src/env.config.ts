@@ -22,6 +22,10 @@ const configSchema = z.object({
     zone: z.string().default(""),
     // The first-bind connection token (TOFU owner gate) and the platform web origin scoped for CORS.
     connectToken: z.string().default("").meta({ secret: true }),
+    // Setup-time desktop-sync pairing: connect.{sh,ps1} passes the claim's SYNC_PAIR_TOKEN here; seeded at boot
+    // as a normal single-use pairing so the connect script's sync agent can enroll without the browser minting
+    // one. Same trust class as connectToken (both live in the container env); empty ⇒ no seed.
+    syncPairToken: z.string().default("").meta({ secret: true }),
     webOrigin: z.string().default(""),
     // The platform base this sandbox registers its public URL against (decentralized directory; best-effort).
     platformUrl: z.string().default(""),

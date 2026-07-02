@@ -48,6 +48,10 @@ export async function* streamAgent(services: Services, input: AgentTurn, signal:
         ...(input.thinking !== undefined ? { thinking: input.thinking } : {}),
         ...(tools.length > 0 ? { tools } : {}),
     };
+    // Attribution fence: capture anything pending as user-authored (terminal edits, desktop-sync arrivals,
+    // unflushed UI writes) BEFORE the agent runs, so the turn-end snapshot below is purely the agent's work.
+    // A no-op skip when the tree is clean; a history failure never blocks a turn.
+    await services.history.snapshot("user").catch((error: unknown) => services.logger.warn({ err: error }, "history: turn-start snapshot failed"));
     try {
         yield* services.agent(request);
     } finally {

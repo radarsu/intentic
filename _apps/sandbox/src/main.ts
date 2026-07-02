@@ -7,6 +7,7 @@ import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
 import { createLogger } from "./logger.js";
 import { registerWithPlatform } from "./system/register.js";
+import { seedPairing } from "./system/sync.js";
 
 // The sandbox container's entrypoint. Config comes from env set at `docker run` — by connect.sh (your PC) or
 // the workspace provider (a server); the workspace (the repos) and agent credentials are injected there,
@@ -16,6 +17,11 @@ const main = async (): Promise<void> => {
     const logger = createLogger(config);
     const services = createServices(config, logger);
     const { workspace } = services;
+
+    // Setup-time desktop sync: arm the platform-minted pairing token so the connect script can enroll its agent.
+    if (config.syncPairToken !== "") {
+        seedPairing(config.syncPairToken);
+    }
 
     // The sandbox boots physically empty — no intent/desired-state repos. They're scaffolded on demand when the
     // user activates the DevOps capability (see capabilities/handlers/devops.ts). The app repo likewise only

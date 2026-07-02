@@ -19,6 +19,14 @@ export const mintPairing = (): { token: string; expiresIn: number } => {
     return { token, expiresIn: Math.floor(PAIR_TTL_MS / 1000) };
 };
 
+// Seed a pre-agreed pairing: the platform-minted setup-time token connect.{sh,ps1} passes via container env
+// (SYNC_PAIR_TOKEN), so the connect script's sync agent can enroll without a browser mint. Same TTL + single-use
+// consumption as a minted one. The env persists on the container, so each restart re-arms it for PAIR_TTL_MS —
+// same trust class as CONNECT_TOKEN sitting in the same env.
+export const seedPairing = (token: string): void => {
+    pairings.set(token, { expiresAt: Date.now() + PAIR_TTL_MS });
+};
+
 // Valid = known + unexpired (prunes on expiry). Peek only — the caller consumes it after a successful enroll,
 // so a failed enroll leaves the token usable for a retry.
 export const isValidPairing = (token: string): boolean => {

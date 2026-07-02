@@ -38,21 +38,26 @@ export const createWorkspaceRoutes = (services: Services) => {
             return { path: input.path, content };
         }),
         // Direct file management over /work (byte writes go through POST /workspace/upload). Both endpoints of a
-        // move/copy are guarded, so neither source nor target can escape or touch a secret/`.git` path.
+        // move/copy are guarded, so neither source nor target can escape or touch a secret/`.git` path. Every
+        // mutation pings history so it lands as a user-authored snapshot (debounced per gesture).
         mkdir: i.mkdir.handler(async ({ input }) => {
             await services.files.mkdir(contained(input.path));
+            services.history.notifyUserWrite();
             return { ok: true } as const;
         }),
         delete: i.delete.handler(async ({ input }) => {
             await services.files.remove(contained(input.path));
+            services.history.notifyUserWrite();
             return { ok: true } as const;
         }),
         move: i.move.handler(async ({ input }) => {
             await services.files.move(contained(input.from), contained(input.to));
+            services.history.notifyUserWrite();
             return { ok: true } as const;
         }),
         copy: i.copy.handler(async ({ input }) => {
             await services.files.copy(contained(input.from), contained(input.to));
+            services.history.notifyUserWrite();
             return { ok: true } as const;
         }),
         repos: i.repos.handler(async () => ({ repos: await listRepos(services.workspace.repositories) })),
@@ -69,6 +74,7 @@ export const createWorkspaceRoutes = (services: Services) => {
                 ...(input.branch !== undefined ? { branch: input.branch } : {}),
                 separateGitDir: repoGitDir(services.config.historyRoot, input.name),
             });
+            services.history.notifyUserWrite();
             return { name: input.name, path: input.name };
         }),
         // Scaffold (or adopt) the deployable app at /work/app. The neutral workspace has none until the user opts
@@ -98,6 +104,7 @@ export const createWorkspaceRoutes = (services: Services) => {
             if (services.config.dev.command !== "" && services.config.dev.port !== "") {
                 services.devServer.start({ command: services.config.dev.command.split(" "), cwd: appDir, port: Number(services.config.dev.port) });
             }
+            services.history.notifyUserWrite();
             return { ok: true } as const;
         }),
     };
