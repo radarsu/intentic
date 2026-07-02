@@ -28,6 +28,14 @@ export interface StoredCredentials {
     readonly refreshToken: string;
 }
 
+// The platform-owned Google *Desktop* OAuth client the sync agent signs in with, so users never create their
+// own — the daemon accepts its id as a token audience (google.syncClientId). Installed-app client secrets are
+// NOT confidential (Google's own guidance), so baking one here is fine; env overrides for a self-hosted platform.
+// ponytail: placeholder credential — provision the platform desktop client and fill these before release.
+export const platformGoogleDesktopClientId =
+    process.env["GOOGLE_SYNC_CLIENT_ID"] ?? "481795963975-pnobq9vv98c2enbdf2hi1r8jdfkocalr.apps.googleusercontent.com";
+export const platformGoogleDesktopClientSecret = process.env["GOOGLE_SYNC_CLIENT_SECRET"] ?? "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";
+
 export const readConfig = async (): Promise<SyncConfig> => JSON.parse(await readFile(configPath, "utf8")) as SyncConfig;
 
 export const writeConfig = async (config: SyncConfig): Promise<void> => {

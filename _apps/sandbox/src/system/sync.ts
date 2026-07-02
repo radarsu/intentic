@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { zoneFromPublicUrl } from "./zone.js";
@@ -23,6 +23,17 @@ export const enrollAuthorizedKey = async (key: string): Promise<void> => {
     }
     await mkdir(join(homedir(), ".ssh"), { recursive: true, mode: 0o700 });
     await appendFile(path, `${line}\n`, { mode: 0o600 });
+};
+
+// Whether a desktop-sync key is enrolled — the UI's "desktop sync enabled" signal (≥1 non-blank key line).
+export const isKeyEnrolled = async (): Promise<boolean> => {
+    const existing = await readFile(authorizedKeysPath(), "utf8").catch(() => "");
+    return existing.split("\n").some((entry) => entry.trim().length > 0);
+};
+
+// Revoke desktop sync: drop all enrolled keys (the UI's Disable). Removing the key halts Mutagen's SSH transport.
+export const clearAuthorizedKeys = async (): Promise<void> => {
+    await writeFile(authorizedKeysPath(), "", { mode: 0o600 }).catch(() => {});
 };
 
 // The SSH hostname the sandbox tunnel exposes for Mutagen — derived exactly as sandbox-tunnel.ts derives the

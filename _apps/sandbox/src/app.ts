@@ -8,7 +8,7 @@ import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { enrollHost } from "./inventory/enroll-host.js";
 import { createRouter } from "./router.js";
-import { enrollAuthorizedKey, isValidAuthorizedKey, syncSshHostname } from "./system/sync.js";
+import { clearAuthorizedKeys, enrollAuthorizedKey, isKeyEnrolled, isValidAuthorizedKey, syncSshHostname } from "./system/sync.js";
 import { createTerminalRoute } from "./system/terminal.js";
 import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
 import { isDeniedWorkspacePath } from "./workspace/workspace-tree.js";
@@ -225,10 +225,16 @@ export const createApp = (services: Services): Hono => {
             return c.json({ error: "unauthorized" }, 401);
         }
         const sshHostname = syncSshHostname(services.config.connectToken, services.config.zone, services.config.sandbox.publicUrl);
-        if (sshHostname === undefined) {
-            return c.json({ error: "ssh tunnel not configured" }, 409);
+        // Always 200 so the UI can render its "enable" vs "enabled" state; sshHostname is omitted when this
+        // sandbox has no SSH tunnel (loopback/preview), which the setup CLI treats as "sync unavailable".
+        return c.json({ enrolled: await isKeyEnrolled(), ...(sshHostname !== undefined ? { sshHostname } : {}) });
+    });
+    app.delete("/system/authorized-key", async (c) => {
+        if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
         }
-        return c.json({ sshHostname });
+        await clearAuthorizedKeys();
+        return c.json({ ok: true });
     });
 
     // Everything else flows through the oRPC OpenAPI handler, mounted at the root (its contract paths ARE the

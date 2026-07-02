@@ -14,7 +14,12 @@ export const sessionName = (sandboxId: string): string => `intentic-${sanitizeId
 // `mutagen sync create` args: two-way-safe (flags conflicts rather than clobber), our ignore set, and
 // neighboring staging on the remote so a huge file stages on the same filesystem as /work (atomic rename, no
 // cross-fs 2× copy). local first, then user@alias:/work.
-export const mutagenCreateArgs = (args: { readonly name: string; readonly localDir: string; readonly alias: string; readonly remoteDir: string }): string[] => [
+export const mutagenCreateArgs = (args: {
+    readonly name: string;
+    readonly localDir: string;
+    readonly alias: string;
+    readonly remoteDir: string;
+}): string[] => [
     "sync",
     "create",
     "--name",
@@ -64,7 +69,10 @@ export const ensureCloudflared = async (): Promise<string> => {
         return "cloudflared";
     }
     const dest = join(binDir, "cloudflared");
-    await download(`https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-${osToken()}-${archToken()}`, dest);
+    await download(
+        `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-${osToken()}-${archToken()}`,
+        dest,
+    );
     await chmod(dest, 0o755);
     return dest;
 };
@@ -77,7 +85,10 @@ export const ensureMutagen = async (): Promise<string> => {
     }
     const dest = join(binDir, "mutagen");
     const tarball = join(binDir, "mutagen.tar.gz");
-    await download(`https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_${osToken()}_${archToken()}_v${MUTAGEN_VERSION}.tar.gz`, tarball);
+    await download(
+        `https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_${osToken()}_${archToken()}_v${MUTAGEN_VERSION}.tar.gz`,
+        tarball,
+    );
     const extract = spawnSync("tar", ["-xzf", tarball, "-C", binDir], { stdio: "inherit" });
     if (extract.status !== 0) {
         throw new Error("failed to extract the mutagen release (is `tar` installed?)");

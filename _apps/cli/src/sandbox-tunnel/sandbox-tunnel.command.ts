@@ -62,6 +62,8 @@ export const sandboxTunnel = buildCommand<{ service: string; previewService?: st
             log: (message) => this.process.stderr.write(`${message}\n`),
         });
         // Machine-readable on stdout for connect.sh to capture (progress went to stderr).
-        this.process.stdout.write(`TUNNEL_TOKEN=${token}\nSANDBOX_HOSTNAME=${hostname}\n${sshHostname !== undefined ? `SANDBOX_SSH_HOSTNAME=${sshHostname}\n` : ""}`);
+        this.process.stdout.write(
+            `TUNNEL_TOKEN=${token}\nSANDBOX_HOSTNAME=${hostname}\n${sshHostname !== undefined ? `SANDBOX_SSH_HOSTNAME=${sshHostname}\n` : ""}`,
+        );
     },
 });
