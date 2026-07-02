@@ -32,9 +32,14 @@ LABEL org.opencontainers.image.source=https://github.com/radarsu/intentic
 # owner can see what's running in the sandbox and reap a stuck dev command. zsh is the terminal's shell (below).
 # curl + jq back the CLI-tool integrations (e.g. the Discord `cli` capability's skill has the agent call
 # Discord's REST API with `curl … | jq`); neither is in the slim base and the build stage's curl doesn't carry over.
+# openssh-server is the transport for the local-sync feature: Mutagen on the laptop connects over SSH (through the
+# sandbox's Cloudflare tunnel) to block-delta sync /work. Key-only (config drop-in below); host keys baked here.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates procps zsh ncurses-term curl jq \
+    && apt-get install -y --no-install-recommends git ca-certificates procps zsh ncurses-term curl jq openssh-server \
     && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh \
+    && ssh-keygen -A \
+    && printf '%s\n' 'PasswordAuthentication no' 'PermitRootLogin prohibit-password' 'PubkeyAuthentication yes' > /etc/ssh/sshd_config.d/intentic.conf
 # The terminal (system/terminal.ts) launches zsh with the oh-my-zsh "bira" theme + zsh-autosuggestions, so the
 # owner gets a real prompt and history autocomplete. Installed into root's home (the daemon/terminal run as
 # root); --depth=1 tracks the default branch (pin to a commit if reproducibility matters).
@@ -66,7 +71,10 @@ RUN chmod +x /opt/intentic-cli/dist/cli.js \
 COPY --from=build /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 # The sandbox daemon.
 COPY --from=build /out/sandbox /opt/sandbox
+# Entrypoint starts sshd (for Mutagen sync) then execs the daemon as PID 1.
+COPY _apps/sandbox/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 WORKDIR /work
 ENV WORKSPACE_ROOT=/work SANDBOX_PORT=8787
-EXPOSE 8787
-ENTRYPOINT ["node", "/opt/sandbox/dist/main.js"]
+EXPOSE 8787 22
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

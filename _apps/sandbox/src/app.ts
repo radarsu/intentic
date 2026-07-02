@@ -8,6 +8,7 @@ import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { enrollHost } from "./inventory/enroll-host.js";
 import { createRouter } from "./router.js";
+import { enrollAuthorizedKey, isValidAuthorizedKey, syncSshHostname } from "./system/sync.js";
 import { createTerminalRoute } from "./system/terminal.js";
 import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
 import { isDeniedWorkspacePath } from "./workspace/workspace-tree.js";
@@ -23,6 +24,12 @@ const logUnexpectedError = (services: Services, error: unknown): void => {
 
 // Extract the bearer token from an Authorization header (empty string when absent/malformed).
 const bearerFrom = (header: string | undefined): string => (header?.startsWith("Bearer ") ? header.slice(7) : "");
+
+// The lowercased email in a member-management request body, or undefined when absent/malformed.
+const memberEmail = async (c: Context): Promise<string | undefined> => {
+    const body = (await c.req.json().catch(() => undefined)) as { email?: unknown } | undefined;
+    return typeof body?.email === "string" ? body.email.toLowerCase() : undefined;
+};
 
 // The HTTP API the browser drives DIRECTLY over the sandbox's own Cloudflare tunnel. When services.auth is set
 // the daemon verifies the owner's Google ID token on every route but /health (it owns its own auth). No auth
@@ -169,10 +176,6 @@ export const createApp = (services: Services): Hono => {
             return false;
         }
     };
-    const memberEmail = async (c: Context): Promise<string | undefined> => {
-        const body = (await c.req.json().catch(() => undefined)) as { email?: unknown } | undefined;
-        return typeof body?.email === "string" ? body.email.toLowerCase() : undefined;
-    };
     app.get("/members", async (c) => {
         if (!(await ensureOwner(c))) {
             return c.json({ error: "unauthorized" }, 401);
@@ -200,6 +203,32 @@ export const createApp = (services: Services): Hono => {
         }
         await services.members.remove(email);
         return c.json({ emails: await services.members.list() });
+    });
+
+    // Local-sync (Mutagen) enrollment — owner-only, same gate as /members. The owner's `intentic-sync setup`
+    // POSTs its ed25519 public key (authorized by the Google token) to authorize SSH; then reads the tunnel's
+    // SSH hostname to point Mutagen at. Both sit before the oRPC catch-all, like /members and /workspace/raw.
+    app.post("/system/authorized-key", async (c) => {
+        if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        const body = (await c.req.json().catch(() => undefined)) as { key?: unknown } | undefined;
+        const key = typeof body?.key === "string" ? body.key : undefined;
+        if (key === undefined || !isValidAuthorizedKey(key)) {
+            return c.json({ error: "invalid key" }, 400);
+        }
+        await enrollAuthorizedKey(key);
+        return c.json({ ok: true });
+    });
+    app.get("/system/sync", async (c) => {
+        if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        const sshHostname = syncSshHostname(services.config.connectToken, services.config.zone, services.config.sandbox.publicUrl);
+        if (sshHostname === undefined) {
+            return c.json({ error: "ssh tunnel not configured" }, 409);
+        }
+        return c.json({ sshHostname });
     });
 
     // Everything else flows through the oRPC OpenAPI handler, mounted at the root (its contract paths ARE the

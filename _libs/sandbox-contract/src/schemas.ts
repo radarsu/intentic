@@ -75,9 +75,6 @@ export const WorkspaceTreeEntrySchema = z.object({
     path: z.string(),
     type: z.enum(["file", "dir"]),
     size: z.number().optional(),
-    // Last-modified epoch millis (files only) — the local sync agent diffs it against its manifest on
-    // (re)connect to decide which files to pull without re-reading every byte.
-    mtime: z.number().optional(),
     get children() {
         return z.array(WorkspaceTreeEntrySchema).optional();
     },
@@ -90,16 +87,6 @@ export const WorkspaceTreeSchema = z.object({
     truncated: z.boolean(),
 });
 export type WorkspaceTree = z.infer<typeof WorkspaceTreeSchema>;
-// A single filesystem change under /work, streamed live over /workspace/watch (SSE). Mirrors chokidar's event
-// names so the sync agent maps each straight to a local write/delete. size+mtime ride along on add/change so
-// the agent's echo-guard can skip a pull when the bytes already match what it just wrote.
-export const WorkspaceChangeSchema = z.object({
-    kind: z.enum(["add", "change", "unlink", "addDir", "unlinkDir"]),
-    path: z.string(),
-    size: z.number().optional(),
-    mtime: z.number().optional(),
-});
-export type WorkspaceChange = z.infer<typeof WorkspaceChangeSchema>;
 export const WorkspaceFileQuerySchema = z.object({ path: z.string().min(1) });
 export const WorkspaceFileSchema = z.object({ path: z.string(), content: z.string() });
 // Direct file management over the /work tree (delete / new folder / rename+move / copy). Byte writes + the

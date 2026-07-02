@@ -3,19 +3,22 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 // Everything the agent persists lives under ~/.intentic/sync — the config it was set up with, the OAuth refresh
-// token, and one manifest dir per sandbox. Kept in the user's home (not the mirror dir) so nothing sync state
-// leaks into the folder being mirrored.
+// token, the SSH keypair Mutagen authenticates with, and the ssh config/known_hosts Mutagen's ssh reads.
 export const baseDir = join(homedir(), ".intentic", "sync");
 export const configPath = join(baseDir, "config.json");
 export const credentialsPath = join(baseDir, "credentials.json");
-export const manifestPath = (sandboxId: string): string => join(baseDir, sandboxId, "manifest.json");
+export const sshKeyPath = join(baseDir, "id_ed25519");
+export const sshConfigPath = join(baseDir, "ssh_config");
+export const knownHostsPath = join(baseDir, "known_hosts");
+export const binDir = join(baseDir, "bin");
 
-// What `intentic-sync setup` writes and `run` reads back. The Google client id/secret are a *desktop* OAuth
-// client (the secret is not confidential for installed apps — Google says so); the daemon accepts the client id
-// as a token audience. sandboxId namespaces the manifest so one machine can mirror several sandboxes.
+// What `intentic-sync setup` writes and the other commands read back. The Google client id/secret are a
+// *desktop* OAuth client (the secret is not confidential for installed apps); the daemon accepts the id as a
+// token audience. sshHostname is what the daemon's /system/sync returned — the tunnel host Mutagen reaches.
 export interface SyncConfig {
     readonly sandboxUrl: string;
     readonly sandboxId: string;
+    readonly sshHostname: string;
     readonly localDir: string;
     readonly googleClientId: string;
     readonly googleClientSecret: string;

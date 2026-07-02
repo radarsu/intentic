@@ -20,8 +20,9 @@ const openBrowser = (url: string): void => {
 
 const startLoopback = (): Promise<{ server: Server; port: number; code: Promise<string> }> =>
     new Promise((resolveServer) => {
-        let resolveCode: (code: string) => void = () => {};
-        let rejectCode: (error: Error) => void = () => {};
+        // Assigned synchronously by the Promise executor below (runs before this returns), hence definite-assignment.
+        let resolveCode!: (code: string) => void;
+        let rejectCode!: (error: Error) => void;
         const code = new Promise<string>((resolve, reject) => {
             resolveCode = resolve;
             rejectCode = reject;

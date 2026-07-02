@@ -1,11 +1,10 @@
-import { eventIterator, oc } from "@orpc/contract";
+import { oc } from "@orpc/contract";
 import {
     AppScaffoldSchema,
     CloneRepoSchema,
     CloneResultSchema,
     OkSchema,
     ReposListSchema,
-    WorkspaceChangeSchema,
     WorkspaceDirSchema,
     WorkspaceFileQuerySchema,
     WorkspaceFileSchema,
@@ -18,9 +17,6 @@ import {
 // fit a streamed binary body). External MCP tools moved to the unified capabilities manifest (mcp kind).
 export const workspaceContract = {
     tree: oc.route({ method: "GET", path: "/workspace/tree" }).output(WorkspaceTreeSchema),
-    // Live filesystem change stream (SSE) the local sync agent subscribes to for near-real-time remote→local
-    // mirroring. Each frame is one chokidar event; the agent pulls the changed bytes via /workspace/raw.
-    watch: oc.route({ method: "GET", path: "/workspace/watch" }).output(eventIterator(WorkspaceChangeSchema)),
     file: oc.route({ method: "GET", path: "/workspace/file" }).input(WorkspaceFileQuerySchema).output(WorkspaceFileSchema),
     // Direct file management the browser drives against the /work tree (byte writes go through POST
     // /workspace/upload). oRPC's OpenAPI codec reads non-GET input from the JSON body, so delete sends {path}

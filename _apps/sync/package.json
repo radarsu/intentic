@@ -20,9 +20,7 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@intentic/sandbox-contract": "workspace:*",
         "@stricli/core": "catalog:",
-        "chokidar": "catalog:",
         "google-auth-library": "catalog:",
         "tslib": "catalog:"
     },

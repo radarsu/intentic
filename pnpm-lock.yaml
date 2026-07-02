@@ -49,9 +49,6 @@ catalogs:
     '@types/ws':
       specifier: 8.18.1
       version: 8.18.1
-    chokidar:
-      specifier: 4.0.3
-      version: 4.0.3
     eta:
       specifier: 4.6.0
       version: 4.6.0
@@ -238,9 +235,6 @@ importers:
       '@puristic/env':
         specifier: 'catalog:'
         version: 1.4.1
-      chokidar:
-        specifier: 'catalog:'
-        version: 4.0.3
       hono:
         specifier: 'catalog:'
         version: 4.12.27
@@ -293,15 +287,9 @@ importers:
 
   _apps/sync:
     dependencies:
-      '@intentic/sandbox-contract':
-        specifier: workspace:*
-        version: link:../../_libs/sandbox-contract
       '@stricli/core':
         specifier: 'catalog:'
         version: 1.2.8
-      chokidar:
-        specifier: 'catalog:'
-        version: 4.0.3
       google-auth-library:
         specifier: 'catalog:'
         version: 9.15.1
@@ -2066,10 +2054,6 @@ packages:
     resolution: {integrity: sha512-kWWXztvZ5SBQV+eRgKFeh8q5sLuZY2+8WUIzlxWVTg+oGwY14qylx1KbKzHd8P6ZYkAg0xyIDU9JMHhyJMZ1jw==}
     engines: {node: '>=10'}
 
-  chokidar@4.0.3:
-    resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
-    engines: {node: '>= 14.16.0'}
-
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
 
@@ -3334,10 +3318,6 @@ packages:
 
   readdir-glob@1.1.3:
     resolution: {integrity: sha512-v05I2k7xN8zXvPD9N+z/uhXPaj0sUFCe2rcWZIpBsqxfP7xXFQ0tipAd/wjj1YxWyWtUS5IDJpOG82JKt2EAVA==}
-
-  readdirp@4.1.2:
-    resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
-    engines: {node: '>= 14.18.0'}
 
   real-require@0.2.0:
     resolution: {integrity: sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==}
@@ -5274,10 +5254,6 @@ snapshots:
 
   char-regex@1.0.2: {}
 
-  chokidar@4.0.3:
-    dependencies:
-      readdirp: 4.1.2
-
   chownr@1.1.4: {}
 
   clean-stack@2.2.0: {}
@@ -6597,8 +6573,6 @@ snapshots:
   readdir-glob@1.1.3:
     dependencies:
       minimatch: 5.1.9
-
-  readdirp@4.1.2: {}
 
   real-require@0.2.0: {}
 

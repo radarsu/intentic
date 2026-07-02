@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { AgentEvent, IntenticLine, WorkspaceChange, WorkspaceTree } from "@intentic/sandbox-contract";
+import type { AgentEvent, IntenticLine, WorkspaceTree } from "@intentic/sandbox-contract";
 import type { Logger } from "pino";
 import { type AgentRequest, runAgent } from "./agent/agent.js";
 import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/capabilities-store.js";
@@ -23,7 +23,6 @@ import {
     writeWorkspaceFile,
 } from "./workspace/workspace-files.js";
 import { walkWorkspaceTree } from "./workspace/workspace-tree.js";
-import { createWorkspaceWatch } from "./workspace/workspace-watch.js";
 
 // The daemon's collaborators, wired once at boot and handed to the route factories — the injection seam the
 // route tests build fakes against (the equivalent of the old createDaemon `deps` object). Stateful members
@@ -62,8 +61,6 @@ export interface Services {
         readonly copy: (fromAbs: string, toAbs: string) => Promise<void>;
     };
     readonly workspaceTree: (root: string) => Promise<WorkspaceTree>;
-    // Live /work change stream backing GET /workspace/watch — one shared chokidar watcher, one generator per subscriber.
-    readonly workspaceWatch: () => AsyncGenerator<WorkspaceChange>;
     readonly sessions: {
         readonly list: (dir: string) => Promise<SessionSummary[]>;
         readonly read: (dir: string, id: string) => Promise<SessionTranscriptMessage[]>;
@@ -129,7 +126,6 @@ export const createServices = (config: Config, logger: Logger): Services => {
             copy: copyWorkspacePath,
         },
         workspaceTree: walkWorkspaceTree,
-        workspaceWatch: createWorkspaceWatch(workspace.root, logger),
         sessions: { list: listWorkspaceSessions, read: readWorkspaceSession },
         members,
         auth,

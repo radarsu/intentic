@@ -9,7 +9,7 @@ import type { WorkspaceTree, WorkspaceTreeEntry } from "@intentic/sandbox-contra
 
 // Directories never worth surfacing — huge or machine-generated; the agent ignores them too. `.git` is also
 // excluded because it can hold remote URLs with embedded tokens.
-export const IGNORED_DIRS = new Set([".git", "node_modules", "dist", ".cache", ".turbo", ".next", ".angular"]);
+const IGNORED_DIRS = new Set([".git", "node_modules", "dist", ".cache", ".turbo", ".next", ".angular"]);
 
 const MAX_DEPTH = 12;
 const MAX_ENTRIES = 5000;
@@ -25,13 +25,6 @@ export const isDeniedWorkspacePath = (relPath: string): boolean => {
     const segments = relPath.split(/[\\/]/).filter((segment) => segment.length > 0);
     const name = segments.at(-1) ?? "";
     return segments.includes(".git") || isSecretFile(name);
-};
-
-// The full prune set for the live watcher: everything the tree walk skips — the machine-generated dirs plus the
-// denied (.git/secret) paths. Kept here so the watcher and the walk share ONE ignore definition.
-export const isIgnoredWorkspacePath = (relPath: string): boolean => {
-    const segments = relPath.split(/[\\/]/).filter((segment) => segment.length > 0);
-    return segments.some((segment) => IGNORED_DIRS.has(segment)) || isDeniedWorkspacePath(relPath);
 };
 
 // Walk the real working tree under `root`, bounded by depth/entry caps so a pathological tree can't blow up the
@@ -78,14 +71,13 @@ export const walkWorkspaceTree = async (root: string, options?: { maxDepth?: num
                 entries.push({ name: dirent.name, path, type: "dir", children: await walk(abs, depth + 1) });
                 continue;
             }
-            let meta: { size: number; mtime: number } | undefined;
+            let size: number | undefined;
             try {
-                const info = await stat(abs);
-                meta = { size: info.size, mtime: info.mtimeMs };
+                size = (await stat(abs)).size;
             } catch {
-                meta = undefined;
+                size = undefined;
             }
-            entries.push({ name: dirent.name, path, type: "file", ...(meta ?? {}) });
+            entries.push({ name: dirent.name, path, type: "file", ...(size !== undefined ? { size } : {}) });
         }
         return entries;
     };

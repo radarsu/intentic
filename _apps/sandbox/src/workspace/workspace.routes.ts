@@ -29,11 +29,6 @@ export const createWorkspaceRoutes = (services: Services) => {
     };
     return {
         tree: i.tree.handler(() => services.workspaceTree(services.workspace.root)),
-        // Live change stream (SSE): fan events off the shared watcher until the client disconnects. Reconnects
-        // reconcile via /workspace/tree, so a dropped connection only means a gap the agent's next walk closes.
-        watch: i.watch.handler(async function* () {
-            yield* services.workspaceWatch();
-        }),
         file: i.file.handler(async ({ input }) => {
             const content = await services.files.read(contained(input.path));
             if (content === undefined) {

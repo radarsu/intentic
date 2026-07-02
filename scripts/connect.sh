@@ -386,6 +386,7 @@ else
         "$SANDBOX_IMAGE" sandbox-tunnel \
         --service "http://${CONTAINER}:8787" \
         --preview-service "http://${CONTAINER}:${DEV_PORT}" \
+        --ssh-service "ssh://${CONTAINER}:22" \
         $sub_flag)"
     TUNNEL_TOKEN="$(printf '%s\n' "$tunnel_out" | sed -n 's/^TUNNEL_TOKEN=//p')"
     SANDBOX_HOSTNAME="$(printf '%s\n' "$tunnel_out" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
