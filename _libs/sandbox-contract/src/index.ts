@@ -3,6 +3,7 @@ import { automationsContract } from "./contracts/automations.contract.js";
 import { capabilitiesContract } from "./contracts/capabilities.contract.js";
 import { claudeContract } from "./contracts/claude.contract.js";
 import { gitContract } from "./contracts/git.contract.js";
+import { historyContract } from "./contracts/history.contract.js";
 import { intenticContract } from "./contracts/intentic.contract.js";
 import { inventoryContract } from "./contracts/inventory.contract.js";
 import { secretsContract } from "./contracts/secrets.contract.js";
@@ -15,6 +16,7 @@ export { automationsContract } from "./contracts/automations.contract.js";
 export { capabilitiesContract } from "./contracts/capabilities.contract.js";
 export { claudeContract } from "./contracts/claude.contract.js";
 export { gitContract } from "./contracts/git.contract.js";
+export { historyContract } from "./contracts/history.contract.js";
 export { intenticContract } from "./contracts/intentic.contract.js";
 export { inventoryContract } from "./contracts/inventory.contract.js";
 export { secretsContract } from "./contracts/secrets.contract.js";
@@ -35,6 +37,7 @@ export const sandboxContract = {
     sessions: sessionsContract,
     intentic: intenticContract,
     git: gitContract,
+    history: historyContract,
     workspace: workspaceContract,
     inventory: inventoryContract,
     secrets: secretsContract,

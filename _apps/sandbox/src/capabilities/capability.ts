@@ -62,6 +62,13 @@ export const echoConfig = (capability: Capability): Record<string, string | numb
             return { provider: capability.config.provider };
         case "cli":
             return { provider: capability.config.provider, hasToken: true };
+        case "plugin":
+            return {
+                url: capability.config.url,
+                ...(capability.config.ref !== undefined ? { ref: capability.config.ref } : {}),
+                ...(capability.config.path !== undefined ? { path: capability.config.path } : {}),
+                hasToken: capability.config.token !== undefined,
+            };
         case "devops":
             return {};
     }

@@ -7,7 +7,8 @@ import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/ca
 import { createAuthorizer, createGoogleVerifier, fileMembersStore, fileOwnerStore, type MembersStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
-import { type GitStatus, gitClone, gitCommitAll, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
+import { type GitStatus, gitCheckout, gitClone, gitCommitAll, gitHead, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
+import { createWorkspaceHistory, type WorkspaceHistory } from "./history/history.js";
 import { type IntenticRun, runIntentic } from "./intentic/intentic-runner.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions/sessions.js";
 import { createDevServer, type DevServer } from "./system/dev-server.js";
@@ -43,6 +44,9 @@ export interface Services {
     // Scheduled agent wake-ups (.intentic/automations.json) — the scheduler polls it; /automations edits it.
     readonly automations: AutomationsStore;
     readonly claudeStore: ClaudeStore;
+    // Daemon-owned workspace snapshots on /history (outside the agent's reach): auto-captured per turn + on an
+    // interval, diffed and restored through the /history routes.
+    readonly history: WorkspaceHistory;
     readonly agent: (request: AgentRequest) => AsyncGenerator<AgentEvent>;
     readonly intentic: (run: IntenticRun) => AsyncGenerator<IntenticLine>;
     readonly git: {
@@ -51,7 +55,9 @@ export interface Services {
         readonly listFiles: (dir: string) => Promise<string[]>;
         readonly commitAll: (dir: string, message: string, author: { name: string; email: string }) => Promise<boolean>;
         readonly push: (dir: string, branch: string) => Promise<void>;
-        readonly clone: (parentDir: string, name: string, cloneUrl: string, branch?: string) => Promise<void>;
+        readonly clone: (parentDir: string, name: string, cloneUrl: string, branch?: string, authHeader?: string) => Promise<void>;
+        readonly checkout: (dir: string, ref: string) => Promise<void>;
+        readonly head: (dir: string) => Promise<string>;
     };
     readonly files: {
         readonly read: (absPath: string) => Promise<string | undefined>;
@@ -116,9 +122,10 @@ export const createServices = (config: Config, logger: Logger): Services => {
         capabilities: fileCapabilitiesStore(join(workspace.root, ".intentic", "capabilities.json")),
         automations: fileAutomationsStore(join(workspace.root, ".intentic", "automations.json")),
         claudeStore: fileClaudeStore(join(workspace.root, ".intentic", "claude.json")),
+        history: createWorkspaceHistory({ workspace, historyRoot: config.historyRoot, logger }),
         agent: runAgent,
         intentic: runIntentic,
-        git: { init: gitInit, status: gitStatus, listFiles: gitListFiles, commitAll: gitCommitAll, push: gitPush, clone: gitClone },
+        git: { init: gitInit, status: gitStatus, listFiles: gitListFiles, commitAll: gitCommitAll, push: gitPush, clone: gitClone, checkout: gitCheckout, head: gitHead },
         files: {
             read: readWorkspaceFile,
             write: writeWorkspaceFile,

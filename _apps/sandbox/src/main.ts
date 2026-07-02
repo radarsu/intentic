@@ -37,6 +37,9 @@ const main = async (): Promise<void> => {
     const scheduler = createAutomationsScheduler(services);
     scheduler.start();
 
+    // Workspace history: an immediate snapshot plus the interval sweep (turn snapshots ride on streamAgent).
+    services.history.start();
+
     // Decentralized path: tell the platform where to reach this sandbox directly (best-effort, off the command
     // path). Needs the platform URL + connection token + this sandbox's public URL.
     if (config.platformUrl !== "" && config.connectToken !== "" && config.sandbox.publicUrl !== "") {
@@ -54,6 +57,7 @@ const main = async (): Promise<void> => {
     const shutdown = (): void => {
         logger.info("shutting down intentic sandbox daemon…");
         scheduler.stop();
+        services.history.stop();
         services.devServer.stop();
         server.close();
         process.exit(0);

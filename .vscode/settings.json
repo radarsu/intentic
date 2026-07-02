@@ -44,9 +44,10 @@
         "**/.turbo": true
     },
 
-    // Git.
+    // Git. Releases force-move the `stable` tag (.releaserc.json), so local tags must be replaceable on pull.
     "git.ignoreLimitWarning": true,
     "git.inputValidationSubjectLength": 128,
+    "git.replaceTagsWhenPull": true,
 
     // JavaScript.
     "js/ts.suggestionActions.enabled": false,

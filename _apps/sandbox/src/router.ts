@@ -4,6 +4,7 @@ import { createCapabilitiesRoutes } from "./capabilities/capabilities.routes.js"
 import { createClaudeRoutes } from "./claude/claude.routes.js";
 import type { Services } from "./composition.js";
 import { createGitRoutes } from "./git/git.routes.js";
+import { createHistoryRoutes } from "./history/history.routes.js";
 import { createIntenticRoutes } from "./intentic/intentic.routes.js";
 import { createInventoryRoutes } from "./inventory/inventory.routes.js";
 import { createSecretsRoutes } from "./secrets/secrets.routes.js";
@@ -21,6 +22,7 @@ export const createRouter = (services: Services) => ({
     sessions: createSessionsRoutes(services),
     intentic: createIntenticRoutes(services),
     git: createGitRoutes(services),
+    history: createHistoryRoutes(services),
     workspace: createWorkspaceRoutes(services),
     inventory: createInventoryRoutes(services),
     secrets: createSecretsRoutes(services),

@@ -40,6 +40,10 @@ export interface AgentRequest {
     // Env vars for the agent's shell from cli-kind capabilities (e.g. DISCORD_BOT_TOKEN) — the stored
     // credentials their CLI tools read. Merged into the SDK `env` each turn; absent ⇒ no extra env.
     readonly cliEnv?: Record<string, string>;
+    // Absolute Claude Code plugin checkout dirs from plugin-kind capabilities, rebuilt each turn (see
+    // pluginDirsOf). The SDK's plugin loader parses their skills/agents/hooks/commands/.mcp.json — the daemon
+    // never does, so the plugin format tracks Claude Code via SDK upgrades alone.
+    readonly plugins?: readonly string[];
 }
 
 // The SDK `query` is injected so tests drive a fake message stream — no API calls, no bundled binary.
@@ -240,8 +244,6 @@ const baseOptions = (request: AgentRequest, abortController: AbortController, pe
     // hooks, and .mcp.json — plus the user tier. The SDK default is [] (loads nothing), so every filesystem
     // capability was invisible until now. New skills/subagents/hooks then arrive as files, no code change.
     settingSources: ["user", "project"],
-    // Back up files before Write/Edit so a turn's changes can be rewound. Prerequisite for the UI's undo.
-    enableFileCheckpointing: true,
     env: {
         ...process.env,
         // cli-kind capability credentials (e.g. DISCORD_BOT_TOKEN) the agent's shell reads. Rebuilt every turn,
@@ -255,6 +257,7 @@ const baseOptions = (request: AgentRequest, abortController: AbortController, pe
     },
     ...(request.model !== undefined ? { model: request.model } : {}),
     ...(request.sessionId !== undefined ? { resume: request.sessionId } : {}),
+    ...(request.plugins !== undefined ? { plugins: request.plugins.map((path) => ({ type: "local" as const, path })) } : {}),
     ...(request.effort !== undefined ? { effort: request.effort as EffortLevel } : {}),
     ...(request.thinking !== undefined ? { thinking: request.thinking ? { type: "adaptive" } : { type: "disabled" } } : {}),
 });

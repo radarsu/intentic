@@ -9,6 +9,9 @@ import { z } from "zod";
 const configSchema = z.object({
     // The project workspace dir; the three repos (intent / desired-state / app) are cloned under <root>/<role>.
     workspaceRoot: z.string().default("/work"),
+    // Where the daemon-owned snapshot history + protected repo git dirs live — OUTSIDE workspaceRoot so agent
+    // accidents (rm -rf, git clean) in the workspace can't reach it. A second named volume in connect.sh.
+    historyRoot: z.string().default("/history"),
     // pino level + whether to pretty-print (human-readable) instead of JSON — pretty only in dev.
     logLevel: z.string().default("info"),
     logPretty: z

@@ -2,6 +2,7 @@ import { type AgentEvent, type AgentTurn, agentContract } from "@intentic/sandbo
 import { implement, ORPCError } from "@orpc/server";
 import { cliEnvOf } from "../capabilities/cli-env.js";
 import { mcpToolsOf } from "../capabilities/mcp-tools.js";
+import { pluginDirsOf } from "../capabilities/plugin-dirs.js";
 import { ensureFreshToken } from "../claude/claude-credentials.js";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
@@ -32,11 +33,13 @@ export async function* streamAgent(services: Services, input: AgentTurn, signal:
     const capabilities = await services.capabilities.list();
     const tools = [...services.tools, ...mcpToolsOf(capabilities)];
     const cliEnv = cliEnvOf(capabilities);
+    const plugins = pluginDirsOf(capabilities, services.workspace.root);
     const request: AgentRequest = {
         prompt: input.prompt,
         cwd: services.workspace.root,
         signal: signal ?? new AbortController().signal,
         ...(Object.keys(cliEnv).length > 0 ? { cliEnv } : {}),
+        ...(plugins.length > 0 ? { plugins } : {}),
         ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
         ...(oauthToken !== undefined ? { oauthToken } : {}),
         ...(input.model !== undefined ? { model: input.model } : {}),
@@ -45,7 +48,13 @@ export async function* streamAgent(services: Services, input: AgentTurn, signal:
         ...(input.thinking !== undefined ? { thinking: input.thinking } : {}),
         ...(tools.length > 0 ? { tools } : {}),
     };
-    yield* services.agent(request);
+    try {
+        yield* services.agent(request);
+    } finally {
+        // Fire-and-forget workspace snapshot at turn end (aborted turns included) — history must never delay
+        // or fail a turn.
+        services.history.snapshot("turn").catch((error: unknown) => services.logger.warn({ err: error }, "history: turn snapshot failed"));
+    }
 }
 
 export const createAgentRoutes = (services: Services) => {

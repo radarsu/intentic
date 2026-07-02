@@ -4,6 +4,7 @@ import { cliHandler } from "./handlers/cli.js";
 import { devopsHandler } from "./handlers/devops.js";
 import { integrationHandler } from "./handlers/integration.js";
 import { mcpHandler } from "./handlers/mcp.js";
+import { pluginHandler } from "./handlers/plugin.js";
 import { serviceHandler } from "./handlers/service.js";
 
 // Every capability kind's handler. Total over CapabilityKind, so an unhandled kind is a compile error.
@@ -13,4 +14,5 @@ export const registry: Record<CapabilityKind, CapabilityHandler> = {
     service: serviceHandler,
     integration: integrationHandler,
     cli: cliHandler,
+    plugin: pluginHandler,
 };

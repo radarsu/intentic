@@ -3,6 +3,7 @@ import { implement, ORPCError } from "@orpc/server";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
 import { capabilityCtx, echoConfig } from "./capability.js";
+import { browseMarketplace } from "./marketplace.js";
 import { registry } from "./registry.js";
 
 // The unified capability manifest routes. `add` streams its apply (mirroring /intentic): the handler yields
@@ -62,5 +63,6 @@ export const createCapabilitiesRoutes = (services: Services) => {
             }
             return registry[capability.kind].status(ctx, capability.id, capability.config);
         }),
+        marketplace: i.marketplace.handler(async ({ input }) => browseMarketplace(ctx, input.url, input.token)),
     };
 };

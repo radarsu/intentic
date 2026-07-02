@@ -65,6 +65,44 @@ export const GitFilesSchema = z.object({ files: z.array(z.string()) });
 export const GitFileSchema = z.object({ path: z.string(), content: z.string() });
 export const CommitResultSchema = z.object({ committed: z.boolean() });
 
+// ---- history: daemon-owned workspace snapshots (diff + restore) ----
+// The daemon snapshots /work into bare git dirs on /history (outside the agent's reach) after every turn and on
+// an interval. A "snapshot" groups one commit per scope (root + each nested repo) under a shared id.
+
+export const SnapshotTriggerSchema = z.enum(["turn", "interval", "manual", "pre-restore", "restore"]);
+export type SnapshotTrigger = z.infer<typeof SnapshotTriggerSchema>;
+export const SnapshotSchema = z.object({
+    id: z.string(),
+    // Committer time, ms since epoch.
+    at: z.number(),
+    trigger: SnapshotTriggerSchema,
+    // The scopes that changed in this snapshot: "root" or "repositories/<name>".
+    scopes: z.array(z.string()),
+});
+export type Snapshot = z.infer<typeof SnapshotSchema>;
+export const SnapshotsListSchema = z.object({ snapshots: z.array(SnapshotSchema) });
+export const SnapshotIdSchema = z.object({ id: z.string().min(1) });
+export const SnapshotChangeSchema = z.object({
+    scope: z.string(),
+    // Scope-relative path with forward slashes.
+    path: z.string(),
+    status: z.enum(["added", "modified", "deleted", "type-changed"]),
+});
+export type SnapshotChange = z.infer<typeof SnapshotChangeSchema>;
+export const SnapshotDiffSchema = z.object({ changes: z.array(SnapshotChangeSchema) });
+export const SnapshotFileDiffQuerySchema = z.object({ id: z.string().min(1), scope: z.string().min(1), path: z.string().min(1) });
+// Both sides of a file at a snapshot vs its parent; an absent side means the file was added/deleted. Binary or
+// oversized content is flagged instead of shipped.
+export const SnapshotFileDiffSchema = z.object({
+    before: z.string().optional(),
+    after: z.string().optional(),
+    binary: z.boolean().optional(),
+    truncated: z.boolean().optional(),
+});
+export type SnapshotFileDiff = z.infer<typeof SnapshotFileDiffSchema>;
+// Manual snapshot result: id is absent when nothing changed since the last snapshot.
+export const SnapshotResultSchema = z.object({ id: z.string().optional() });
+
 // ---- workspace tree + files ----
 
 // One node of the full /work filesystem tree the agent sees (untracked + generated files included), distinct
@@ -161,7 +199,7 @@ export type EnrollHostInput = z.infer<typeof EnrollHostInputSchema>;
 // the source of truth for what's active; `mcp`-kind entries also feed the agent's MCP servers each turn. DevOps
 // is the capability that scaffolds the intent/desired-state repos — until it's active the sandbox is empty.
 
-export const CapabilityKindSchema = z.enum(["devops", "mcp", "service", "integration", "cli"]);
+export const CapabilityKindSchema = z.enum(["devops", "mcp", "service", "integration", "cli", "plugin"]);
 export type CapabilityKind = z.infer<typeof CapabilityKindSchema>;
 export const CapabilityStateSchema = z.enum(["active", "pending", "error", "inactive"]);
 export type CapabilityState = z.infer<typeof CapabilityStateSchema>;
@@ -199,10 +237,25 @@ export const CliConfigSchema = z.discriminatedUnion("provider", [
     z.object({ provider: z.literal("imap"), host: z.string().min(1), port: z.coerce.number(), username: z.string().min(1), password: z.string().min(1) }),
     z.object({ provider: z.literal("signoz"), url: z.string().url(), apiKey: z.string().min(1) }),
 ]);
+// A Claude Code plugin from a git repo. The daemon only owns the checkout; the Agent SDK's plugin loader reads
+// its internals (skills/agents/hooks/commands/.mcp.json). `path` = subdirectory for plugins that live inside a
+// marketplace/monorepo checkout. `token` = https auth for private repos (never echoed; becomes hasToken).
+export const PluginConfigSchema = z.object({
+    url: z.string().url(),
+    // Branch / tag / commit sha to pin; absent = the default branch's HEAD.
+    ref: z.string().min(1).optional(),
+    path: z
+        .string()
+        .min(1)
+        .refine((value) => !value.split("/").includes(".."), { message: "path must stay inside the checkout" })
+        .optional(),
+    token: z.string().min(1).optional(),
+});
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
 export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
 export type CliConfig = z.infer<typeof CliConfigSchema>;
+export type PluginConfig = z.infer<typeof PluginConfigSchema>;
 
 export const CapabilitySchema = z.discriminatedUnion("kind", [
     z.object({ id: entryId, kind: z.literal("devops"), config: z.object({}) }),
@@ -210,6 +263,7 @@ export const CapabilitySchema = z.discriminatedUnion("kind", [
     z.object({ id: entryId, kind: z.literal("service"), config: ServiceConfigSchema }),
     z.object({ id: entryId, kind: z.literal("integration"), config: IntegrationConfigSchema }),
     z.object({ id: entryId, kind: z.literal("cli"), config: CliConfigSchema }),
+    z.object({ id: entryId, kind: z.literal("plugin"), config: PluginConfigSchema }),
 ]);
 export type Capability = z.infer<typeof CapabilitySchema>;
 
@@ -225,13 +279,34 @@ export const CapabilitySummarySchema = z.object({
 export const CapabilitiesListSchema = z.object({ capabilities: z.array(CapabilitySummarySchema) });
 export const CapabilityIdParamSchema = z.object({ id: z.string() });
 
+// Browse a Claude Code plugin marketplace (a git repo with .claude-plugin/marketplace.json). POST so the
+// optional token for a private marketplace never rides a URL or an access log.
+export const MarketplaceRequestSchema = z.object({ url: z.string().url(), token: z.string().min(1).optional() });
+// One marketplace entry; `install` is the entry's source resolved onto PluginConfig shape (url/ref/path), so
+// picking an entry just pre-fills the plugin form. Absent = a source the daemon can't clone (e.g. npm).
+export const MarketplacePluginSchema = z.object({
+    name: z.string(),
+    description: z.string().optional(),
+    version: z.string().optional(),
+    install: z.object({ url: z.string(), ref: z.string().optional(), path: z.string().optional() }).optional(),
+});
+export type MarketplacePlugin = z.infer<typeof MarketplacePluginSchema>;
+export const MarketplaceSchema = z.object({ name: z.string(), plugins: z.array(MarketplacePluginSchema) });
+export type Marketplace = z.infer<typeof MarketplaceSchema>;
+
 // ---- automations: scheduled agent wake-ups (.intentic/automations.json) ----
 // An automation wakes the agent autonomously: the daemon's scheduler fires each enabled automation on its
 // trigger, runs the optional guard command (a shell command in the workspace; non-zero exit skips the wake),
 // then runs one agent turn with the prompt. The manifest is user config; run history is daemon-recorded.
 
-// Discriminated on `kind` so an `event` trigger (webhook) can slot in later without a wire break.
-export const TriggerSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("schedule"), cron: z.string().min(1) })]);
+// `schedule` fires on its cron; `event` fires when an external system POSTs /automations/{id}/fire?token=…
+// (a plain Hono route — webhook bodies are arbitrary). The token is the webhook's own auth (senders can't do
+// Google ID tokens): optional on input — the daemon generates one on upsert — and always present in stored and
+// listed automations, so the owner's UI can render the copyable URL.
+export const TriggerSchema = z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("schedule"), cron: z.string().min(1) }),
+    z.object({ kind: z.literal("event"), token: z.string().min(1).optional() }),
+]);
 export type Trigger = z.infer<typeof TriggerSchema>;
 
 export const AutomationSchema = z.object({
