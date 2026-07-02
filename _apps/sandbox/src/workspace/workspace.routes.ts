@@ -5,6 +5,7 @@ import { insertAppStanza, readManagedRegion } from "@intentic/scaffold";
 import { implement, ORPCError } from "@orpc/server";
 import type { Services } from "../composition.js";
 import type { OrpcContext } from "../context.js";
+import { repoGitDir } from "../history/history.js";
 import { createConfigStore } from "../inventory/config-store.js";
 import { zoneFromPublicUrl } from "../system/zone.js";
 import { isValidRepoName, listRepos } from "./repos.js";
@@ -64,7 +65,10 @@ export const createWorkspaceRoutes = (services: Services) => {
             }
             // The repositories/ dir may not exist yet on a fresh sandbox; git clone needs its parent present.
             await services.files.mkdir(services.workspace.repositories);
-            await services.git.clone(services.workspace.repositories, input.name, input.cloneUrl, input.branch);
+            await services.git.clone(services.workspace.repositories, input.name, input.cloneUrl, {
+                ...(input.branch !== undefined ? { branch: input.branch } : {}),
+                separateGitDir: repoGitDir(services.config.historyRoot, input.name),
+            });
             return { name: input.name, path: input.name };
         }),
         // Scaffold (or adopt) the deployable app at /work/app. The neutral workspace has none until the user opts

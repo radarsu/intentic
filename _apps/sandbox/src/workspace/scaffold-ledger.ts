@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { scaffoldDeployConfig } from "@intentic/scaffold";
 import type { Services } from "../composition.js";
 import { AGENT_GIT_AUTHOR } from "../git/git.js";
+import { repoGitDir } from "../history/history.js";
 
 // The desired-state repo's local-only / secret files, kept out of its PR-managed history (mirrors the CLI init's
 // TARGET_GITIGNORE): the user-supplied `.env`, the generated `.secrets.json`, and the `.last-applied.json` prune
@@ -19,12 +20,12 @@ export const scaffoldNeutralLedger = async (services: Services): Promise<void> =
     const intent = services.workspace.repos.intent;
     const desiredState = services.workspace.repos["desired-state"];
 
-    await services.git.init(intent);
+    await services.git.init(intent, repoGitDir(services.config.historyRoot, "intent"));
     await services.files.write(join(intent, "deploy.config.ts"), scaffoldDeployConfig([]));
     await services.files.write(join(intent, ".gitignore"), INTENT_GITIGNORE);
     await services.git.commitAll(intent, "chore(intentic): scaffold neutral ledger", AGENT_GIT_AUTHOR);
 
-    await services.git.init(desiredState);
+    await services.git.init(desiredState, repoGitDir(services.config.historyRoot, "desired-state"));
     await services.files.write(join(desiredState, ".gitignore"), TARGET_GITIGNORE);
     await services.git.commitAll(desiredState, "chore(intentic): scaffold desired-state", AGENT_GIT_AUTHOR);
 };

@@ -409,6 +409,9 @@ else
 fi
 CONTAINER="intentic-sandbox-${SLUG}"
 WORKSPACE_VOLUME="intentic-workspace-${SLUG}"
+# Snapshot history + protected repo git dirs live on their own volume, mounted OUTSIDE /work so agent accidents
+# in the workspace can't destroy them.
+HISTORY_VOLUME="intentic-history-${SLUG}"
 NETWORK="intentic-workspace-${SLUG}"
 TUNNEL_CONTAINER="intentic-sandbox-tunnel-${SLUG}"
 
@@ -610,7 +613,9 @@ docker run -d --restart unless-stopped --name "$CONTAINER" \
     --network-alias "$ORIGIN_HOST" \
     --add-host host.docker.internal:host-gateway \
     -v "${WORKSPACE_VOLUME}:/work" \
+    -v "${HISTORY_VOLUME}:/history" \
     -e WORKSPACE_ROOT="/work" \
+    -e HISTORY_ROOT="/history" \
     -e SANDBOX_HOST="0.0.0.0" \
     -e SANDBOX_PORT="8787" \
     -e SANDBOX_NAME="$CONTAINER" \

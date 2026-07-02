@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { type GitRunner, gitCommitAll, gitStatus } from "./git.js";
+import { type GitRunner, gitClone, gitCommitAll, gitStatus } from "./git.js";
 
 // A GitRunner that returns canned stdout per joined-args key and records every invocation.
 const recordingGit = (responses: Readonly<Record<string, string>>) => {
@@ -27,6 +27,36 @@ test("gitCommitAll stages, commits with the author identity, and reports a commi
     expect(committed).toBe(true);
     expect(calls).toContainEqual(["/work/app", "add", "-A"]);
     expect(calls).toContainEqual(["/work/app", "-c", "user.name=intentic", "-c", "user.email=agent@intentic.dev", "commit", "-m", "agent edit"]);
+});
+
+test("gitClone forwards the auth header, branch, and separate git dir flags", async () => {
+    const { git, calls } = recordingGit({});
+    await gitClone(
+        "/work/repositories",
+        "extra",
+        "https://example.com/extra.git",
+        { branch: "main", authHeader: "Authorization: Basic abc", separateGitDir: "/history/gits/extra" },
+        git,
+    );
+    expect(calls).toEqual([
+        [
+            "/work/repositories",
+            "-c",
+            "http.extraheader=Authorization: Basic abc",
+            "clone",
+            "--branch",
+            "main",
+            "--separate-git-dir=/history/gits/extra",
+            "https://example.com/extra.git",
+            "extra",
+        ],
+    ]);
+});
+
+test("gitClone with no options is a bare clone", async () => {
+    const { git, calls } = recordingGit({});
+    await gitClone("/work/repositories", "extra", "https://example.com/extra.git", undefined, git);
+    expect(calls).toEqual([["/work/repositories", "clone", "https://example.com/extra.git", "extra"]]);
 });
 
 test("gitCommitAll is a no-op (returns false, never commits) on a clean tree", async () => {

@@ -57,7 +57,7 @@ export const browseMarketplace = async (ctx: CapabilityCtx, url: string, token?:
     await ctx.files.mkdir(root);
     await ctx.files.remove(tmp);
     try {
-        await ctx.git.clone(root, tmpName, url, undefined, token !== undefined ? gitAuthHeader(token) : undefined);
+        await ctx.git.clone(root, tmpName, url, token !== undefined ? { authHeader: gitAuthHeader(token) } : undefined);
         const raw = await ctx.files.read(join(tmp, ".claude-plugin", "marketplace.json"));
         if (raw === undefined) {
             throw new Error("not a plugin marketplace: no .claude-plugin/marketplace.json in the repo");
@@ -66,13 +66,18 @@ export const browseMarketplace = async (ctx: CapabilityCtx, url: string, token?:
         return {
             name: file.name,
             plugins: file.plugins.map((plugin) => {
+                const entry: MarketplacePlugin = { name: plugin.name };
+                if (plugin.description !== undefined) {
+                    entry.description = plugin.description;
+                }
+                if (plugin.version !== undefined) {
+                    entry.version = plugin.version;
+                }
                 const install = resolveSource(plugin.source, url, file.metadata?.pluginRoot);
-                return {
-                    name: plugin.name,
-                    ...(plugin.description !== undefined ? { description: plugin.description } : {}),
-                    ...(plugin.version !== undefined ? { version: plugin.version } : {}),
-                    ...(install !== undefined ? { install } : {}),
-                };
+                if (install !== undefined) {
+                    entry.install = install;
+                }
+                return entry;
             }),
         };
     } finally {

@@ -100,6 +100,21 @@ test("the plan turn keeps the ui server and merges the request's tools alongside
     });
 });
 
+test("plugin checkout dirs are passed to the SDK as local plugins", async () => {
+    let captured: Options | undefined;
+    const capture: QueryFn = async function* (args) {
+        captured = args.options;
+        yield { type: "result", subtype: "success" } as SDKMessage;
+    };
+
+    await collect({ ...request, plugins: ["/work/.intentic/plugins/x"] }, capture);
+    expect(captured?.plugins).toEqual([{ type: "local", path: "/work/.intentic/plugins/x" }]);
+
+    captured = undefined;
+    await collect(request, capture);
+    expect(captured?.plugins).toBeUndefined();
+});
+
 test("a non-success result becomes an error followed by done", async () => {
     const events = await collect(request, fakeQuery({ type: "result", subtype: "error_max_turns", session_id: "s" }));
     expect(events).toEqual([

@@ -234,7 +234,13 @@ export const CliConfigSchema = z.discriminatedUnion("provider", [
     z.object({ provider: z.literal("sentry"), token: z.string().min(1), url: z.string().url(), org: z.string().optional() }),
     z.object({ provider: z.literal("redmine"), url: z.string().url(), apiKey: z.string().min(1) }),
     z.object({ provider: z.literal("outline"), url: z.string().url(), apiKey: z.string().min(1) }),
-    z.object({ provider: z.literal("imap"), host: z.string().min(1), port: z.coerce.number(), username: z.string().min(1), password: z.string().min(1) }),
+    z.object({
+        provider: z.literal("imap"),
+        host: z.string().min(1),
+        port: z.coerce.number(),
+        username: z.string().min(1),
+        password: z.string().min(1),
+    }),
     z.object({ provider: z.literal("signoz"), url: z.string().url(), apiKey: z.string().min(1) }),
 ]);
 // A Claude Code plugin from a git repo. The daemon only owns the checkout; the Agent SDK's plugin loader reads

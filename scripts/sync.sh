@@ -50,6 +50,13 @@ if [ -z "$BIN" ]; then
     if curl -fsSL "https://github.com/radarsu/intentic/releases/latest/download/intentic-sync-${os}-${arch}" -o "$dest"; then
         chmod +x "$dest"
         BIN="$dest"
+        # Put `intentic-sync` on PATH for the status/pause/resume commands the setup output suggests.
+        mkdir -p "$HOME/.local/bin"
+        ln -sf "$dest" "$HOME/.local/bin/intentic-sync"
+        case ":$PATH:" in
+            *":$HOME/.local/bin:"*) ;;
+            *) echo "note: add ~/.local/bin to your PATH to use \`intentic-sync\` directly (or run $dest)." ;;
+        esac
     elif command -v npx >/dev/null 2>&1; then
         rm -f "$dest"
         echo "Falling back to npx (@intentic/sync@latest)…" >&2

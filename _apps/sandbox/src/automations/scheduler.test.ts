@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { AgentEvent, Automation } from "@intentic/sandbox-contract";
 import { expect, test, vi } from "vitest";
 import type { Services } from "../composition.js";
-import { fileAutomationsStore } from "./automations-store.js";
-import { createAutomationsScheduler, type WakeFn } from "./scheduler.js";
+import { type AutomationRecord, fileAutomationsStore } from "./automations-store.js";
+import { createAutomationsScheduler, fireAutomation, type WakeFn } from "./scheduler.js";
 
 // The scheduler only touches automations/workspace/logger; a cast keeps the fake that small.
 const fakeServices = (root: string): Services =>
@@ -62,6 +62,30 @@ test("a failing guard skips the wake and records why; a passing guard wakes", as
     await vi.waitFor(async () => expect((await services.automations.get("guarded"))?.runs).toHaveLength(2));
     expect((await services.automations.get("guarded"))?.runs[0]?.outcome).toBe("completed");
     expect(prompts).toEqual(["wake:guarded"]);
+});
+
+test("event automations never tick; fireAutomation hands the payload to the guard and the prompt", async () => {
+    const services = fakeServices(mkdtempSync(join(tmpdir(), "sched-")));
+    await services.automations.upsert(automation("hook", { trigger: { kind: "event", token: "t" }, guard: `test "$AUTOMATION_PAYLOAD" = "ping"` }));
+    await services.automations.upsert(automation("sched"));
+    const prompts: string[] = [];
+    const scheduler = createAutomationsScheduler(services, fakeWake(prompts));
+    await scheduler.tick(pastDue());
+    await vi.waitFor(async () => expect((await services.automations.get("sched"))?.runs).toHaveLength(1));
+    // Only the schedule automation fired — events wait for their webhook.
+    expect((await services.automations.get("hook"))?.runs).toEqual([]);
+    expect(prompts).toEqual(["wake:sched"]);
+
+    // A webhook fire: the guard passes only because the payload reached it, and the prompt carries it too.
+    const hook = (await services.automations.get("hook")) as AutomationRecord;
+    await fireAutomation(services, hook, "ping", fakeWake(prompts));
+    expect((await services.automations.get("hook"))?.runs[0]?.outcome).toBe("completed");
+    expect(prompts[1]).toBe("wake:hook\n\n--- Event payload ---\nping");
+
+    // A payload the guard rejects skips the wake.
+    await fireAutomation(services, hook, "pong", fakeWake(prompts));
+    expect((await services.automations.get("hook"))?.runs[0]?.outcome).toBe("skipped");
+    expect(prompts).toHaveLength(2);
 });
 
 test("disabled automations and not-yet-due crons never fire; agent errors land as error runs", async () => {

@@ -14,10 +14,11 @@ export type GitRunner = (dir: string, args: readonly string[]) => Promise<{ read
 const defaultGit: GitRunner = (dir, args) => exec("git", ["-C", dir, ...args]);
 
 // Initialize a fresh git repo in `dir` (created if absent). Scaffolds the workspace's neutral ledger (intent +
-// desired-state) at first boot without shelling to `intentic init`.
-export const gitInit = async (dir: string, git: GitRunner = defaultGit): Promise<void> => {
+// desired-state) at first boot without shelling to `intentic init`. `separateGitDir` keeps the real git dir
+// outside the worktree (the in-tree .git becomes a pointer file), so workspace accidents can't destroy history.
+export const gitInit = async (dir: string, separateGitDir?: string, git: GitRunner = defaultGit): Promise<void> => {
     await mkdir(dir, { recursive: true });
-    await git(dir, ["init", "-q"]);
+    await git(dir, ["init", "-q", ...(separateGitDir !== undefined ? [`--separate-git-dir=${separateGitDir}`] : [])]);
 };
 
 export interface GitStatus {
@@ -61,22 +62,29 @@ export const gitPush = async (dir: string, branch: string, git: GitRunner = defa
     await git(dir, ["push", "origin", `HEAD:${branch}`]);
 };
 
-// Clone a repo into <parentDir>/<name> (optionally at a branch). Push/pull auth rides on the URL or the
-// credentials the host already holds — no token passes through the platform. The caller validates `name`.
-// `authHeader` (e.g. "Authorization: Basic …") rides a -c http.extraheader flag for private-repo clones, so the
-// credential never lands in the URL, .git/config, or git's stderr.
+export interface GitCloneOptions {
+    readonly branch?: string;
+    // "Authorization: Basic …" rides a -c http.extraheader flag for private-repo clones, so the credential
+    // never lands in the URL, .git/config, or git's stderr.
+    readonly authHeader?: string;
+    // Keep the real git dir outside the worktree (the in-tree .git becomes a pointer file) — see gitInit.
+    readonly separateGitDir?: string;
+}
+
+// Clone a repo into <parentDir>/<name>. Push/pull auth rides on the URL or the credentials the host already
+// holds — no token passes through the platform. The caller validates `name`.
 export const gitClone = async (
     parentDir: string,
     name: string,
     cloneUrl: string,
-    branch?: string,
-    authHeader?: string,
+    options?: GitCloneOptions,
     git: GitRunner = defaultGit,
 ): Promise<void> => {
     await git(parentDir, [
-        ...(authHeader !== undefined ? ["-c", `http.extraheader=${authHeader}`] : []),
+        ...(options?.authHeader !== undefined ? ["-c", `http.extraheader=${options.authHeader}`] : []),
         "clone",
-        ...(branch !== undefined ? ["--branch", branch] : []),
+        ...(options?.branch !== undefined ? ["--branch", options.branch] : []),
+        ...(options?.separateGitDir !== undefined ? [`--separate-git-dir=${options.separateGitDir}`] : []),
         cloneUrl,
         name,
     ]);
@@ -89,7 +97,8 @@ export const gitCheckout = async (dir: string, ref: string, git: GitRunner = def
 };
 
 // The checkout's short HEAD sha — the version identity a plugin capability reports.
-export const gitHead = async (dir: string, git: GitRunner = defaultGit): Promise<string> => (await git(dir, ["rev-parse", "--short", "HEAD"])).stdout.trim();
+export const gitHead = async (dir: string, git: GitRunner = defaultGit): Promise<string> =>
+    (await git(dir, ["rev-parse", "--short", "HEAD"])).stdout.trim();
 
 // The repo's tracked files (git ls-files), so the UI can render the source tree without node_modules/build
 // noise. Untracked-but-present files are intentionally excluded — they surface through status instead.

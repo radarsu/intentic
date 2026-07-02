@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildCommand, type CommandContext } from "@stricli/core";
@@ -52,6 +53,9 @@ const setup = buildCommand<SetupFlags>({
 
         const sandboxId = flags.sandboxId ?? sanitizeId(new URL(flags.url).host);
         const localDir = resolve(flags.dir ?? join(homedir(), "intentic", sandboxId));
+        // Create the local root up front — Mutagen only materializes it once content propagates, and an
+        // immediately-visible folder is the user's anchor that setup worked.
+        await mkdir(localDir, { recursive: true });
         const cloudflaredPath = await ensureCloudflared();
         const mutagen = await ensureMutagen();
         await writeManagedSshConfig(
@@ -67,18 +71,24 @@ const setup = buildCommand<SetupFlags>({
         const config: SyncConfig = { sandboxUrl: flags.url, sandboxId, sshHostname, localDir };
         await writeConfig(config);
 
+        // Terminate any previous session of the same name so re-running setup (a fresh pairing) replaces it
+        // instead of failing on the name collision. Silent: "no session found" is the common case.
+        spawnSync(mutagen, ["sync", "terminate", sessionName(sandboxId)], { stdio: "ignore" });
         runMutagen(
             mutagen,
             mutagenCreateArgs({ name: sessionName(sandboxId), localDir: config.localDir, alias: sshAlias(sandboxId), remoteDir: "/work" }),
         );
         // Register the Mutagen daemon to autostart at login and resume sessions across reboots (its own native
-        // mechanism — launchd/systemd/Task Scheduler). Best-effort: already-registered is not an error worth failing on.
-        try {
-            runMutagen(mutagen, ["daemon", "register"]);
-        } catch (error) {
-            out(
-                `note: could not register the Mutagen daemon for autostart (${error instanceof Error ? error.message : String(error)}); it still runs while you're logged in.`,
-            );
+        // mechanism — launchd/Task Scheduler; Mutagen has no register on Linux, where the daemon parent command
+        // would just dump its help). Best-effort: already-registered is not an error worth failing on.
+        if (process.platform !== "linux") {
+            try {
+                runMutagen(mutagen, ["daemon", "register"]);
+            } catch (error) {
+                out(
+                    `note: could not register the Mutagen daemon for autostart (${error instanceof Error ? error.message : String(error)}); it still runs while you're logged in.`,
+                );
+            }
         }
         out(`Sync started: ${config.localDir} ↔ ${sshHostname}:/work. Check it with \`intentic-sync status\`.`);
     },

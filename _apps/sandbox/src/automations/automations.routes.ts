@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { automationsContract } from "@intentic/sandbox-contract";
 import { implement, ORPCError } from "@orpc/server";
 import { Cron } from "croner";
@@ -6,9 +7,9 @@ import type { OrpcContext } from "../context.js";
 import type { AutomationRecord } from "./automations-store.js";
 
 // An invalid cron can only come from a hand-edited manifest (upsert rejects it) — surface "no next run"
-// rather than failing the whole list.
+// rather than failing the whole list. Event automations have no next run; they fire on their webhook.
 const nextRunOf = (automation: AutomationRecord): number | undefined => {
-    if (!automation.enabled) {
+    if (!automation.enabled || automation.trigger.kind !== "schedule") {
         return undefined;
     }
     try {
@@ -31,12 +32,19 @@ export const createAutomationsRoutes = (services: Services) => {
             }),
         })),
         upsert: i.upsert.handler(async ({ input }) => {
-            try {
-                new Cron(input.trigger.cron).nextRun();
-            } catch {
-                throw new ORPCError("BAD_REQUEST", { message: "invalid cron expression" });
+            if (input.trigger.kind === "schedule") {
+                try {
+                    new Cron(input.trigger.cron).nextRun();
+                } catch {
+                    throw new ORPCError("BAD_REQUEST", { message: "invalid cron expression" });
+                }
+                await services.automations.upsert(input);
+                return { ok: true } as const;
             }
-            await services.automations.upsert(input);
+            // Event: keep the round-tripped token (the enabled toggle re-posts the trigger) or mint the
+            // webhook's auth token — /automations/{id}/fire compares against it.
+            const trigger = input.trigger.token !== undefined ? input.trigger : { ...input.trigger, token: randomBytes(24).toString("base64url") };
+            await services.automations.upsert({ ...input, trigger });
             return { ok: true } as const;
         }),
         remove: i.remove.handler(async ({ input }) => {

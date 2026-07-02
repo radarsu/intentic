@@ -25,7 +25,7 @@ export const pluginHandler: CapabilityHandler = {
         await ctx.files.remove(staging);
         yield { kind: "log", message: `Cloning ${url}${ref !== undefined ? ` @ ${ref}` : ""}…` };
         try {
-            await ctx.git.clone(root, stagingName(id), url, undefined, token !== undefined ? gitAuthHeader(token) : undefined);
+            await ctx.git.clone(root, stagingName(id), url, token !== undefined ? { authHeader: gitAuthHeader(token) } : undefined);
             if (ref !== undefined) {
                 await ctx.git.checkout(staging, ref);
             }

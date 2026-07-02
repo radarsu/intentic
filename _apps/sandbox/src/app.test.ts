@@ -4,8 +4,9 @@ import { createORPCClient } from "@orpc/client";
 import type { ContractRouterClient } from "@orpc/contract";
 import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import type { Hono } from "hono";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { createApp } from "./app.js";
+import type { AutomationRecord, AutomationsStore } from "./automations/automations-store.js";
 import type { CapabilitiesStore } from "./capabilities/capabilities-store.js";
 import type { Services } from "./composition.js";
 import type { Config } from "./env.config.js";
@@ -34,6 +35,31 @@ const memoryCapabilitiesStore = (initial: Capability[] = []): CapabilitiesStore 
     };
 };
 
+// An in-memory automations store so the fire route is testable without the fs.
+const memoryAutomationsStore = (initial: AutomationRecord[] = []): AutomationsStore => {
+    let automations = [...initial];
+    return {
+        list: async () => automations,
+        get: async (id) => automations.find((automation) => automation.id === id),
+        upsert: async (automation) => {
+            const runs = automations.find((existing) => existing.id === automation.id)?.runs ?? [];
+            automations = [...automations.filter((existing) => existing.id !== automation.id), { ...automation, runs }];
+        },
+        remove: async (id) => {
+            const next = automations.filter((automation) => automation.id !== id);
+            const existed = next.length !== automations.length;
+            automations = next;
+            return existed;
+        },
+        recordRun: async (id, run) => {
+            const record = automations.find((automation) => automation.id === id);
+            if (record !== undefined) {
+                record.runs = [run, ...record.runs];
+            }
+        },
+    };
+};
+
 const fakeDevServer = (status: Awaited<ReturnType<DevServer["status"]>>): DevServer => ({
     start: () => {},
     stop: () => {},
@@ -57,6 +83,7 @@ const fakeFiles = (overrides: Partial<Services["files"]> = {}): Services["files"
 // (the agent guard) and the workspace paths (via services.workspace), so the rest are inert here.
 const baseConfig: Config = {
     workspaceRoot: "/work",
+    historyRoot: "/history",
     logLevel: "silent",
     logPretty: false,
     zone: "",
@@ -79,9 +106,20 @@ const services = (overrides: Partial<Services> = {}): Services => ({
     info: undefined,
     tools: [],
     capabilities: memoryCapabilitiesStore(),
+    automations: memoryAutomationsStore(),
     // A connected account by default, so the /agent guard (no token + no env creds) doesn't short-circuit
     // turns under test. Tests that exercise the disconnected path override this.
     claudeStore: { read: async () => ({ accessToken: "tok-xyz" }), write: async () => {}, clear: async () => {} },
+    // Inert history: no snapshots recorded, every id unknown — route tests that need history override this.
+    history: {
+        start: () => {},
+        stop: () => {},
+        snapshot: async () => undefined,
+        list: async () => [],
+        diff: async () => undefined,
+        fileDiff: async () => undefined,
+        restore: async () => false,
+    },
     agent: async function* () {
         yield { kind: "done" };
     },
@@ -136,7 +174,9 @@ test("system.preview returns the dev server status", async () => {
 });
 
 test("POST /enroll rejects a wrong connect token and 412s until DevOps (when auth is enforced)", async () => {
-    const app = createApp(services({ auth: { authorize: async () => {}, authorizeOwner: async () => {} }, config: { ...baseConfig, connectToken: "ct" } }));
+    const app = createApp(
+        services({ auth: { authorize: async () => {}, authorizeOwner: async () => {} }, config: { ...baseConfig, connectToken: "ct" } }),
+    );
     const enroll = (token: string) =>
         app.request("/enroll", {
             method: "POST",
@@ -164,6 +204,34 @@ test("POST /system/authorized-key authorizes via the pairing token alone (no bea
     expect((await post({ "x-intentic-pair": mintPairing().token })).status).toBe(400);
     expect((await post()).status).toBe(401);
     expect((await post({ "x-intentic-pair": "bogus" })).status).toBe(401);
+});
+
+test("POST /automations/:id/fire skips bearer auth, enforces the automation token, and records a run", async () => {
+    const reject = async (): Promise<void> => {
+        throw new Error("no bearer");
+    };
+    const store = memoryAutomationsStore([
+        { id: "deploy", trigger: { kind: "event", token: "tok-1" }, prompt: "handle the event", enabled: true, runs: [] },
+        { id: "paused", trigger: { kind: "event", token: "tok-2" }, prompt: "x", enabled: false, runs: [] },
+        { id: "cron", trigger: { kind: "schedule", cron: "* * * * *" }, prompt: "x", enabled: true, runs: [] },
+    ]);
+    // Bearer auth rejects everything, so a 200 proves the route's exemption; the token is the only gate.
+    const app = createApp(services({ automations: store, auth: { authorize: reject, authorizeOwner: reject } }));
+    const fire = (path: string) => app.request(path, { method: "POST", body: "payload" });
+
+    expect((await fire("/automations/ghost/fire?token=tok-1")).status).toBe(404);
+    // Schedule automations can't be fired externally.
+    expect((await fire("/automations/cron/fire?token=anything")).status).toBe(404);
+    expect((await fire("/automations/deploy/fire?token=wrong")).status).toBe(401);
+    expect((await fire("/automations/deploy/fire")).status).toBe(401);
+    expect((await fire("/automations/paused/fire?token=tok-2")).status).toBe(409);
+
+    const ok = await fire("/automations/deploy/fire?token=tok-1");
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ ok: true });
+    // The turn runs detached (the fake agent completes instantly) and lands in the run history.
+    await vi.waitFor(async () => expect((await store.get("deploy"))?.runs).toHaveLength(1));
+    expect((await store.get("deploy"))?.runs[0]?.outcome).toBe("completed");
 });
 
 test("agent.run streams the agent events", async () => {
@@ -205,7 +273,9 @@ test("agent.run merges internal (env) tools with the mcp-kind capabilities for t
         createApp(
             services({
                 tools: [{ name: "obs", url: "https://signoz.example.com/mcp", token: "internal" }],
-                capabilities: memoryCapabilitiesStore([{ id: "linear", kind: "mcp", config: { url: "https://mcp.linear.app/sse", token: "external" } }]),
+                capabilities: memoryCapabilitiesStore([
+                    { id: "linear", kind: "mcp", config: { url: "https://mcp.linear.app/sse", token: "external" } },
+                ]),
                 agent: async function* (request) {
                     seen = request;
                     yield { kind: "done" };
@@ -338,7 +408,9 @@ test("git.readFile reads a contained file, NOT_FOUNDs a missing one, and BAD_REQ
     const client = clientFor(
         createApp(
             services({
-                files: fakeFiles({ read: async (absPath) => (absPath === "/work/repositories/intent/deploy.config.ts" ? "export const intent = 1;" : undefined) }),
+                files: fakeFiles({
+                    read: async (absPath) => (absPath === "/work/repositories/intent/deploy.config.ts" ? "export const intent = 1;" : undefined),
+                }),
             }),
         ),
     );
@@ -498,8 +570,8 @@ test("workspace.mkdir/delete/move/copy resolve within /work and guard escapes + 
     expect(calls).toHaveLength(4);
 });
 
-test("workspace.addRepo clones a repo, rejects reserved names + a bad body", async () => {
-    const clones: { parentDir: string; name: string; cloneUrl: string }[] = [];
+test("workspace.addRepo clones a repo with a protected git dir, rejects reserved names + a bad body", async () => {
+    const clones: { parentDir: string; name: string; cloneUrl: string; separateGitDir?: string }[] = [];
     const client = clientFor(
         createApp(
             services({
@@ -508,15 +580,22 @@ test("workspace.addRepo clones a repo, rejects reserved names + a bad body", asy
                     listFiles: async () => [],
                     commitAll: async () => false,
                     push: async () => {},
-                    clone: async (parentDir, name, cloneUrl) => {
-                        clones.push({ parentDir, name, cloneUrl });
+                    clone: async (parentDir, name, cloneUrl, options) => {
+                        clones.push({
+                            parentDir,
+                            name,
+                            cloneUrl,
+                            ...(options?.separateGitDir !== undefined ? { separateGitDir: options.separateGitDir } : {}),
+                        });
                     },
                 },
             }),
         ),
     );
     expect(await client.workspace.addRepo({ name: "extra", cloneUrl: "https://example.com/extra.git" })).toEqual({ name: "extra", path: "extra" });
-    expect(clones).toEqual([{ parentDir: "/work/repositories", name: "extra", cloneUrl: "https://example.com/extra.git" }]);
+    expect(clones).toEqual([
+        { parentDir: "/work/repositories", name: "extra", cloneUrl: "https://example.com/extra.git", separateGitDir: "/history/gits/extra" },
+    ]);
     // A reserved role (one of the three fixed repos) cannot be clobbered, and a path-escape name is rejected.
     expect(await errorCode(client.workspace.addRepo({ name: "intent", cloneUrl: "https://example.com/x.git" }))).toBe("BAD_REQUEST");
     expect(await errorCode(client.workspace.addRepo({ name: "../evil", cloneUrl: "https://example.com/x.git" }))).toBe("BAD_REQUEST");

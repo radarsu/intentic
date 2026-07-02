@@ -32,11 +32,11 @@ fi
 slug="${1:-}"
 if [ -n "$slug" ]; then
     containers="intentic-sandbox-$slug intentic-sandbox-tunnel-$slug intentic-dind-host-$slug"
-    volumes="intentic-workspace-$slug intentic-dind-docker-$slug"
+    volumes="intentic-workspace-$slug intentic-history-$slug intentic-dind-docker-$slug"
     networks="intentic-workspace-$slug"
 else
     containers="$(docker ps -aq --filter 'name=intentic-sandbox-'; docker ps -aq --filter 'name=intentic-dind-host-')"
-    volumes="$(docker volume ls -q --filter 'name=intentic-workspace-'; docker volume ls -q --filter 'name=intentic-dind-docker-')"
+    volumes="$(docker volume ls -q --filter 'name=intentic-workspace-'; docker volume ls -q --filter 'name=intentic-history-'; docker volume ls -q --filter 'name=intentic-dind-docker-')"
     networks="$(docker network ls -q --filter 'name=intentic-workspace-')"
 fi
 

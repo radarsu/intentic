@@ -4,6 +4,7 @@ import { ORPCError } from "@orpc/server";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { tokenEquals } from "./auth/auth.js";
+import { fireAutomation, PAYLOAD_MAX } from "./automations/scheduler.js";
 import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { enrollHost } from "./inventory/enroll-host.js";
@@ -33,6 +34,10 @@ const logUnexpectedError = (services: Services, error: unknown): void => {
 
 // Extract the bearer token from an Authorization header (empty string when absent/malformed).
 const bearerFrom = (header: string | undefined): string => (header?.startsWith("Bearer ") ? header.slice(7) : "");
+
+// The webhook fire route for event automations — its callers are external systems, so it's exempt from the
+// bearer middleware and authenticated by the automation's own token instead (see the route).
+const eventFirePath = /^\/automations\/[^/]+\/fire$/;
 
 // The lowercased email in a member-management request body, or undefined when absent/malformed.
 const memberEmail = async (c: Context): Promise<string | undefined> => {
@@ -76,7 +81,13 @@ export const createApp = (services: Services): Hono => {
             // the terminal route authorizes the token from the query string itself (see createTerminalRoute).
             // /system/authorized-key is redeemed by the desktop-sync agent with a one-time pairing token instead
             // of a bearer; the POST handler checks that token itself and the DELETE handler re-checks the owner.
-            if (c.req.path === "/health" || c.req.path === "/system/terminal" || c.req.path === "/enroll" || c.req.path === "/system/authorized-key") {
+            if (
+                c.req.path === "/health" ||
+                c.req.path === "/system/terminal" ||
+                c.req.path === "/enroll" ||
+                c.req.path === "/system/authorized-key" ||
+                eventFirePath.test(c.req.path)
+            ) {
                 return next();
             }
             try {
@@ -169,6 +180,34 @@ export const createApp = (services: Services): Hono => {
             }
             throw error;
         }
+        return c.json({ ok: true });
+    });
+
+    // Webhook fire for event automations: external systems (GitHub/Sentry/monitors) POST here to wake the
+    // agent, authenticated by the automation's own token as ?token=… — the only mechanism every webhook sender
+    // supports. Enforced ALWAYS (fail-closed even in loopback, unlike /enroll — the token always exists). The
+    // body (any format, capped) reaches the guard as AUTOMATION_PAYLOAD and is appended to the wake prompt.
+    // Responds immediately; the agent turn runs detached, exactly like a scheduler fire.
+    app.post("/automations/:id/fire", async (c) => {
+        const automation = await services.automations.get(c.req.param("id"));
+        if (automation === undefined || automation.trigger.kind !== "event") {
+            return c.json({ error: "no event automation with that id" }, 404);
+        }
+        const token = automation.trigger.token;
+        if (token === undefined || !tokenEquals(c.req.query("token") ?? "", token)) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        if (!automation.enabled) {
+            return c.json({ error: "automation disabled" }, 409);
+        }
+        const declared = Number(c.req.header("content-length"));
+        if (Number.isFinite(declared) && declared > PAYLOAD_MAX) {
+            return c.json({ error: "payload too large" }, 413);
+        }
+        const payload = await c.req.text();
+        void fireAutomation(services, automation, payload === "" ? undefined : payload).catch((error: unknown) =>
+            services.logger.error({ err: error, automation: automation.id }, "automation run failed"),
+        );
         return c.json({ ok: true });
     });
 

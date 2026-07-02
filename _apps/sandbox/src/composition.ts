@@ -7,7 +7,7 @@ import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/ca
 import { createAuthorizer, createGoogleVerifier, fileMembersStore, fileOwnerStore, type MembersStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
-import { type GitStatus, gitCheckout, gitClone, gitCommitAll, gitHead, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
+import { type GitCloneOptions, type GitStatus, gitCheckout, gitClone, gitCommitAll, gitHead, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
 import { createWorkspaceHistory, type WorkspaceHistory } from "./history/history.js";
 import { type IntenticRun, runIntentic } from "./intentic/intentic-runner.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions/sessions.js";
@@ -50,12 +50,12 @@ export interface Services {
     readonly agent: (request: AgentRequest) => AsyncGenerator<AgentEvent>;
     readonly intentic: (run: IntenticRun) => AsyncGenerator<IntenticLine>;
     readonly git: {
-        readonly init: (dir: string) => Promise<void>;
+        readonly init: (dir: string, separateGitDir?: string) => Promise<void>;
         readonly status: (dir: string) => Promise<GitStatus>;
         readonly listFiles: (dir: string) => Promise<string[]>;
         readonly commitAll: (dir: string, message: string, author: { name: string; email: string }) => Promise<boolean>;
         readonly push: (dir: string, branch: string) => Promise<void>;
-        readonly clone: (parentDir: string, name: string, cloneUrl: string, branch?: string, authHeader?: string) => Promise<void>;
+        readonly clone: (parentDir: string, name: string, cloneUrl: string, options?: GitCloneOptions) => Promise<void>;
         readonly checkout: (dir: string, ref: string) => Promise<void>;
         readonly head: (dir: string) => Promise<string>;
     };
