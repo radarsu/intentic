@@ -1,11 +1,42 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { zoneFromPublicUrl } from "./zone.js";
 
-// Local-sync (Mutagen) key enrollment. The owner's Google token authorizes POST /system/authorized-key, which
-// lands their ed25519 public key here — so trust roots in Google, and Mutagen then rides SSH with that key.
+// Local-sync (Mutagen) enrollment. The owner mints a short-lived pairing token in the browser (POST
+// /system/sync/pair, Google-authed); the desktop agent redeems it once at POST /system/authorized-key to land
+// its ed25519 public key here, then Mutagen rides SSH with that key. So trust still roots in the owner's Google
+// identity (which mints the token), but the agent itself needs no OAuth — just the one-time token.
+
+// One-time pairing tokens, in memory (ephemeral: a daemon restart just means the user clicks Enable again).
+const PAIR_TTL_MS = 10 * 60 * 1000;
+const pairings = new Map<string, { expiresAt: number }>();
+
+export const mintPairing = (): { token: string; expiresIn: number } => {
+    const token = randomBytes(32).toString("base64url");
+    pairings.set(token, { expiresAt: Date.now() + PAIR_TTL_MS });
+    return { token, expiresIn: Math.floor(PAIR_TTL_MS / 1000) };
+};
+
+// Valid = known + unexpired (prunes on expiry). Peek only — the caller consumes it after a successful enroll,
+// so a failed enroll leaves the token usable for a retry.
+export const isValidPairing = (token: string): boolean => {
+    const pairing = pairings.get(token);
+    if (pairing === undefined) {
+        return false;
+    }
+    if (pairing.expiresAt < Date.now()) {
+        pairings.delete(token);
+        return false;
+    }
+    return true;
+};
+
+export const consumePairing = (token: string): void => {
+    pairings.delete(token);
+};
+
 const authorizedKeysPath = (): string => join(homedir(), ".ssh", "authorized_keys");
 
 // One well-formed public key line: a known type, a base64 blob, an optional comment, and no embedded newline

@@ -89,7 +89,7 @@ export const createServices = (config: Config, logger: Logger): Services => {
     const authorizer =
         config.google.clientId !== ""
             ? createAuthorizer({
-                  verify: createGoogleVerifier([config.google.clientId, ...(config.google.syncClientId !== "" ? [config.google.syncClientId] : [])]),
+                  verify: createGoogleVerifier(config.google.clientId),
                   owner: fileOwnerStore(join(workspace.root, ".intentic", "owner.json")),
                   members,
                   ...(config.connectToken !== "" ? { connectToken: config.connectToken } : {}),

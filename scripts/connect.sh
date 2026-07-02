@@ -69,11 +69,6 @@ SELF_HOST_USER="${SELF_HOST_USER:-}"
 # empty the daemon allows any origin (the Google-token audience is the real gate). ZONE picks the zone when the
 # token sees several.
 GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-481795963975-cq9msl6higcd91joidrfp8mjlkuq5fk3.apps.googleusercontent.com}"
-# The platform's PUBLIC Google *desktop* client id — the additional token audience the daemon accepts from the
-# local desktop-sync agent (Mutagen). Baked like GOOGLE_CLIENT_ID; the desktop client's "secret" is baked into
-# the sync CLI (installed-app secrets are not confidential). ponytail: placeholder — fill with the provisioned id.
-GOOGLE_SYNC_CLIENT_ID="${GOOGLE_SYNC_CLIENT_ID:-481795963975-pnobq9vv98c2enbdf2hi1r8jdfkocalr.apps.googleusercontent.com
-}"
 WEB_ORIGIN="${WEB_ORIGIN:-}"
 ZONE="${ZONE:-}"
 CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.1}"
@@ -473,7 +468,6 @@ docker run -d --restart unless-stopped --name "$CONTAINER" \
     -e DEV_COMMAND="$DEV_COMMAND" \
     -e DEV_PORT="$DEV_PORT" \
     -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-    -e GOOGLE_SYNC_CLIENT_ID="$GOOGLE_SYNC_CLIENT_ID" \
     -e CONNECT_TOKEN="$CONNECT_TOKEN" \
     -e WEB_ORIGIN="$WEB_ORIGIN" \
     -e SANDBOX_PUBLIC_URL="$SANDBOX_PUBLIC_URL" \

@@ -18,13 +18,10 @@ export interface VerifiedIdentity {
 // email verification fail. Implemented over Google's remote JWKS (jose caches the keys).
 export type IdTokenVerifier = (idToken: string) => Promise<VerifiedIdentity>;
 
-// `audience` accepts more than one client id so a single owner can present tokens minted by different Google
-// OAuth clients — the browser's *web* client and the local sync agent's *desktop* client — against the same
-// sandbox. Ownership is still by verified email; only the accepted `aud` set widens.
-export const createGoogleVerifier = (audience: string | readonly string[]): IdTokenVerifier => {
+export const createGoogleVerifier = (audience: string): IdTokenVerifier => {
     const jwks = createRemoteJWKSet(new URL(GOOGLE_JWKS_URL));
     return async (idToken) => {
-        const { payload } = await jwtVerify(idToken, jwks, { issuer: GOOGLE_ISSUERS, audience: audience as string | string[] });
+        const { payload } = await jwtVerify(idToken, jwks, { issuer: GOOGLE_ISSUERS, audience });
         const email = payload["email"];
         if (typeof email !== "string" || payload["email_verified"] !== true) {
             throw new Error("google id token has no verified email");

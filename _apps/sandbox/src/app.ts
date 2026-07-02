@@ -8,7 +8,7 @@ import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { enrollHost } from "./inventory/enroll-host.js";
 import { createRouter } from "./router.js";
-import { clearAuthorizedKeys, enrollAuthorizedKey, isKeyEnrolled, isValidAuthorizedKey, syncSshHostname } from "./system/sync.js";
+import { clearAuthorizedKeys, consumePairing, enrollAuthorizedKey, isKeyEnrolled, isValidAuthorizedKey, isValidPairing, mintPairing, syncSshHostname } from "./system/sync.js";
 import { createTerminalRoute } from "./system/terminal.js";
 import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
 import { isDeniedWorkspacePath } from "./workspace/workspace-tree.js";
@@ -205,11 +205,21 @@ export const createApp = (services: Services): Hono => {
         return c.json({ emails: await services.members.list() });
     });
 
-    // Local-sync (Mutagen) enrollment — owner-only, same gate as /members. The owner's `intentic-sync setup`
-    // POSTs its ed25519 public key (authorized by the Google token) to authorize SSH; then reads the tunnel's
-    // SSH hostname to point Mutagen at. Both sit before the oRPC catch-all, like /members and /workspace/raw.
-    app.post("/system/authorized-key", async (c) => {
+    // Local-sync (Mutagen) enrollment. The owner mints a short-lived pairing token in the browser (owner-gated,
+    // like /members); the desktop agent redeems it once here to enroll its SSH key — so the agent needs no OAuth,
+    // and trust still roots in the owner's Google identity that minted the token. These sit before the oRPC
+    // catch-all, like /members and /workspace/raw.
+    app.post("/system/sync/pair", async (c) => {
         if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        return c.json(mintPairing());
+    });
+    app.post("/system/authorized-key", async (c) => {
+        // Authorized either by a valid pairing token (the agent's path) or the owner's Google token (fallback).
+        const pair = c.req.header("x-intentic-pair") ?? undefined;
+        const viaPair = pair !== undefined && isValidPairing(pair);
+        if (!viaPair && !(await ensureOwner(c))) {
             return c.json({ error: "unauthorized" }, 401);
         }
         const body = (await c.req.json().catch(() => undefined)) as { key?: unknown } | undefined;
@@ -217,8 +227,17 @@ export const createApp = (services: Services): Hono => {
         if (key === undefined || !isValidAuthorizedKey(key)) {
             return c.json({ error: "invalid key" }, 400);
         }
+        // The agent needs the tunnel's SSH host to point Mutagen at; without one, sync can't reach this sandbox.
+        const sshHostname = syncSshHostname(services.config.connectToken, services.config.zone, services.config.sandbox.publicUrl);
+        if (sshHostname === undefined) {
+            return c.json({ error: "ssh tunnel not configured" }, 409);
+        }
         await enrollAuthorizedKey(key);
-        return c.json({ ok: true });
+        // Burn the pairing token only on success, so a transient failure leaves it usable for a retry.
+        if (pair !== undefined) {
+            consumePairing(pair);
+        }
+        return c.json({ ok: true, sshHostname });
     });
     app.get("/system/sync", async (c) => {
         if (!(await ensureOwner(c))) {
@@ -226,7 +245,7 @@ export const createApp = (services: Services): Hono => {
         }
         const sshHostname = syncSshHostname(services.config.connectToken, services.config.zone, services.config.sandbox.publicUrl);
         // Always 200 so the UI can render its "enable" vs "enabled" state; sshHostname is omitted when this
-        // sandbox has no SSH tunnel (loopback/preview), which the setup CLI treats as "sync unavailable".
+        // sandbox has no SSH tunnel (loopback/preview), which the card treats as "sync unavailable".
         return c.json({ enrolled: await isKeyEnrolled(), ...(sshHostname !== undefined ? { sshHostname } : {}) });
     });
     app.delete("/system/authorized-key", async (c) => {

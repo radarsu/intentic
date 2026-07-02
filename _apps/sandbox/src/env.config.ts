@@ -51,9 +51,6 @@ const configSchema = z.object({
             // The Google *web* client id (public) — the audience the daemon verifies bearer ID tokens against.
             // Empty ⇒ loopback mode (no auth): tests, or the host-internal server preview.
             clientId: z.string().default(""),
-            // The Google *desktop* client id the local sync agent's loopback OAuth mints tokens under; accepted
-            // as an additional audience alongside clientId so the same owner can drive both. Empty ⇒ sync off.
-            syncClientId: z.string().default(""),
         })
         .prefault({}),
 });
