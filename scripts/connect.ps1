@@ -92,6 +92,10 @@ $Container = "intentic-sandbox-$Slug"
 $WorkspaceVolume = "intentic-workspace-$Slug"
 $Network   = "intentic-workspace-$Slug"
 $TunnelContainer = "intentic-sandbox-tunnel-$Slug"
+# The stable name the tunnel ingress dials. The workspace answers to it via a --network-alias on its own per-sandbox
+# network, so the real container name stays unique (coexistence) while BOTH the platform-provisioned tunnel (whose
+# ingress origin is fixed to this name) and the own-Cloudflare tunnel below reach the daemon by one constant.
+$OriginHost = 'intentic-sandbox-workspace'
 # The Docker-in-Docker deploy target (when self-host is on): its own dockerd + sshd, reached by the sandbox at this
 # container name on the per-sandbox network. Per-slug too, so self-hosting sandboxes don't fight over one target.
 $DindContainer = "intentic-dind-host-$Slug"
@@ -165,7 +169,7 @@ if ($ProvidedTunnel) {
     # --entrypoint intentic: the image's default entrypoint is the daemon; we want the bundled CLI instead.
     $tunnelArgs = @('run', '--rm', '--entrypoint', 'intentic', '-e', "CLOUDFLARE_API_TOKEN=$CfToken", '-e', "CONNECT_TOKEN=$ConnectToken")
     if ($Zone) { $tunnelArgs += @('-e', "ZONE=$Zone") }
-    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${Container}:8787", '--preview-service', "http://${Container}:$DevPort")
+    $tunnelArgs += @($SandboxImage, 'sandbox-tunnel', '--service', "http://${OriginHost}:8787", '--preview-service', "http://${OriginHost}:$DevPort")
     if ($Subdomain) { $tunnelArgs += @('--subdomain', $Subdomain) }
     $tunnelOut = & docker $tunnelArgs
     $TunnelToken = ($tunnelOut | Where-Object { $_ -like 'TUNNEL_TOKEN=*' } | Select-Object -First 1) -replace '^TUNNEL_TOKEN=', ''
@@ -223,6 +227,7 @@ if ($SelfHost) {
 # the multi-line HOST_SSH_KEY pass as single arguments.
 docker run -d --restart unless-stopped --name $Container `
     --network $Network `
+    --network-alias $OriginHost `
     --add-host host.docker.internal:host-gateway `
     -v "${WorkspaceVolume}:/work" `
     -e WORKSPACE_ROOT=/work `

@@ -106,6 +106,10 @@ CONTAINER="intentic-sandbox-${SLUG}"
 WORKSPACE_VOLUME="intentic-workspace-${SLUG}"
 NETWORK="intentic-workspace-${SLUG}"
 TUNNEL_CONTAINER="intentic-sandbox-tunnel-${SLUG}"
+# The stable name the tunnel ingress dials. The workspace answers to it via a --network-alias on its own per-sandbox
+# network, so the real container name stays unique (coexistence) while BOTH the platform-provisioned tunnel (whose
+# ingress origin is fixed to this name) and the own-Cloudflare tunnel below reach the daemon by one constant.
+ORIGIN_HOST="intentic-sandbox-workspace"
 
 # Wire THIS machine as a deployable host: a dedicated service user in the docker group with a generated SSH key
 # the sandbox uses to reach the host back over host.docker.internal. Idempotent — an existing user/key is reused
@@ -395,9 +399,9 @@ else
         -e CONNECT_TOKEN="$CONNECT_TOKEN" \
         $zone_env \
         "$SANDBOX_IMAGE" sandbox-tunnel \
-        --service "http://${CONTAINER}:8787" \
-        --preview-service "http://${CONTAINER}:${DEV_PORT}" \
-        --ssh-service "ssh://${CONTAINER}:22" \
+        --service "http://${ORIGIN_HOST}:8787" \
+        --preview-service "http://${ORIGIN_HOST}:${DEV_PORT}" \
+        --ssh-service "ssh://${ORIGIN_HOST}:22" \
         $sub_flag)"
     TUNNEL_TOKEN="$(printf '%s\n' "$tunnel_out" | sed -n 's/^TUNNEL_TOKEN=//p')"
     SANDBOX_HOSTNAME="$(printf '%s\n' "$tunnel_out" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
@@ -453,6 +457,7 @@ self_host_addr_env=""
 # SELF_HOST_USER are the infra secrets the in-sandbox `intentic apply` reads (they never touch the platform).
 docker run -d --restart unless-stopped --name "$CONTAINER" \
     --network "$NETWORK" \
+    --network-alias "$ORIGIN_HOST" \
     --add-host host.docker.internal:host-gateway \
     -v "${WORKSPACE_VOLUME}:/work" \
     -e WORKSPACE_ROOT="/work" \
