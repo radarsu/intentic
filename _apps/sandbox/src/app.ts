@@ -8,7 +8,16 @@ import type { Services } from "./composition.js";
 import { buildOrpcContext } from "./context.js";
 import { enrollHost } from "./inventory/enroll-host.js";
 import { createRouter } from "./router.js";
-import { clearAuthorizedKeys, consumePairing, enrollAuthorizedKey, isKeyEnrolled, isValidAuthorizedKey, isValidPairing, mintPairing, syncSshHostname } from "./system/sync.js";
+import {
+    clearAuthorizedKeys,
+    consumePairing,
+    enrollAuthorizedKey,
+    isKeyEnrolled,
+    isValidAuthorizedKey,
+    isValidPairing,
+    mintPairing,
+    syncSshHostname,
+} from "./system/sync.js";
 import { createTerminalRoute } from "./system/terminal.js";
 import { contentTypeForPath, MAX_RAW_BYTES, resolveWithin } from "./workspace/workspace-files.js";
 import { isDeniedWorkspacePath } from "./workspace/workspace-tree.js";

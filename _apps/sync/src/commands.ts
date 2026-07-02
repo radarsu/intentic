@@ -2,90 +2,52 @@ import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildCommand, type CommandContext } from "@stricli/core";
-import { authorizeInteractive, idTokenFromRefresh } from "./auth.js";
-import {
-    knownHostsPath,
-    platformGoogleDesktopClientId,
-    platformGoogleDesktopClientSecret,
-    readConfig,
-    type SyncConfig,
-    sshConfigPath,
-    sshKeyPath,
-    writeConfig,
-    writeCredentials,
-} from "./config.js";
+import { knownHostsPath, readConfig, type SyncConfig, sshConfigPath, sshKeyPath, writeConfig } from "./config.js";
 import { ensureCloudflared, ensureMutagen, mutagenCreateArgs, runMutagen, sessionName } from "./mutagen.js";
 import { ensureSshKey, sanitizeId, sshAlias, sshConfigBlock, writeManagedSshConfig } from "./ssh.js";
 
-// Minimal daemon client for the two owner-gated setup calls, authed by the Google ID token (same trust root as
-// the browser). Everything else is Mutagen over SSH.
-const daemon = (sandboxUrl: string, idToken: string) => {
-    const root = sandboxUrl.replace(/\/$/, "");
-    const headers = { authorization: `Bearer ${idToken}` };
-    return {
-        enrollKey: async (key: string): Promise<void> => {
-            const response = await fetch(`${root}/system/authorized-key`, {
-                method: "POST",
-                headers: { ...headers, "content-type": "application/json" },
-                body: JSON.stringify({ key }),
-            });
-            if (!response.ok) {
-                throw new Error(`enrolling SSH key failed (${response.status}): ${await response.text()}`);
-            }
-        },
-        sshHostname: async (): Promise<string> => {
-            const response = await fetch(`${root}/system/sync`, { headers });
-            if (!response.ok) {
-                throw new Error(
-                    `reading sync info failed (${response.status}): ${await response.text()} — is the sandbox tunnel (with --ssh-service) up?`,
-                );
-            }
-            const body = (await response.json()) as { sshHostname?: string };
-            if (body.sshHostname === undefined) {
-                throw new Error("this sandbox has no SSH tunnel configured for sync — reconnect it so its tunnel routes ssh-<id>.<zone>.");
-            }
-            return body.sshHostname;
-        },
-    };
+// Enroll our SSH public key using the browser-minted pairing token (single-use). The daemon returns the tunnel's
+// SSH hostname — the one and only call the agent makes over HTTP; everything after is Mutagen over SSH.
+const enrollKey = async (sandboxUrl: string, pairToken: string, key: string): Promise<string> => {
+    const response = await fetch(`${sandboxUrl.replace(/\/$/, "")}/system/authorized-key`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-intentic-pair": pairToken },
+        body: JSON.stringify({ key }),
+    });
+    if (response.status === 401) {
+        throw new Error("pairing expired — click “Enable desktop sync” again in your browser for a fresh command.");
+    }
+    if (!response.ok) {
+        throw new Error(`enrolling the sync key failed (${response.status}): ${await response.text()}`);
+    }
+    const body = (await response.json()) as { sshHostname?: string };
+    if (body.sshHostname === undefined) {
+        throw new Error("this sandbox has no SSH tunnel configured for sync — reconnect it so its tunnel routes ssh-<id>.<zone>.");
+    }
+    return body.sshHostname;
 };
 
 interface SetupFlags {
     readonly url: string;
+    readonly pair: string;
     readonly dir?: string;
     readonly sandboxId?: string;
-    readonly clientId?: string;
-    readonly clientSecret?: string;
 }
 
 const setup = buildCommand<SetupFlags>({
-    docs: { brief: "Authorize with Google, enroll an SSH key, and start a Mutagen sync of the local dir ↔ sandbox /work" },
+    docs: { brief: "Enroll an SSH key with a pairing token and start a Mutagen sync of the local dir ↔ sandbox /work" },
     parameters: {
         flags: {
             url: { kind: "parsed", parse: String, brief: "The sandbox's public URL (e.g. https://sandbox-xxx.example.dev)" },
+            pair: { kind: "parsed", parse: String, brief: "The one-time pairing token from the Desktop sync card" },
             dir: { kind: "parsed", parse: String, optional: true, brief: "Local directory to sync (default: ~/intentic/<sandbox>)" },
             sandboxId: { kind: "parsed", parse: String, optional: true, brief: "Session/alias id (default: the sandbox URL host)" },
-            // Optional overrides; default to the platform's shared desktop client so users create no Google app.
-            clientId: { kind: "parsed", parse: String, optional: true, brief: "Google desktop OAuth client id (default: the platform client)" },
-            clientSecret: {
-                kind: "parsed",
-                parse: String,
-                optional: true,
-                brief: "Google desktop OAuth client secret (default: the platform client)",
-            },
         },
     },
     async func(this: CommandContext, flags: SetupFlags) {
         const out = (message: string): void => void this.process.stdout.write(`${message}\n`);
-        const clientId = flags.clientId ?? platformGoogleDesktopClientId;
-        const clientSecret = flags.clientSecret ?? platformGoogleDesktopClientSecret;
-        const refreshToken = await authorizeInteractive(clientId, clientSecret);
-        await writeCredentials({ refreshToken });
-        const idToken = await idTokenFromRefresh(clientId, clientSecret, refreshToken);
-
-        const api = daemon(flags.url, idToken);
         const publicKey = await ensureSshKey();
-        await api.enrollKey(publicKey);
-        const sshHostname = await api.sshHostname();
+        const sshHostname = await enrollKey(flags.url, flags.pair, publicKey);
         out(`enrolled SSH key; sandbox reachable at ${sshHostname}`);
 
         const sandboxId = flags.sandboxId ?? sanitizeId(new URL(flags.url).host);
@@ -102,14 +64,7 @@ const setup = buildCommand<SetupFlags>({
             }),
         );
 
-        const config: SyncConfig = {
-            sandboxUrl: flags.url,
-            sandboxId,
-            sshHostname,
-            localDir,
-            googleClientId: clientId,
-            googleClientSecret: clientSecret,
-        };
+        const config: SyncConfig = { sandboxUrl: flags.url, sandboxId, sshHostname, localDir };
         await writeConfig(config);
 
         runMutagen(

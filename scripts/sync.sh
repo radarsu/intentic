@@ -4,18 +4,20 @@
 # ~/.intentic/sync and registers a per-user login agent.
 #
 # Usage (the platform's Desktop sync card hands you this):
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/sync.sh | env SANDBOX_URL='https://sandbox-<id>.<zone>' SYNC_DIR="$HOME/intentic/<name>" sh
+#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/sync.sh | env SANDBOX_URL='https://sandbox-<id>.<zone>' PAIR_TOKEN='<token>' SYNC_DIR="$HOME/intentic/<name>" sh
 #
 # Required env:
-#   SANDBOX_URL  your sandbox's public URL (from the card). NOT secret — auth is your Google sign-in.
+#   SANDBOX_URL  your sandbox's public URL (from the card).
+#   PAIR_TOKEN   the one-time pairing token from the card (single-use, expires in ~10 min).
 # Optional env:
 #   SYNC_DIR     local folder to sync (default: ~/intentic/<sandbox-host>)
 set -eu
 
 URL="${SANDBOX_URL:-}"
+PAIR="${PAIR_TOKEN:-}"
 DIR="${SYNC_DIR:-}"
-if [ -z "$URL" ]; then
-    echo "error: SANDBOX_URL is required (copy the command from the Desktop sync card)." >&2
+if [ -z "$URL" ] || [ -z "$PAIR" ]; then
+    echo "error: SANDBOX_URL and PAIR_TOKEN are required (copy the command from the Desktop sync card)." >&2
     exit 1
 fi
 
@@ -54,7 +56,7 @@ if [ -z "$BIN" ]; then
     fi
 fi
 
-set -- setup --url "$URL"
+set -- setup --url "$URL" --pair "$PAIR"
 [ -n "$DIR" ] && set -- "$@" --dir "$DIR"
 # BIN may be "npx -y @intentic/sync@stable" (intentional word-split); a real path runs directly.
 # shellcheck disable=SC2086

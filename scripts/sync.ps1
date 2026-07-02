@@ -3,15 +3,16 @@
 # %USERPROFILE%\.intentic\sync and registers a per-user logon task.
 #
 # Usage (the platform's Desktop sync card hands you this):
-#   $env:SANDBOX_URL='https://sandbox-<id>.<zone>'; $env:SYNC_DIR="$HOME\intentic\<name>"; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/sync.ps1 | iex
+#   $env:SANDBOX_URL='https://sandbox-<id>.<zone>'; $env:PAIR_TOKEN='<token>'; $env:SYNC_DIR="$HOME\intentic\<name>"; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/sync.ps1 | iex
 #
-# Required env: SANDBOX_URL (your sandbox URL; not secret). Optional env: SYNC_DIR (default: ~\intentic\<host>).
+# Required env: SANDBOX_URL, PAIR_TOKEN (the one-time token from the card). Optional: SYNC_DIR (default: ~\intentic\<host>).
 $ErrorActionPreference = 'Stop'
 
 $url = $env:SANDBOX_URL
+$pair = $env:PAIR_TOKEN
 $dir = $env:SYNC_DIR
-if ([string]::IsNullOrEmpty($url)) {
-    Write-Error 'SANDBOX_URL is required (copy the command from the Desktop sync card).'
+if ([string]::IsNullOrEmpty($url) -or [string]::IsNullOrEmpty($pair)) {
+    Write-Error 'SANDBOX_URL and PAIR_TOKEN are required (copy the command from the Desktop sync card).'
     exit 1
 }
 
@@ -29,6 +30,6 @@ if (-not $bin) {
     }
 }
 
-$syncArgs = @('setup', '--url', $url)
+$syncArgs = @('setup', '--url', $url, '--pair', $pair)
 if (-not [string]::IsNullOrEmpty($dir)) { $syncArgs += @('--dir', $dir) }
 if ($bin -eq 'npx') { & npx -y '@intentic/sync@stable' @syncArgs } else { & $bin @syncArgs }

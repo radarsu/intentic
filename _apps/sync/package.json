@@ -21,7 +21,6 @@
     },
     "dependencies": {
         "@stricli/core": "catalog:",
-        "google-auth-library": "catalog:",
         "tslib": "catalog:"
     },
     "devDependencies": {
