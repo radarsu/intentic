@@ -21,7 +21,9 @@ export type IdTokenVerifier = (idToken: string) => Promise<VerifiedIdentity>;
 export const createGoogleVerifier = (audience: string): IdTokenVerifier => {
     const jwks = createRemoteJWKSet(new URL(GOOGLE_JWKS_URL));
     return async (idToken) => {
-        const { payload } = await jwtVerify(idToken, jwks, { issuer: GOOGLE_ISSUERS, audience });
+        // clockTolerance: a fresh container's clock (WSL/Docker after host sleep) can run ahead of the
+        // browser's, making a still-valid token look expired here and killing the terminal with 1008.
+        const { payload } = await jwtVerify(idToken, jwks, { issuer: GOOGLE_ISSUERS, audience, clockTolerance: 60 });
         const email = payload["email"];
         if (typeof email !== "string" || payload["email_verified"] !== true) {
             throw new Error("google id token has no verified email");

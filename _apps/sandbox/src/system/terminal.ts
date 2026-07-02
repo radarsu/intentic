@@ -10,8 +10,12 @@ import { resolveWithin } from "../workspace/workspace-files.js";
 // a shell for the authenticated owner adds no new trust surface.
 
 // The wire protocol, JSON both ways (xterm speaks strings). Kept tiny and defined on each side (the web app
-// doesn't import this contract package — it re-declares the agent event shapes too).
-type ClientMessage = { readonly type: "input"; readonly data: string } | { readonly type: "resize"; readonly cols: number; readonly rows: number };
+// doesn't import this contract package — it re-declares the agent event shapes too). `ping` is the client's
+// 30s keepalive against tunnel idle-reaping — deliberately no branch in onMessage, arriving is its whole job.
+type ClientMessage =
+    | { readonly type: "input"; readonly data: string }
+    | { readonly type: "resize"; readonly cols: number; readonly rows: number }
+    | { readonly type: "ping" };
 
 // Spawn a shell rooted in the workspace. `cwd` is a workspace-relative path from the terminal's ?cwd= query; it
 // must resolve inside /work (resolveWithin returns undefined on escape) and exist, else we fall back to the root.
@@ -38,7 +42,10 @@ export const createTerminalRoute = (services: Services) =>
                 if (services.auth !== undefined) {
                     try {
                         await services.auth.authorize(url.searchParams.get("token") ?? "", url.searchParams.get("connect") ?? undefined);
-                    } catch {
+                    } catch (err) {
+                        // The close frame only says "unauthorized"; the actual cause (JWKS fetch, clock skew,
+                        // first-bind token mismatch) is only visible here.
+                        services.logger.warn({ err }, "terminal authorize failed");
                         ws.close(1008, "unauthorized");
                         return;
                     }

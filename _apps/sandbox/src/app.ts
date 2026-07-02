@@ -74,7 +74,9 @@ export const createApp = (services: Services): Hono => {
         app.use("*", async (c, next) => {
             // /system/terminal is a WebSocket upgrade: the browser can't set an Authorization header on it, so
             // the terminal route authorizes the token from the query string itself (see createTerminalRoute).
-            if (c.req.path === "/health" || c.req.path === "/system/terminal" || c.req.path === "/enroll") {
+            // /system/authorized-key is redeemed by the desktop-sync agent with a one-time pairing token instead
+            // of a bearer; the POST handler checks that token itself and the DELETE handler re-checks the owner.
+            if (c.req.path === "/health" || c.req.path === "/system/terminal" || c.req.path === "/enroll" || c.req.path === "/system/authorized-key") {
                 return next();
             }
             try {

@@ -11,6 +11,7 @@ import type { Services } from "./composition.js";
 import type { Config } from "./env.config.js";
 import { createLogger } from "./logger.js";
 import type { DevServer } from "./system/dev-server.js";
+import { mintPairing } from "./system/sync.js";
 import type { AgentTool } from "./workspace/tools.js";
 import { workspacePaths } from "./workspace/workspace.js";
 import { MAX_RAW_BYTES } from "./workspace/workspace-files.js";
@@ -145,6 +146,24 @@ test("POST /enroll rejects a wrong connect token and 412s until DevOps (when aut
     expect((await enroll("wrong")).status).toBe(401);
     // Right token, but the desired-state repo is absent under test → 412 (DevOps not active).
     expect((await enroll("ct")).status).toBe(412);
+});
+
+test("POST /system/authorized-key authorizes via the pairing token alone (no bearer)", async () => {
+    const reject = async (): Promise<void> => {
+        throw new Error("no bearer");
+    };
+    const app = createApp(services({ auth: { authorize: reject, authorizeOwner: reject } }));
+    // Empty body: a valid pairing must get past auth and fail on key validation (400), never on auth (401) —
+    // the regression was the global bearer middleware 401ing before the route's own pairing check ran.
+    const post = (headers: Record<string, string> = {}) =>
+        app.request("/system/authorized-key", {
+            method: "POST",
+            headers: { "content-type": "application/json", ...headers },
+            body: JSON.stringify({}),
+        });
+    expect((await post({ "x-intentic-pair": mintPairing().token })).status).toBe(400);
+    expect((await post()).status).toBe(401);
+    expect((await post({ "x-intentic-pair": "bogus" })).status).toBe(401);
 });
 
 test("agent.run streams the agent events", async () => {
