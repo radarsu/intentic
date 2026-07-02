@@ -363,4 +363,4 @@ export const DevLogsSchema = z.object({
     output: z.string(),
     lastExit: z.object({ code: z.number().optional(), signal: z.string().optional() }).optional(),
 });
-export const InfoSchema = z.object({ name: z.string().optional(), image: z.string().optional() });
+export const InfoSchema = z.object({ name: z.string().optional(), image: z.string().optional(), version: z.string().optional() });

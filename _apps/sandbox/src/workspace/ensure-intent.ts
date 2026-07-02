@@ -1,14 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { createRequire } from "node:module";
 import { join } from "node:path";
 import { INTENT_TSCONFIG, intentPackageJson } from "@intentic/scaffold";
 import type { Services } from "../composition.js";
 import { AGENT_GIT_AUTHOR } from "../git/git.js";
+import { version } from "../version.js";
 
 // The sandbox's own version — the intent repo pins @intentic/{graph,sdk} to it (published in the release image).
-// Mirrors the CLI's lib/version.ts; resolved relative to this module ({src,dist}/workspace/…/package.json).
-const { version } = createRequire(import.meta.url)("../../package.json") as { version: string };
+// It is the same value surfaced by /info as the exact release behind the moving stable image tag.
 
 // Make the intent repo provisionable. `resolve` dynamically imports deploy.config.ts, which needs @intentic/graph
 // and @intentic/sdk installed in /work/intent. The neutral first-boot ledger deliberately skips the skeleton +

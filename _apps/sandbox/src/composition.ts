@@ -7,11 +7,23 @@ import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/ca
 import { createAuthorizer, createGoogleVerifier, fileMembersStore, fileOwnerStore, type MembersStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
-import { type GitCloneOptions, type GitStatus, gitCheckout, gitClone, gitCommitAll, gitHead, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
+import {
+    type GitCloneOptions,
+    type GitStatus,
+    gitCheckout,
+    gitClone,
+    gitCommitAll,
+    gitHead,
+    gitInit,
+    gitListFiles,
+    gitPush,
+    gitStatus,
+} from "./git/git.js";
 import { createWorkspaceHistory, type WorkspaceHistory } from "./history/history.js";
 import { type IntenticRun, runIntentic } from "./intentic/intentic-runner.js";
 import { listWorkspaceSessions, readWorkspaceSession, type SessionSummary, type SessionTranscriptMessage } from "./sessions/sessions.js";
 import { createDevServer, type DevServer } from "./system/dev-server.js";
+import { version } from "./version.js";
 import { type AgentTool, internalTools } from "./workspace/tools.js";
 import { type WorkspacePaths, workspacePaths } from "./workspace/workspace.js";
 import {
@@ -36,7 +48,7 @@ export interface Services {
     readonly workspace: WorkspacePaths;
     readonly devServer: DevServer;
     // This sandbox's identity for the platform's Connections card; undefined ⇒ /info returns {} (loopback/test).
-    readonly info: { readonly name: string; readonly image: string } | undefined;
+    readonly info: { readonly name: string; readonly image: string; readonly version: string } | undefined;
     // Intent-declared internal MCP tools (constant for the sandbox), merged with mcp-kind capabilities each turn.
     readonly tools: readonly AgentTool[];
     // The unified capability manifest (.intentic/capabilities.json) — DevOps/mcp/service/integration.
@@ -93,7 +105,8 @@ export interface Services {
 // real module functions referenced directly (their injectable last arg defaults to the real subprocess/fs).
 export const createServices = (config: Config, logger: Logger): Services => {
     const workspace = workspacePaths(config.workspaceRoot);
-    const info = config.sandbox.name !== "" && config.sandbox.image !== "" ? { name: config.sandbox.name, image: config.sandbox.image } : undefined;
+    const info =
+        config.sandbox.name !== "" && config.sandbox.image !== "" ? { name: config.sandbox.name, image: config.sandbox.image, version } : undefined;
     const members = fileMembersStore(join(workspace.root, ".intentic", "members.json"));
     const authorizer =
         config.google.clientId !== ""
@@ -125,7 +138,16 @@ export const createServices = (config: Config, logger: Logger): Services => {
         history: createWorkspaceHistory({ workspace, historyRoot: config.historyRoot, logger }),
         agent: runAgent,
         intentic: runIntentic,
-        git: { init: gitInit, status: gitStatus, listFiles: gitListFiles, commitAll: gitCommitAll, push: gitPush, clone: gitClone, checkout: gitCheckout, head: gitHead },
+        git: {
+            init: gitInit,
+            status: gitStatus,
+            listFiles: gitListFiles,
+            commitAll: gitCommitAll,
+            push: gitPush,
+            clone: gitClone,
+            checkout: gitCheckout,
+            head: gitHead,
+        },
         files: {
             read: readWorkspaceFile,
             write: writeWorkspaceFile,

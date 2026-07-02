@@ -173,6 +173,13 @@ test("system.preview returns the dev server status", async () => {
     expect(await client.system.preview()).toEqual({ running: true, port: 5173, healthy: true });
 });
 
+test("system.info reports the sandbox image tag and exact bundled version", async () => {
+    const client = clientFor(
+        createApp(services({ info: { name: "intentic-sandbox", image: "ghcr.io/radarsu/intentic/sandbox:stable", version: "1.52.0" } })),
+    );
+    expect(await client.system.info()).toEqual({ name: "intentic-sandbox", image: "ghcr.io/radarsu/intentic/sandbox:stable", version: "1.52.0" });
+});
+
 test("POST /enroll rejects a wrong connect token and 412s until DevOps (when auth is enforced)", async () => {
     const app = createApp(
         services({ auth: { authorize: async () => {}, authorizeOwner: async () => {} }, config: { ...baseConfig, connectToken: "ct" } }),
