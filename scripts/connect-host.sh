@@ -8,7 +8,7 @@
 # recreate a sandbox — that already exists from setup.
 #
 # Usage (the Infra screen hands you a copy-paste one-liner):
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect-host.sh \
+#   curl -fsSL https://intentic.dev/connect-host \
 #     | sudo env SANDBOX_URL=… CONNECT_TOKEN=… CF_TOKEN=… ZONE=… HOST_NAME=… sh
 #
 # Required:
@@ -21,8 +21,15 @@
 #   HOST_USER            the service user to create/use (default: intentic)
 #   SANDBOX_IMAGE        the image carrying the intentic CLI for the tunnel step (default: the latest release)
 #   CLOUDFLARED_VERSION  the native cloudflared version for the host connector
+#   INSTALL_DOCKER       set to 1 to install Docker without the interactive consent prompt when it's missing
 # POSIX sh (piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
+
+# The script curls Cloudflare and the sandbox's /enroll; fail up front on a box without curl.
+if ! command -v curl >/dev/null 2>&1; then
+    echo "error: curl is required — install it and re-run." >&2
+    exit 1
+fi
 
 SANDBOX_URL="${SANDBOX_URL:-}"
 CONNECT_TOKEN="${CONNECT_TOKEN:-}"
@@ -186,13 +193,50 @@ pull_image() {
 # ---- preflight ----
 require_root
 echo "intentic: checking Docker…"
+docker_installed=""
 if ! command -v docker >/dev/null 2>&1; then
-    echo "error: docker is not installed. Install Docker Engine, then re-run." >&2
-    exit 1
+    # Deploy targets are standard Linux servers, so install Docker Engine via Docker's official convenience
+    # script — with consent (a root-level system change), pre-given via INSTALL_DOCKER=1 for headless runs.
+    if [ "${INSTALL_DOCKER:-}" != "1" ]; then
+        if [ ! -r /dev/tty ]; then
+            echo "error: docker is not installed and there is no terminal to ask — re-run with INSTALL_DOCKER=1" >&2
+            echo "       to install it automatically, or install it yourself: https://docs.docker.com/engine/install/" >&2
+            exit 1
+        fi
+        printf 'intentic: Docker is not installed. Install it now via get.docker.com? [Y/n] ' >&2
+        read -r answer </dev/tty || answer=""
+        case "$answer" in
+            n* | N*)
+                echo "error: docker is required — install it (https://docs.docker.com/engine/install/) and re-run." >&2
+                exit 1
+                ;;
+        esac
+    fi
+    echo "intentic: installing Docker Engine (get.docker.com)…"
+    curl -fsSL https://get.docker.com | $SUDO sh
+    # Enable on boot + start now — also what brings deployed containers back after a reboot.
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+    elif command -v service >/dev/null 2>&1; then
+        $SUDO service docker start >/dev/null 2>&1 || true
+    fi
+    docker_installed=1
 fi
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
-    echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
-    exit 1
+    if [ -z "$docker_installed" ]; then
+        echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
+        exit 1
+    fi
+    # A freshly installed daemon takes a moment to come up.
+    i=0
+    until docker version --format '{{.Server.Version}}' >/dev/null 2>&1; do
+        i=$((i + 1))
+        if [ "$i" -ge 10 ]; then
+            echo "error: the Docker daemon did not come up — start Docker, then re-run." >&2
+            exit 1
+        fi
+        sleep 2
+    done
 fi
 for var in SANDBOX_URL CONNECT_TOKEN CF_TOKEN; do
     eval "val=\${$var}"
@@ -203,22 +247,67 @@ for var in SANDBOX_URL CONNECT_TOKEN CF_TOKEN; do
 done
 
 # Validate the Cloudflare token up front (same verify endpoint intentic uses), then resolve the zone if unset.
+# A network failure is reported as such — not conflated with a bad token.
 echo "intentic: validating Cloudflare API token…"
-cf_verify="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
-if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf_verify" | grep -q '"status": *"active"'; then
+if ! cf_verify="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>&1)"; then
+    case "$cf_verify" in
+        *401* | *403*) ;; # an auth error IS a bad token — fall through to the invalid-token message below
+        *)
+            echo "error: could not reach the Cloudflare API to validate the token: $cf_verify" >&2
+            exit 1
+            ;;
+    esac
+fi
+if ! printf '%s' "$cf_verify" | grep -q '"success":[[:space:]]*true' || ! printf '%s' "$cf_verify" | grep -q '"status":[[:space:]]*"active"'; then
     echo "error: the Cloudflare API token is invalid or inactive. Re-check it + its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit)." >&2
     exit 1
 fi
 if [ -z "$ZONE" ]; then
     echo "intentic: resolving the Cloudflare zone…"
-    zones_json="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>/dev/null || true)"
+    if ! zones_json="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>&1)"; then
+        echo "error: could not list Cloudflare zones: $zones_json" >&2
+        exit 1
+    fi
     zones="$(printf '%s' "$zones_json" | grep -o '"name":"[^"]*"' | sed 's/^"name":"//;s/"$//' || true)"
     zone_count="$(printf '%s\n' "$zones" | grep -c . || true)"
-    if [ "$zone_count" -eq 1 ]; then
+    if [ "$zone_count" -eq 0 ]; then
+        echo "error: the Cloudflare API token sees no zones — add a domain to the account, or broaden the token's" >&2
+        echo "       Zone:Read scope, at https://dash.cloudflare.com/profile/api-tokens, then re-run." >&2
+        exit 1
+    elif [ "$zone_count" -eq 1 ]; then
         ZONE="$zones"
+        echo "intentic: using the only zone the token sees — $ZONE."
+    elif [ -r /dev/tty ]; then
+        # The human is at a terminal even under `curl … | sh` (stdin is the script), so prompt on /dev/tty.
+        echo "intentic: this Cloudflare token can use several zones — pick the one this host's tunnel should use:" >&2
+        i=1
+        for z in $zones; do
+            echo "  $i) $z" >&2
+            i=$((i + 1))
+        done
+        printf "intentic: zone number [1]: " >&2
+        read -r choice </dev/tty || choice=1
+        [ -n "$choice" ] || choice=1
+        case "$choice" in
+            *[!0-9]*)
+                echo "error: invalid selection '$choice'." >&2
+                exit 1
+                ;;
+        esac
+        ZONE="$(printf '%s\n' "$zones" | sed -n "${choice}p")"
+        if [ -z "$ZONE" ]; then
+            echo "error: '$choice' is out of range." >&2
+            exit 1
+        fi
+        echo "intentic: using zone $ZONE."
     else
+        # Non-interactive (no controlling terminal): can't prompt, so name the zones and the exact remedy.
         first="$(printf '%s\n' "$zones" | sed -n '1p')"
-        echo "error: the token sees $zone_count zones; set ZONE to choose one (e.g. ZONE=$first) and re-run." >&2
+        echo "error: the Cloudflare API token sees multiple zones; set ZONE to choose one. The token can use:" >&2
+        for z in $zones; do
+            echo "  - $z" >&2
+        done
+        echo "       Re-run with ZONE set in the environment (alongside CF_TOKEN), e.g. ZONE=$first" >&2
         exit 1
     fi
 fi

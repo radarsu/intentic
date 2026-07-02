@@ -4,7 +4,7 @@
 # ~/.intentic/sync and registers a per-user login agent.
 #
 # Usage (the platform's Desktop sync card hands you this):
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/sync.sh | env SANDBOX_URL='https://sandbox-<id>.<zone>' PAIR_TOKEN='<token>' SYNC_DIR="$HOME/intentic/<name>" sh
+#   curl -fsSL https://intentic.dev/sync | env SANDBOX_URL='https://sandbox-<id>.<zone>' PAIR_TOKEN='<token>' SYNC_DIR="$HOME/intentic/<name>" sh
 #
 # Required env:
 #   SANDBOX_URL  your sandbox's public URL (from the card).
@@ -45,12 +45,17 @@ if [ -z "$BIN" ]; then
     dest="${HOME}/.intentic/sync/bin/intentic-sync"
     mkdir -p "$(dirname "$dest")"
     echo "Downloading the intentic-sync agent…"
-    if curl -fsSL "https://github.com/radarsu/intentic/releases/latest/download/intentic-sync-${os}-${arch}" -o "$dest" 2>/dev/null; then
+    # The download error stays visible (a masked network/permission failure used to silently drop to npx);
+    # a partial file is removed before falling back.
+    if curl -fsSL "https://github.com/radarsu/intentic/releases/latest/download/intentic-sync-${os}-${arch}" -o "$dest"; then
         chmod +x "$dest"
         BIN="$dest"
     elif command -v npx >/dev/null 2>&1; then
+        rm -f "$dest"
+        echo "Falling back to npx (@intentic/sync@stable)…" >&2
         BIN="npx -y @intentic/sync@stable"
     else
+        rm -f "$dest"
         echo "error: could not download the agent and no npx fallback (install Node.js, or see the docs)." >&2
         exit 1
     fi

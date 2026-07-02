@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { baseDir, sshConfigPath, sshKeyPath } from "./config.js";
@@ -63,5 +63,8 @@ export const writeManagedSshConfig = async (block: string): Promise<void> => {
         return;
     }
     await mkdir(join(homedir(), ".ssh"), { recursive: true, mode: 0o700 });
-    await writeFile(userConfig, `${INCLUDE_MARKER}\n${current}`, { mode: 0o600 });
+    // Temp file + rename: a crash mid-write must never truncate the user's whole ssh config.
+    const tmp = `${userConfig}.intentic-tmp`;
+    await writeFile(tmp, `${INCLUDE_MARKER}\n${current}`, { mode: 0o600 });
+    await rename(tmp, userConfig);
 };

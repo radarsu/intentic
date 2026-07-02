@@ -3,7 +3,7 @@
 # %USERPROFILE%\.intentic\sync and registers a per-user logon task.
 #
 # Usage (the platform's Desktop sync card hands you this):
-#   $env:SANDBOX_URL='https://sandbox-<id>.<zone>'; $env:PAIR_TOKEN='<token>'; $env:SYNC_DIR="$HOME\intentic\<name>"; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/sync.ps1 | iex
+#   $env:SANDBOX_URL='https://sandbox-<id>.<zone>'; $env:PAIR_TOKEN='<token>'; $env:SYNC_DIR="$HOME\intentic\<name>"; irm https://intentic.dev/sync.ps1 | iex
 #
 # Required env: SANDBOX_URL, PAIR_TOKEN (the one-time token from the card). Optional: SYNC_DIR (default: ~\intentic\<host>).
 $ErrorActionPreference = 'Stop'

@@ -9,8 +9,8 @@
 # (intentic-app-*) untouched.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.sh | sh            # all sandboxes
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.sh | sh -s -- SLUG # one sandbox
+#   curl -fsSL https://intentic.dev/cleanup | sh            # all sandboxes
+#   curl -fsSL https://intentic.dev/cleanup | sh -s -- SLUG # one sandbox
 #   ./scripts/cleanup.sh [SLUG]
 #
 # NOT removed (host-level, only exist after a SELF_HOST=1 run; recreated on the next one): the

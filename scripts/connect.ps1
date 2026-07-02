@@ -16,14 +16,18 @@
   Docker Desktop in Linux-containers mode (the sandbox image is Linux).
 
 .EXAMPLE
-  $env:CF_TOKEN='<cf>'; $env:CONNECT_TOKEN='<token>'; irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.ps1 | iex
+  $env:SETUP_CODE='<code>'; irm https://intentic.dev/connect.ps1 | iex                        # intentic-provided tunnel
 
 .EXAMPLE
-  ./connect.ps1 -ConnectToken <token>   # -PlatformUrl defaults to the central platform
+  $env:CF_TOKEN='<cf>'; $env:SETUP_CODE='<code>'; irm https://intentic.dev/connect.ps1 | iex  # own Cloudflare
+
+.EXAMPLE
+  ./connect.ps1 -ConnectToken <token>   # headless/scripted: raw values, no setup code
 #>
 param(
     [string]$PlatformUrl,
-    [string]$ConnectToken
+    [string]$ConnectToken,
+    [string]$SetupCode
 )
 $ErrorActionPreference = 'Stop'
 # Native commands (docker) are expected to exit non-zero on the probes below; we branch on $LASTEXITCODE
@@ -36,6 +40,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 # (the sandbox container reaches your host's platform there) — never shown in the product UI.
 if (-not $PlatformUrl) { $PlatformUrl = if ($env:PLATFORM_URL) { $env:PLATFORM_URL } else { 'https://app.intentic.dev' } }
 if (-not $ConnectToken) { $ConnectToken = $env:CONNECT_TOKEN }
+if (-not $SetupCode) { $SetupCode = $env:SETUP_CODE }
 # The latest RELEASE image via the moving `stable` tag (pulled fresh below), never :latest — see connect.sh for
 # why (the :latest/hand-tagged builds carry internal version 0.0.0, whose @intentic/* deps are unpublished, so
 # `intentic init` can't resolve them; the release only ever moves `stable` onto a published release image).
@@ -72,8 +77,77 @@ $CloudflaredImage = if ($env:CLOUDFLARED_IMAGE) { $env:CLOUDFLARED_IMAGE } else 
 $TunnelToken = $env:TUNNEL_TOKEN
 $SandboxHostname = $env:SANDBOX_HOSTNAME
 $Subdomain = $env:SUBDOMAIN
-$ProvidedTunnel = [bool]$TunnelToken -and [bool]$SandboxHostname
 $SandboxPublicUrl = ''
+
+Write-Host 'intentic: checking Docker...'
+$DockerInstalled = $false
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    # Best-effort guided install: winget can install Docker Desktop, but a first WSL2 setup may require a
+    # reboot — the daemon wait below names that remedy. Never silent: consent (naming Docker's terms) first.
+    if ($env:INSTALL_DOCKER -ne '1') {
+        $answer = Read-Host 'intentic: Docker Desktop is not installed. Install it now via winget? Continuing accepts Docker''s terms (https://www.docker.com/legal/docker-subscription-service-agreement) [Y/n]'
+        if ($answer -match '^[nN]') {
+            Write-Error 'docker is required — install Docker Desktop (https://docs.docker.com/get-docker/) and re-run.'
+            exit 1
+        }
+    }
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Error 'docker is not installed and winget is unavailable — install Docker Desktop (https://docs.docker.com/get-docker/), then re-run.'
+        exit 1
+    }
+    Write-Host 'intentic: installing Docker Desktop (winget, ~500 MB)...'
+    winget install --id Docker.DockerDesktop --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'Docker Desktop install failed — install it manually (https://docs.docker.com/get-docker/), then re-run.'
+        exit 1
+    }
+    # A fresh install isn't on this session's PATH yet; point at the standard install location and launch it.
+    $env:Path += ";$env:ProgramFiles\Docker\Docker\resources\bin"
+    $dockerDesktop = "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
+    if (Test-Path $dockerDesktop) { Start-Process $dockerDesktop }
+    $DockerInstalled = $true
+}
+docker info *> $null
+if ($LASTEXITCODE -ne 0) {
+    if (-not $DockerInstalled) {
+        Write-Error 'the docker daemon is not running. Start Docker Desktop, then re-run.'
+        exit 1
+    }
+    Write-Host 'intentic: waiting for Docker Desktop (accept the first-run dialog if shown)...'
+    for ($i = 0; $i -lt 60; $i++) {
+        Start-Sleep -Seconds 5
+        docker info *> $null
+        if ($LASTEXITCODE -eq 0) { break }
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'the Docker daemon did not come up — if Windows asked to reboot (WSL2 setup), reboot and re-run this command.'
+        exit 1
+    }
+}
+
+# The platform's one-liner carries ONE short-lived setup code instead of raw tokens (nothing secret lands in
+# shell history); redeem it for the per-sandbox values — CONNECT_TOKEN plus either the pre-provisioned tunnel
+# (intentic path) or the zone/subdomain picks (own-Cloudflare path), as KEY=value lines. Env vars still work
+# without a code (headless/scripted installs). Redeemed after the Docker step so a docker-missing failure
+# never burns time against the code's TTL.
+if ($SetupCode) {
+    Write-Host 'intentic: redeeming the setup code...'
+    try {
+        $claim = Invoke-RestMethod -Method Post -Uri "$PlatformUrl/setup/claim" -Body @{ code = $SetupCode }
+    } catch {
+        Write-Error 'the setup code is invalid or expired — refresh the platform''s setup page and copy a fresh command.'
+        exit 1
+    }
+    foreach ($line in ($claim -split "`n")) {
+        $line = $line.Trim()
+        if ($line -like 'CONNECT_TOKEN=*') { $ConnectToken = $line.Substring('CONNECT_TOKEN='.Length) }
+        elseif ($line -like 'TUNNEL_TOKEN=*') { $TunnelToken = $line.Substring('TUNNEL_TOKEN='.Length) }
+        elseif ($line -like 'SANDBOX_HOSTNAME=*') { $SandboxHostname = $line.Substring('SANDBOX_HOSTNAME='.Length) }
+        elseif ($line -like 'ZONE=*') { $Zone = $line.Substring('ZONE='.Length) }
+        elseif ($line -like 'SUBDOMAIN=*') { $Subdomain = $line.Substring('SUBDOMAIN='.Length) }
+    }
+}
+$ProvidedTunnel = [bool]$TunnelToken -and [bool]$SandboxHostname
 
 # Per-sandbox identity, so several sandboxes coexist on one machine. The slug is the same key the public hostname
 # uses: an explicit SUBDOMAIN, else a platform-provided hostname's leftmost label, else the connect-token digest
@@ -102,19 +176,9 @@ $DindContainer = "intentic-dind-host-$Slug"
 $DindImage = if ($env:DIND_IMAGE) { $env:DIND_IMAGE } else { 'ghcr.io/radarsu/intentic/dind-host:latest' }
 $DindVolume = "intentic-dind-docker-$Slug"
 
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Error 'docker is not installed. Install Docker Desktop (Linux containers), then re-run.'
-    exit 1
-}
-docker info *> $null
-if ($LASTEXITCODE -ne 0) {
-    Write-Error 'the docker daemon is not running. Start Docker Desktop, then re-run.'
-    exit 1
-}
-# CONNECT_TOKEN is the only per-user value the one-liner carries; PLATFORM_URL + GOOGLE_CLIENT_ID default to the
-# platform's static values above, so only this must be present.
+# CONNECT_TOKEN is the per-user value the setup code redeems into (or env/-ConnectToken carries directly).
 if (-not $ConnectToken) {
-    Write-Error 'CONNECT_TOKEN is required (env var or -ConnectToken) — copy the one-liner from the platform''s setup screen.'
+    Write-Error 'CONNECT_TOKEN is required (via the setup code, env var, or -ConnectToken) — copy the one-liner from the platform''s setup screen.'
     exit 1
 }
 # Intentic-provided sandboxes (pre-provisioned tunnel, no CF_TOKEN) are reachability-only — SELF_HOST's deploy
@@ -269,4 +333,4 @@ if (-not $SelfHost) {
 }
 Write-Host "Logs: docker logs -f $Container"
 Write-Host "Stop (keeps your /work): docker stop $StopList"
-Write-Host "Reset this sandbox (also removes its /work volume): & ([scriptblock]::Create((irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.ps1))) -Slug $Slug"
+Write-Host "Reset this sandbox (also removes its /work volume): & ([scriptblock]::Create((irm https://intentic.dev/cleanup.ps1))) -Slug $Slug"

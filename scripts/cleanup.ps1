@@ -10,7 +10,7 @@
   intentic sandbox, matched by name prefix. It leaves the platform's own resources (intentic-app-*) untouched.
 
 .EXAMPLE
-  irm https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.ps1 | iex
+  irm https://intentic.dev/cleanup.ps1 | iex
 
 .EXAMPLE
   ./cleanup.ps1 -Slug abc123def456

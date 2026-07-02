@@ -10,12 +10,16 @@
 # boot the sandbox registers its public URL with the platform's directory, so its setup gate flips to "ready".
 #
 # Usage (the platform's setup screen hands you a copy-paste one-liner):
-#   curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/connect.sh | sudo env CF_TOKEN=… CONNECT_TOKEN=… sh
-#   ./connect.sh <PLATFORM_URL> <CONNECT_TOKEN>   (positional; PLATFORM_URL defaults to the central platform)
+#   curl -fsSL https://intentic.dev/connect | sudo sh -s -- <SETUP_CODE>                 (intentic-provided tunnel)
+#   curl -fsSL https://intentic.dev/connect | sudo env CF_TOKEN=… sh -s -- <SETUP_CODE>  (own Cloudflare)
+#   Headless/scripted: skip the code and pass everything as env vars (CONNECT_TOKEN=… CF_TOKEN=… ./connect.sh).
 #
-# Required — only the two values the platform can't bake in:
-#   CF_TOKEN       your Cloudflare API token (Zone:Read, DNS:Edit, Tunnel:Edit) — intentic's reachability fabric; passed to the sandbox as CLOUDFLARE_API_TOKEN
-#   CONNECT_TOKEN  the per-user connection token the platform mints + fills into the one-liner
+# Required:
+#   SETUP_CODE     the short-lived code the platform mints ($1 or env) — redeemed at ${PLATFORM_URL}/setup/claim
+#                  below for CONNECT_TOKEN + the tunnel/zone values, so no raw token rides in the command line.
+#                  Without a code, set CONNECT_TOKEN (+ CF_TOKEN, or TUNNEL_TOKEN + SANDBOX_HOSTNAME) directly.
+#   CF_TOKEN       your Cloudflare API token (Zone:Read, DNS:Edit, Tunnel:Edit) — own-Cloudflare path only; it is
+#                  NEVER sent to the platform and rides into the sandbox as CLOUDFLARE_API_TOKEN
 #
 # Platform statics (defaulted below — overridden only for local dev against a non-prod platform):
 #   PLATFORM_URL         the platform base the sandbox registers back to (default: https://app.intentic.dev)
@@ -31,15 +35,25 @@
 #                   setup is reachability-only. Set `SELF_HOST=1` (needs root, hence `sudo`) to register this
 #                   machine as a deploy target; this is what the platform's "Deploy on this machine" action runs.
 #   SELF_HOST_USER  the service user to create/use for self-host (default: intentic).
+#   INSTALL_DOCKER  set to 1 to install Docker without the interactive consent prompt when it's missing.
 # POSIX sh (this is piped into `sh`, which is dash on Debian/Ubuntu/WSL — no `pipefail`).
 set -eu
 
+# The script curls the platform (setup-code claim) and Cloudflare; a box without curl would otherwise fail
+# with a raw "command not found" mid-run (direct ./connect.sh runs — the piped form obviously has curl).
+if ! command -v curl >/dev/null 2>&1; then
+    echo "error: curl is required — install it and re-run." >&2
+    exit 1
+fi
+
+# The one-liner passes the setup code positionally (`sh -s -- <CODE>`); SETUP_CODE env works for scripted runs.
+SETUP_CODE="${SETUP_CODE:-${1:-}}"
 # The central platform is a single static domain (never self-hosted), so PLATFORM_URL defaults to it. The sandbox
 # registers its public URL at ${PLATFORM_URL}/sandbox/register. LOCAL DEV ONLY: to test against a platform running
 # on your own machine, prepend PLATFORM_URL=http://host.docker.internal:<apiPort> (the sandbox container reaches
 # your host's platform there, not localhost) — this is never shown in the product UI.
-PLATFORM_URL="${PLATFORM_URL:-${1:-https://app.intentic.dev}}"
-CONNECT_TOKEN="${CONNECT_TOKEN:-${2:-}}"
+PLATFORM_URL="${PLATFORM_URL:-https://app.intentic.dev}"
+CONNECT_TOKEN="${CONNECT_TOKEN:-}"
 # The latest RELEASE image via the moving `stable` tag (pulled fresh below), never :latest: the release pipeline
 # bumps every @intentic/* package to the release version, publishes them to npm, THEN builds this image and moves
 # `stable` onto it — so its bundled CLI is a published version and the intent repo `intentic init` scaffolds
@@ -85,27 +99,6 @@ TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
 SANDBOX_HOSTNAME="${SANDBOX_HOSTNAME:-}"
 SUBDOMAIN="${SUBDOMAIN:-}"
 SANDBOX_PUBLIC_URL=""
-PROVIDED_TUNNEL=""
-if [ -n "$TUNNEL_TOKEN" ] && [ -n "$SANDBOX_HOSTNAME" ]; then
-    PROVIDED_TUNNEL=1
-fi
-
-# Per-sandbox identity, so several sandboxes coexist on one machine. The slug is the same key the public hostname
-# uses: an explicit SUBDOMAIN, else a platform-provided hostname's leftmost label, else the connect-token digest
-# that forms sandbox-<id>. So distinct tokens get distinct container/volume/network (which persist the cloned repos
-# and let the tunnel ingress + cloudflared sidecar resolve by DNS), while re-running with the same token replaces
-# just that one. sha256sum is coreutils on the Linux/WSL targets; shasum -a 256 is the macOS fallback.
-if [ -n "$SUBDOMAIN" ]; then
-    SLUG="$SUBDOMAIN"
-elif [ -n "$PROVIDED_TUNNEL" ]; then
-    SLUG="${SANDBOX_HOSTNAME%%.*}"
-else
-    SLUG="$(printf '%s' "$CONNECT_TOKEN" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)"
-fi
-CONTAINER="intentic-sandbox-${SLUG}"
-WORKSPACE_VOLUME="intentic-workspace-${SLUG}"
-NETWORK="intentic-workspace-${SLUG}"
-TUNNEL_CONTAINER="intentic-sandbox-tunnel-${SLUG}"
 # The stable name the tunnel ingress dials. The workspace answers to it via a --network-alias on its own per-sandbox
 # network, so the real container name stays unique (coexistence) while BOTH the platform-provisioned tunnel (whose
 # ingress origin is fixed to this name) and the own-Cloudflare tunnel below reach the daemon by one constant.
@@ -265,21 +258,147 @@ pull_image() {
     docker pull "$image"
 }
 
+# Consent gate for installing Docker: a root-level system change beyond the sandbox itself, so never silent.
+# INSTALL_DOCKER=1 pre-consents (headless runs); otherwise ask on /dev/tty (the human is at a terminal even
+# under `curl … | sh` — stdin is the script), and fail with the remedy when there is no terminal to ask.
+confirm_install_docker() {
+    if [ "${INSTALL_DOCKER:-}" = "1" ]; then
+        return 0
+    fi
+    if [ ! -r /dev/tty ]; then
+        echo "error: docker is not installed and there is no terminal to ask — re-run with INSTALL_DOCKER=1" >&2
+        echo "       to install it automatically, or install it yourself: https://docs.docker.com/get-docker/" >&2
+        exit 1
+    fi
+    printf '%s [Y/n] ' "$1" >&2
+    read -r answer </dev/tty || answer=""
+    case "$answer" in
+        n* | N*)
+            echo "error: docker is required — install it (https://docs.docker.com/get-docker/) and re-run." >&2
+            exit 1
+            ;;
+    esac
+}
+
+# Docker Engine via Docker's official convenience script. Enabling dockerd on boot is also what brings the
+# sandbox + tunnel containers (--restart unless-stopped) back after a reboot.
+install_docker_linux() {
+    confirm_install_docker "intentic: Docker is not installed. Install it now via get.docker.com?"
+    if [ "$(id -u)" = 0 ]; then
+        docker_sudo=""
+    else
+        docker_sudo="sudo"
+    fi
+    echo "intentic: installing Docker Engine (get.docker.com)…"
+    curl -fsSL https://get.docker.com | $docker_sudo sh
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        $docker_sudo systemctl enable --now docker >/dev/null 2>&1 || true
+    elif command -v service >/dev/null 2>&1; then
+        $docker_sudo service docker start >/dev/null 2>&1 || true
+    fi
+}
+
+# Docker Desktop, guided: its dmg ships a CLI installer, so under the one-liner's sudo this installs without
+# clicking — only the first-run dialog stays manual (the daemon wait below covers it). --accept-license is
+# passed only after the consent prompt above named Docker's terms. --user skips the privileged-helper prompt
+# for the human who invoked sudo.
+install_docker_macos() {
+    confirm_install_docker "intentic: Docker Desktop is not installed. Download (~1.5 GB) and install it now? Continuing accepts Docker's terms (https://www.docker.com/legal/docker-subscription-service-agreement)."
+    case "$(uname -m)" in
+        arm64) dmg_arch="arm64" ;;
+        *) dmg_arch="amd64" ;;
+    esac
+    dmg="$(mktemp -d)/Docker.dmg"
+    echo "intentic: downloading Docker Desktop (~1.5 GB)…"
+    curl -fL "https://desktop.docker.com/mac/main/${dmg_arch}/Docker.dmg" -o "$dmg"
+    echo "intentic: installing Docker Desktop…"
+    hdiutil attach "$dmg" -nobrowse -quiet
+    /Volumes/Docker/Docker.app/Contents/MacOS/install --accept-license --user="${SUDO_USER:-$USER}"
+    hdiutil detach /Volumes/Docker -quiet || true
+    rm -f "$dmg"
+    # Docker Desktop is a user-session app — launch it as the human who invoked sudo, not as root.
+    if [ -n "${SUDO_USER:-}" ]; then
+        sudo -u "$SUDO_USER" open -a Docker
+    else
+        open -a Docker
+    fi
+}
+
 echo "intentic: checking Docker…"
+docker_installed=""
 if ! command -v docker >/dev/null 2>&1; then
-    echo "error: docker is not installed. Install Docker Engine (Linux) or Docker Desktop, then re-run." >&2
-    exit 1
+    case "$(uname -s)" in
+        Linux) install_docker_linux ;;
+        Darwin) install_docker_macos ;;
+        *)
+            echo "error: docker is not installed. Install Docker Desktop (https://docs.docker.com/get-docker/), then re-run." >&2
+            exit 1
+            ;;
+    esac
+    docker_installed=1
 fi
 # `docker info` aggregates CLI-plugin data and can hang (e.g. docker-scout/buildx); `docker version`
 # with a server-format does a fast daemon round-trip and fails cleanly if the daemon is unreachable.
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
-    echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
-    exit 1
+    if [ -z "$docker_installed" ]; then
+        echo "error: the docker daemon is not running or not reachable. Start Docker, then re-run." >&2
+        exit 1
+    fi
+    # A freshly installed daemon takes a moment (Docker Desktop: first-run dialog + VM boot) — wait up to 5 min.
+    echo "intentic: waiting for the Docker daemon (accept Docker Desktop's first-run dialog if shown)…"
+    i=0
+    until docker version --format '{{.Server.Version}}' >/dev/null 2>&1; do
+        i=$((i + 1))
+        if [ "$i" -ge 60 ]; then
+            echo "error: the Docker daemon did not come up — start Docker, then re-run this command." >&2
+            exit 1
+        fi
+        sleep 5
+    done
 fi
-# CONNECT_TOKEN is the only per-user value the one-liner carries — the platform mints it and fills it in.
-# PLATFORM_URL + GOOGLE_CLIENT_ID default to the platform's static values above, so only this must be present.
+
+# The platform's one-liner carries ONE short-lived setup code instead of raw tokens (nothing secret lands in
+# shell history or `ps`); redeem it for the per-sandbox values — CONNECT_TOKEN plus either the pre-provisioned
+# tunnel (intentic path) or the zone/subdomain picks (own-Cloudflare path), as KEY=value lines. Env vars still
+# work without a code (headless/scripted installs) — this block is simply skipped then. Redeemed after the
+# Docker step so a docker-missing failure never burns time against the code's TTL.
+if [ -n "$SETUP_CODE" ]; then
+    echo "intentic: redeeming the setup code…"
+    if ! claim="$(curl -fsS "$PLATFORM_URL/setup/claim" -d "code=$SETUP_CODE")"; then
+        echo "error: the setup code is invalid or expired — refresh the platform's setup page and copy a fresh command." >&2
+        exit 1
+    fi
+    CONNECT_TOKEN="$(printf '%s\n' "$claim" | sed -n 's/^CONNECT_TOKEN=//p')"
+    TUNNEL_TOKEN="$(printf '%s\n' "$claim" | sed -n 's/^TUNNEL_TOKEN=//p')"
+    SANDBOX_HOSTNAME="$(printf '%s\n' "$claim" | sed -n 's/^SANDBOX_HOSTNAME=//p')"
+    ZONE="$(printf '%s\n' "$claim" | sed -n 's/^ZONE=//p')"
+    SUBDOMAIN="$(printf '%s\n' "$claim" | sed -n 's/^SUBDOMAIN=//p')"
+fi
+PROVIDED_TUNNEL=""
+if [ -n "$TUNNEL_TOKEN" ] && [ -n "$SANDBOX_HOSTNAME" ]; then
+    PROVIDED_TUNNEL=1
+fi
+
+# Per-sandbox identity, so several sandboxes coexist on one machine. The slug is the same key the public hostname
+# uses: an explicit SUBDOMAIN, else a platform-provided hostname's leftmost label, else the connect-token digest
+# that forms sandbox-<id>. So distinct tokens get distinct container/volume/network (which persist the cloned repos
+# and let the tunnel ingress + cloudflared sidecar resolve by DNS), while re-running with the same token replaces
+# just that one. sha256sum is coreutils on the Linux/WSL targets; shasum -a 256 is the macOS fallback.
+if [ -n "$SUBDOMAIN" ]; then
+    SLUG="$SUBDOMAIN"
+elif [ -n "$PROVIDED_TUNNEL" ]; then
+    SLUG="${SANDBOX_HOSTNAME%%.*}"
+else
+    SLUG="$(printf '%s' "$CONNECT_TOKEN" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)"
+fi
+CONTAINER="intentic-sandbox-${SLUG}"
+WORKSPACE_VOLUME="intentic-workspace-${SLUG}"
+NETWORK="intentic-workspace-${SLUG}"
+TUNNEL_CONTAINER="intentic-sandbox-tunnel-${SLUG}"
+
+# CONNECT_TOKEN is the per-user value the setup code redeems into (or env carries directly).
 if [ -z "$CONNECT_TOKEN" ]; then
-    echo "error: CONNECT_TOKEN is required (env or positional arg) — copy the one-liner from the platform's setup screen." >&2
+    echo "error: CONNECT_TOKEN is required (via the setup code or env) — copy the one-liner from the platform's setup screen." >&2
     exit 1
 fi
 
@@ -302,10 +421,19 @@ if [ -z "$PROVIDED_TUNNEL" ] && [ -z "$CF_TOKEN" ]; then
     exit 1
 fi
 # Validate the token only when the user supplied one (own-Cloudflare path); the intentic-provided path has none.
+# A network failure is reported as such — not conflated with a bad token.
 if [ -n "$CF_TOKEN" ]; then
     echo "intentic: validating Cloudflare API token…"
-    cf_verify="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
-    if ! printf '%s' "$cf_verify" | grep -q '"success": *true' || ! printf '%s' "$cf_verify" | grep -q '"status": *"active"'; then
+    if ! cf_verify="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>&1)"; then
+        case "$cf_verify" in
+            *401* | *403*) ;; # an auth error IS a bad token — fall through to the invalid-token message below
+            *)
+                echo "error: could not reach the Cloudflare API to validate the token: $cf_verify" >&2
+                exit 1
+                ;;
+        esac
+    fi
+    if ! printf '%s' "$cf_verify" | grep -q '"success":[[:space:]]*true' || ! printf '%s' "$cf_verify" | grep -q '"status":[[:space:]]*"active"'; then
         echo "error: the Cloudflare API token is invalid or inactive (token verify failed). Re-check the token and its" >&2
         echo "       scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) at https://dash.cloudflare.com/profile/api-tokens." >&2
         exit 1
@@ -318,7 +446,10 @@ fi
 # token's zones (same Bearer auth as the verify above) and parse "name":"…" with grep/sed — no jq on a stock box.
 if [ -z "$PROVIDED_TUNNEL" ] && [ -z "$ZONE" ]; then
     echo "intentic: resolving the Cloudflare zone…"
-    zones_json="$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>/dev/null || true)"
+    if ! zones_json="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>&1)"; then
+        echo "error: could not list Cloudflare zones: $zones_json" >&2
+        exit 1
+    fi
     zones="$(printf '%s' "$zones_json" | grep -o '"name":"[^"]*"' | sed 's/^"name":"//;s/"$//' || true)"
     zone_count="$(printf '%s\n' "$zones" | grep -c . || true)"
     if [ "$zone_count" -eq 0 ]; then
@@ -493,4 +624,4 @@ if [ -z "$SELF_HOST" ]; then
 fi
 echo "Logs: docker logs -f ${CONTAINER}"
 echo "Stop (keeps your /work): docker stop ${CONTAINER} ${TUNNEL_CONTAINER}"
-echo "Reset this sandbox (also removes its /work volume): curl -fsSL https://raw.githubusercontent.com/radarsu/intentic/main/scripts/cleanup.sh | sh -s -- ${SLUG}"
+echo "Reset this sandbox (also removes its /work volume): curl -fsSL https://intentic.dev/cleanup | sh -s -- ${SLUG}"
