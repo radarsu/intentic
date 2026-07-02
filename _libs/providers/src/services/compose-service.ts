@@ -1,13 +1,15 @@
 import type { Provider, ResolvedInputs } from "@intentic/engine";
-import type { z } from "zod";
+import { z } from "zod";
 import { parseInputs, sshSchema, sshTarget } from "../core/inputs.js";
 import type { SshSession } from "../core/ssh.js";
 import type { SshExecutor } from "../core/ssh.js";
 
 // The inputs every catalog service shares (see state-resolver's resolveService): the host SSH block, the
-// host-internal ip, the routed domain, and the intentic-seeded admin identity. Per-service schemas extend
-// this with their pinned image inputs.
-export const serviceSchema = sshSchema.extend({});
+// host-internal ip, and the routed domain. Per-service schemas extend this with their pinned image inputs.
+export const serviceSchema = sshSchema.extend({
+    internalIp: z.string(),
+    domain: z.string(),
+});
 
 // One line of the write-once .env: a literal `value` (single-quoted into the shell), or omitted to generate
 // a host-side `openssl rand -hex 32` — the signoz JWT pattern, so secrets survive restarts and re-applies.
