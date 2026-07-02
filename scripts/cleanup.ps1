@@ -29,11 +29,11 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 # (intentic-sandbox-tunnel-<slug>) shares the intentic-sandbox- prefix, so the prefix pass catches it too.
 if ($Slug) {
     $containers = @("intentic-sandbox-$Slug", "intentic-sandbox-tunnel-$Slug", "intentic-dind-host-$Slug")
-    $volumes = @("intentic-workspace-$Slug", "intentic-dind-docker-$Slug")
+    $volumes = @("intentic-workspace-$Slug", "intentic-history-$Slug", "intentic-dind-docker-$Slug")
     $networks = @("intentic-workspace-$Slug")
 } else {
     $containers = @(docker ps -aq --filter 'name=intentic-sandbox-') + @(docker ps -aq --filter 'name=intentic-dind-host-')
-    $volumes = @(docker volume ls -q --filter 'name=intentic-workspace-') + @(docker volume ls -q --filter 'name=intentic-dind-docker-')
+    $volumes = @(docker volume ls -q --filter 'name=intentic-workspace-') + @(docker volume ls -q --filter 'name=intentic-history-') + @(docker volume ls -q --filter 'name=intentic-dind-docker-')
     $networks = @(docker network ls -q --filter 'name=intentic-workspace-')
 }
 

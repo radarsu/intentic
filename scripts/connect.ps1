@@ -171,6 +171,9 @@ if ($Subdomain) {
 }
 $Container = "intentic-sandbox-$Slug"
 $WorkspaceVolume = "intentic-workspace-$Slug"
+# Snapshot history + protected repo git dirs live on their own volume, mounted OUTSIDE /work so agent accidents
+# in the workspace can't destroy them.
+$HistoryVolume = "intentic-history-$Slug"
 $Network   = "intentic-workspace-$Slug"
 $TunnelContainer = "intentic-sandbox-tunnel-$Slug"
 # The stable name the tunnel ingress dials. The workspace answers to it via a --network-alias on its own per-sandbox
@@ -301,7 +304,9 @@ docker run -d --restart unless-stopped --name $Container `
     --network-alias $OriginHost `
     --add-host host.docker.internal:host-gateway `
     -v "${WorkspaceVolume}:/work" `
+    -v "${HistoryVolume}:/history" `
     -e WORKSPACE_ROOT=/work `
+    -e HISTORY_ROOT=/history `
     -e SANDBOX_HOST=0.0.0.0 `
     -e SANDBOX_PORT=8787 `
     -e "SANDBOX_NAME=$Container" `
