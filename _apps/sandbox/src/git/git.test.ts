@@ -1,3 +1,6 @@
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "vitest";
 import { type GitRunner, gitClone, gitCommitAll, gitStatus } from "./git.js";
 
@@ -29,13 +32,16 @@ test("gitCommitAll stages, commits with the author identity, and reports a commi
     expect(calls).toContainEqual(["/work/app", "-c", "user.name=intentic", "-c", "user.email=agent@intentic.dev", "commit", "-m", "agent edit"]);
 });
 
-test("gitClone forwards the auth header, branch, and separate git dir flags", async () => {
+test("gitClone forwards the auth header, branch, and separate git dir flags, and creates the git dir's parent", async () => {
+    const historyRoot = await mkdtemp(join(tmpdir(), "intentic-git-test-"));
+    await rm(historyRoot, { recursive: true });
+    const separateGitDir = join(historyRoot, "gits", "extra");
     const { git, calls } = recordingGit({});
     await gitClone(
         "/work/repositories",
         "extra",
         "https://example.com/extra.git",
-        { branch: "main", authHeader: "Authorization: Basic abc", separateGitDir: "/history/gits/extra" },
+        { branch: "main", authHeader: "Authorization: Basic abc", separateGitDir },
         git,
     );
     expect(calls).toEqual([
@@ -46,11 +52,13 @@ test("gitClone forwards the auth header, branch, and separate git dir flags", as
             "clone",
             "--branch",
             "main",
-            "--separate-git-dir=/history/gits/extra",
+            `--separate-git-dir=${separateGitDir}`,
             "https://example.com/extra.git",
             "extra",
         ],
     ]);
+    await expect(access(join(historyRoot, "gits"))).resolves.toBeUndefined();
+    await rm(historyRoot, { recursive: true });
 });
 
 test("gitClone with no options is a bare clone", async () => {

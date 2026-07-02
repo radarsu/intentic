@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -18,6 +19,10 @@ const defaultGit: GitRunner = (dir, args) => exec("git", ["-C", dir, ...args]);
 // outside the worktree (the in-tree .git becomes a pointer file), so workspace accidents can't destroy history.
 export const gitInit = async (dir: string, separateGitDir?: string, git: GitRunner = defaultGit): Promise<void> => {
     await mkdir(dir, { recursive: true });
+    if (separateGitDir !== undefined) {
+        // Git creates the git dir itself but not its parents (fresh /history volume has no gits/).
+        await mkdir(dirname(separateGitDir), { recursive: true });
+    }
     await git(dir, ["init", "-q", ...(separateGitDir !== undefined ? [`--separate-git-dir=${separateGitDir}`] : [])]);
 };
 
@@ -80,6 +85,10 @@ export const gitClone = async (
     options?: GitCloneOptions,
     git: GitRunner = defaultGit,
 ): Promise<void> => {
+    if (options?.separateGitDir !== undefined) {
+        // Git creates the git dir itself but not its parents (fresh /history volume has no gits/).
+        await mkdir(dirname(options.separateGitDir), { recursive: true });
+    }
     await git(parentDir, [
         ...(options?.authHeader !== undefined ? ["-c", `http.extraheader=${options.authHeader}`] : []),
         "clone",
