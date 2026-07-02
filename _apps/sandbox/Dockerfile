@@ -75,6 +75,8 @@ COPY --from=build /out/sandbox /opt/sandbox
 COPY _apps/sandbox/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 WORKDIR /work
-ENV WORKSPACE_ROOT=/work SANDBOX_PORT=8787
+# LANG: without a UTF-8 locale zsh's line editor counts BYTES as columns, so bira's multibyte prompt glyphs
+# (╰─, ↵) desync the cursor and corrupt the prompt after any non-zero exit status. C.utf8 is glibc-built-in.
+ENV WORKSPACE_ROOT=/work SANDBOX_PORT=8787 LANG=C.utf8
 EXPOSE 8787 22
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

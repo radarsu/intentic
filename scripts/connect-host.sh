@@ -7,14 +7,24 @@
 # your sandbox's daemon via POST /enroll (authenticated by your connection token). It does NOT create or
 # recreate a sandbox — that already exists from setup.
 #
-# Usage (the Infra screen hands you a copy-paste one-liner):
-#   curl -fsSL https://intentic.dev/connect-host \
-#     | sudo env SANDBOX_URL=… CONNECT_TOKEN=… CF_TOKEN=… ZONE=… HOST_NAME=… sh
+# Two paths, matching the sandbox's setup mode (the Infra screen hands you the right one-liner):
+#   own Cloudflare — CF_TOKEN creates this host's tunnel + DNS on your zone:
+#     curl -fsSL https://intentic.dev/connect-host \
+#       | sudo env SANDBOX_URL=… CONNECT_TOKEN=… CF_TOKEN=… ZONE=… HOST_NAME=… sh
+#   intentic-provided — the platform already minted the tunnel under intentic's zone; the command carries its
+#   narrow connector token instead of a Cloudflare token (no tunnel creation here):
+#     curl -fsSL https://intentic.dev/connect-host \
+#       | sudo env SANDBOX_URL=… CONNECT_TOKEN=… HOST_SSH_TUNNEL_TOKEN=… HOST_SSH_HOSTNAME=… HOST_NAME=… sh
 #
 # Required:
 #   SANDBOX_URL    your sandbox's public URL (https://sandbox-<id>.<zone>); the script POSTs $SANDBOX_URL/enroll
 #   CONNECT_TOKEN  your per-user connection token (authorizes /enroll; also salts this host's tunnel id)
-#   CF_TOKEN       your Cloudflare API token (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) — creates the host tunnel
+#   CF_TOKEN       your Cloudflare API token (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit) — creates the host
+#                  tunnel; not needed (and unused) when a pre-provisioned tunnel is supplied
+# Pre-provisioned tunnel (both together; minted by the Infra screen for intentic-provided sandboxes):
+#   HOST_SSH_TUNNEL_TOKEN  the tunnel's cloudflared connector token
+#   HOST_SSH_HOSTNAME      its public hostname (ssh-<id>.<zone>); becomes the host's registered address
+#                          — HOST_NAME is then required: it salted the minted tunnel id on the Infra screen
 # Optional:
 #   ZONE                 Cloudflare zone (when the token sees several)
 #   HOST_NAME            inventory name for this host (default: this machine's hostname, sanitized)
@@ -35,11 +45,20 @@ SANDBOX_URL="${SANDBOX_URL:-}"
 CONNECT_TOKEN="${CONNECT_TOKEN:-}"
 CF_TOKEN="${CF_TOKEN:-}"
 ZONE="${ZONE:-}"
+HOST_SSH_TUNNEL_TOKEN="${HOST_SSH_TUNNEL_TOKEN:-}"
+HOST_SSH_HOSTNAME="${HOST_SSH_HOSTNAME:-}"
 HOST_USER="${HOST_USER:-intentic}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/radarsu/intentic/sandbox:stable}"
 CLOUDFLARED_VERSION="${CLOUDFLARED_VERSION:-2026.6.1}"
 HOST_SSH_KEY=""
 SUDO=""
+
+# Pre-provisioned host tunnel (intentic-provided sandboxes): the platform minted the tunnel + DNS under its own
+# zone and the one-liner carries the connector token + hostname — no Cloudflare token, no tunnel creation here.
+PROVIDED_TUNNEL=""
+if [ -n "$HOST_SSH_TUNNEL_TOKEN" ] && [ -n "$HOST_SSH_HOSTNAME" ]; then
+    PROVIDED_TUNNEL=1
+fi
 
 # HOST_NAME defaults to this machine's hostname, sanitized to a valid deploy.config identifier (^[a-zA-Z_]\w*$),
 # lower-cased, non-alnum → `_`; a leading digit is prefixed with `_`; "self" is reserved (legacy HOST_SSH_KEY), → host.
@@ -50,6 +69,12 @@ default_host_name() {
     [ "$h" != "self" ] || h="host"
     printf '%s' "$h"
 }
+# The pre-provisioned path requires an explicit HOST_NAME: the minted tunnel id is salted with the name picked
+# on the Infra screen, so a machine-hostname default here would silently desync from it.
+if [ -n "$PROVIDED_TUNNEL" ] && [ -z "${HOST_NAME:-}" ]; then
+    echo "error: HOST_NAME is required with a pre-provisioned tunnel — copy the one-liner from the Infra screen." >&2
+    exit 1
+fi
 HOST_NAME="${HOST_NAME:-$(default_host_name)}"
 
 # Enrollment mutates the host (creates a user, installs packages), so it needs root. Prefer already-root, else
@@ -238,7 +263,10 @@ if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
         sleep 2
     done
 fi
-for var in SANDBOX_URL CONNECT_TOKEN CF_TOKEN; do
+# CF_TOKEN only creates the host tunnel — a pre-provisioned one makes it unnecessary.
+required_vars="SANDBOX_URL CONNECT_TOKEN"
+[ -n "$PROVIDED_TUNNEL" ] || required_vars="$required_vars CF_TOKEN"
+for var in $required_vars; do
     eval "val=\${$var}"
     if [ -z "$val" ]; then
         echo "error: $var is required — copy the one-liner from the Infra screen." >&2
@@ -247,68 +275,71 @@ for var in SANDBOX_URL CONNECT_TOKEN CF_TOKEN; do
 done
 
 # Validate the Cloudflare token up front (same verify endpoint intentic uses), then resolve the zone if unset.
-# A network failure is reported as such — not conflated with a bad token.
-echo "intentic: validating Cloudflare API token…"
-if ! cf_verify="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>&1)"; then
-    case "$cf_verify" in
-        *401* | *403*) ;; # an auth error IS a bad token — fall through to the invalid-token message below
-        *)
-            echo "error: could not reach the Cloudflare API to validate the token: $cf_verify" >&2
-            exit 1
-            ;;
-    esac
-fi
-if ! printf '%s' "$cf_verify" | grep -q '"success":[[:space:]]*true' || ! printf '%s' "$cf_verify" | grep -q '"status":[[:space:]]*"active"'; then
-    echo "error: the Cloudflare API token is invalid or inactive. Re-check it + its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit)." >&2
-    exit 1
-fi
-if [ -z "$ZONE" ]; then
-    echo "intentic: resolving the Cloudflare zone…"
-    if ! zones_json="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>&1)"; then
-        echo "error: could not list Cloudflare zones: $zones_json" >&2
-        exit 1
-    fi
-    zones="$(printf '%s' "$zones_json" | grep -o '"name":"[^"]*"' | sed 's/^"name":"//;s/"$//' || true)"
-    zone_count="$(printf '%s\n' "$zones" | grep -c . || true)"
-    if [ "$zone_count" -eq 0 ]; then
-        echo "error: the Cloudflare API token sees no zones — add a domain to the account, or broaden the token's" >&2
-        echo "       Zone:Read scope, at https://dash.cloudflare.com/profile/api-tokens, then re-run." >&2
-        exit 1
-    elif [ "$zone_count" -eq 1 ]; then
-        ZONE="$zones"
-        echo "intentic: using the only zone the token sees — $ZONE."
-    elif [ -r /dev/tty ]; then
-        # The human is at a terminal even under `curl … | sh` (stdin is the script), so prompt on /dev/tty.
-        echo "intentic: this Cloudflare token can use several zones — pick the one this host's tunnel should use:" >&2
-        i=1
-        for z in $zones; do
-            echo "  $i) $z" >&2
-            i=$((i + 1))
-        done
-        printf "intentic: zone number [1]: " >&2
-        read -r choice </dev/tty || choice=1
-        [ -n "$choice" ] || choice=1
-        case "$choice" in
-            *[!0-9]*)
-                echo "error: invalid selection '$choice'." >&2
+# A network failure is reported as such — not conflated with a bad token. The pre-provisioned path skips both:
+# there is no token, and the hostname (with its zone) was already minted.
+if [ -z "$PROVIDED_TUNNEL" ]; then
+    echo "intentic: validating Cloudflare API token…"
+    if ! cf_verify="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify 2>&1)"; then
+        case "$cf_verify" in
+            *401* | *403*) ;; # an auth error IS a bad token — fall through to the invalid-token message below
+            *)
+                echo "error: could not reach the Cloudflare API to validate the token: $cf_verify" >&2
                 exit 1
                 ;;
         esac
-        ZONE="$(printf '%s\n' "$zones" | sed -n "${choice}p")"
-        if [ -z "$ZONE" ]; then
-            echo "error: '$choice' is out of range." >&2
+    fi
+    if ! printf '%s' "$cf_verify" | grep -q '"success":[[:space:]]*true' || ! printf '%s' "$cf_verify" | grep -q '"status":[[:space:]]*"active"'; then
+        echo "error: the Cloudflare API token is invalid or inactive. Re-check it + its scopes (Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit)." >&2
+        exit 1
+    fi
+    if [ -z "$ZONE" ]; then
+        echo "intentic: resolving the Cloudflare zone…"
+        if ! zones_json="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=50" 2>&1)"; then
+            echo "error: could not list Cloudflare zones: $zones_json" >&2
             exit 1
         fi
-        echo "intentic: using zone $ZONE."
-    else
-        # Non-interactive (no controlling terminal): can't prompt, so name the zones and the exact remedy.
-        first="$(printf '%s\n' "$zones" | sed -n '1p')"
-        echo "error: the Cloudflare API token sees multiple zones; set ZONE to choose one. The token can use:" >&2
-        for z in $zones; do
-            echo "  - $z" >&2
-        done
-        echo "       Re-run with ZONE set in the environment (alongside CF_TOKEN), e.g. ZONE=$first" >&2
-        exit 1
+        zones="$(printf '%s' "$zones_json" | grep -o '"name":"[^"]*"' | sed 's/^"name":"//;s/"$//' || true)"
+        zone_count="$(printf '%s\n' "$zones" | grep -c . || true)"
+        if [ "$zone_count" -eq 0 ]; then
+            echo "error: the Cloudflare API token sees no zones — add a domain to the account, or broaden the token's" >&2
+            echo "       Zone:Read scope, at https://dash.cloudflare.com/profile/api-tokens, then re-run." >&2
+            exit 1
+        elif [ "$zone_count" -eq 1 ]; then
+            ZONE="$zones"
+            echo "intentic: using the only zone the token sees — $ZONE."
+        elif [ -r /dev/tty ]; then
+            # The human is at a terminal even under `curl … | sh` (stdin is the script), so prompt on /dev/tty.
+            echo "intentic: this Cloudflare token can use several zones — pick the one this host's tunnel should use:" >&2
+            i=1
+            for z in $zones; do
+                echo "  $i) $z" >&2
+                i=$((i + 1))
+            done
+            printf "intentic: zone number [1]: " >&2
+            read -r choice </dev/tty || choice=1
+            [ -n "$choice" ] || choice=1
+            case "$choice" in
+                *[!0-9]*)
+                    echo "error: invalid selection '$choice'." >&2
+                    exit 1
+                    ;;
+            esac
+            ZONE="$(printf '%s\n' "$zones" | sed -n "${choice}p")"
+            if [ -z "$ZONE" ]; then
+                echo "error: '$choice' is out of range." >&2
+                exit 1
+            fi
+            echo "intentic: using zone $ZONE."
+        else
+            # Non-interactive (no controlling terminal): can't prompt, so name the zones and the exact remedy.
+            first="$(printf '%s\n' "$zones" | sed -n '1p')"
+            echo "error: the Cloudflare API token sees multiple zones; set ZONE to choose one. The token can use:" >&2
+            for z in $zones; do
+                echo "  - $z" >&2
+            done
+            echo "       Re-run with ZONE set in the environment (alongside CF_TOKEN), e.g. ZONE=$first" >&2
+            exit 1
+        fi
     fi
 fi
 
@@ -317,28 +348,38 @@ setup_host
 echo "intentic: pulling the intentic CLI image (${SANDBOX_IMAGE})…"
 pull_image "$SANDBOX_IMAGE"
 
-echo "intentic: creating this host's SSH tunnel…"
-zone_env=""
-[ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
-host_ssh_out="$(docker run --rm --entrypoint intentic \
-    -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
-    -e CONNECT_TOKEN="$CONNECT_TOKEN" \
-    -e HOST_NAME="$HOST_NAME" \
-    $zone_env \
-    "$SANDBOX_IMAGE" host-ssh-tunnel)"
-HOST_SSH_TUNNEL_TOKEN="$(printf '%s\n' "$host_ssh_out" | sed -n 's/^HOST_SSH_TUNNEL_TOKEN=//p')"
-HOST_ADDRESS="$(printf '%s\n' "$host_ssh_out" | sed -n 's/^HOST_SSH_HOSTNAME=//p')"
-if [ -z "$HOST_SSH_TUNNEL_TOKEN" ] || [ -z "$HOST_ADDRESS" ]; then
-    echo "error: failed to create this host's SSH tunnel (see the output above)." >&2
-    exit 1
+if [ -n "$PROVIDED_TUNNEL" ]; then
+    echo "intentic: using the pre-provisioned host SSH tunnel ($HOST_SSH_HOSTNAME)."
+    HOST_ADDRESS="$HOST_SSH_HOSTNAME"
+else
+    echo "intentic: creating this host's SSH tunnel…"
+    zone_env=""
+    [ -n "$ZONE" ] && zone_env="-e ZONE=$ZONE"
+    host_ssh_out="$(docker run --rm --entrypoint intentic \
+        -e CLOUDFLARE_API_TOKEN="$CF_TOKEN" \
+        -e CONNECT_TOKEN="$CONNECT_TOKEN" \
+        -e HOST_NAME="$HOST_NAME" \
+        $zone_env \
+        "$SANDBOX_IMAGE" host-ssh-tunnel)"
+    HOST_SSH_TUNNEL_TOKEN="$(printf '%s\n' "$host_ssh_out" | sed -n 's/^HOST_SSH_TUNNEL_TOKEN=//p')"
+    HOST_ADDRESS="$(printf '%s\n' "$host_ssh_out" | sed -n 's/^HOST_SSH_HOSTNAME=//p')"
+    if [ -z "$HOST_SSH_TUNNEL_TOKEN" ] || [ -z "$HOST_ADDRESS" ]; then
+        echo "error: failed to create this host's SSH tunnel (see the output above)." >&2
+        exit 1
+    fi
 fi
 install_host_cloudflared
 run_host_ssh_connector "$HOST_SSH_TUNNEL_TOKEN"
 
 # JSON-encode the multi-line private key with the image's node (no jq on a stock box), then POST /enroll.
+# cfToken rides along only on the own-Cloudflare path — the pre-provisioned one has no token to hand over.
 echo "intentic: enrolling with the sandbox…"
 key_json="$(docker run --rm --entrypoint node -e K="$HOST_SSH_KEY" "$SANDBOX_IMAGE" -e 'process.stdout.write(JSON.stringify(process.env.K))')"
-body="{\"name\":\"$HOST_NAME\",\"user\":\"$HOST_USER\",\"address\":\"$HOST_ADDRESS\",\"port\":22,\"via\":\"cloudflared\",\"sshKey\":$key_json,\"cfToken\":\"$CF_TOKEN\"}"
+cf_json=""
+if [ -n "$CF_TOKEN" ]; then
+    cf_json=",\"cfToken\":\"$CF_TOKEN\""
+fi
+body="{\"name\":\"$HOST_NAME\",\"user\":\"$HOST_USER\",\"address\":\"$HOST_ADDRESS\",\"port\":22,\"via\":\"cloudflared\",\"sshKey\":$key_json$cf_json}"
 code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$SANDBOX_URL/enroll" \
     -H "x-intentic-connect: $CONNECT_TOKEN" -H "content-type: application/json" -d "$body" || echo "000")"
 if [ "$code" != "200" ]; then

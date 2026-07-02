@@ -418,11 +418,14 @@ if [ -z "$CONNECT_TOKEN" ]; then
     exit 1
 fi
 
-# Intentic-provided sandboxes (pre-provisioned tunnel, no CF_TOKEN) are reachability-only — the host tunnel that
-# SELF_HOST wires needs your OWN Cloudflare token. Fail fast rather than deep inside the host-tunnel step.
+# Intentic-provided sandboxes (pre-provisioned tunnel, no CF_TOKEN) can't wire SELF_HOST here — its host tunnel
+# would need your OWN Cloudflare token. The Infra screen covers it instead: it mints an intentic-hosted host
+# tunnel and hands you a connect-host one-liner (no Cloudflare token) to run on this machine. Fail fast rather
+# than deep inside the host-tunnel step.
 if [ -n "$PROVIDED_TUNNEL" ] && [ -n "$SELF_HOST" ]; then
-    echo "error: SELF_HOST needs your own Cloudflare API token (CF_TOKEN). Intentic-provided sandboxes are" >&2
-    echo "       reachability-only — add your own Cloudflare from the workspace to deploy onto this machine." >&2
+    echo "error: SELF_HOST needs your own Cloudflare API token (CF_TOKEN). On an intentic-provided sandbox," >&2
+    echo "       connect this machine from the workspace's Infra screen instead — its one-liner needs no" >&2
+    echo "       Cloudflare token." >&2
     exit 1
 fi
 
