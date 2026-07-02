@@ -27,15 +27,16 @@ export const sshConfigBlock = (args: {
         `Host ${args.alias}`,
         `    HostName ${args.hostname}`,
         "    User root",
-        `    IdentityFile ${args.identityFile}`,
+        `    IdentityFile "${args.identityFile}"`,
         "    IdentitiesOnly yes",
-        `    UserKnownHostsFile ${args.knownHostsFile}`,
+        `    UserKnownHostsFile "${args.knownHostsFile}"`,
         "    StrictHostKeyChecking accept-new",
-        `    ProxyCommand ${args.cloudflaredPath} access ssh --hostname %h`,
+        // Paths are quoted: Windows profile paths often contain spaces (C:\Users\First Last\…).
+        `    ProxyCommand "${args.cloudflaredPath}" access ssh --hostname %h`,
         "",
     ].join("\n");
 
-const INCLUDE_MARKER = `Include ${sshConfigPath}`;
+export const INCLUDE_MARKER = `Include "${sshConfigPath}"`;
 
 // Generate the ed25519 keypair on first setup; return the public key line to enroll on the daemon.
 export const ensureSshKey = async (): Promise<string> => {

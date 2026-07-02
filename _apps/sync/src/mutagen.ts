@@ -32,12 +32,17 @@ export const mutagenCreateArgs = (args: {
     `${args.alias}:${args.remoteDir}`,
 ];
 
-const osToken = (): "linux" | "darwin" => {
+const osToken = (): "linux" | "darwin" | "windows" => {
     if (process.platform === "linux" || process.platform === "darwin") {
         return process.platform;
     }
+    if (process.platform === "win32") {
+        return "windows";
+    }
     throw new Error(`auto-download isn't supported on ${process.platform} — install mutagen and cloudflared manually, then re-run.`);
 };
+
+const exe = process.platform === "win32" ? ".exe" : "";
 
 const archToken = (): "amd64" | "arm64" => {
     if (process.arch === "x64") {
@@ -63,16 +68,35 @@ const download = async (url: string, dest: string): Promise<void> => {
     await writeFile(dest, new Uint8Array(await response.arrayBuffer()));
 };
 
-// Resolve cloudflared: on PATH, else download the single static binary to ~/.intentic/sync/bin.
+// Extract a gzipped tarball into ~/.intentic/sync/bin using the system `tar` (bsdtar on macOS/Windows 10+).
+const extractTarball = (tarball: string): void => {
+    const extract = spawnSync("tar", ["-xzf", tarball, "-C", binDir], { stdio: "inherit" });
+    if (extract.status !== 0) {
+        throw new Error(`failed to extract ${tarball} (is \`tar\` installed?)`);
+    }
+};
+
+// Resolve cloudflared: on PATH, else download the release to ~/.intentic/sync/bin. Asset shapes differ per OS:
+// bare binary on linux, .tgz on darwin, .exe on windows (amd64 only — no windows-arm64 build exists).
 export const ensureCloudflared = async (): Promise<string> => {
     if (onPath("cloudflared", ["--version"])) {
         return "cloudflared";
     }
-    const dest = join(binDir, "cloudflared");
-    await download(
-        `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-${osToken()}-${archToken()}`,
-        dest,
-    );
+    const os = osToken();
+    const base = `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}`;
+    const dest = join(binDir, `cloudflared${exe}`);
+    if (os === "darwin") {
+        const tgz = join(binDir, "cloudflared.tgz");
+        await download(`${base}/cloudflared-darwin-${archToken()}.tgz`, tgz);
+        extractTarball(tgz);
+    } else if (os === "windows") {
+        if (archToken() !== "amd64") {
+            throw new Error("cloudflared has no windows-arm64 build — install cloudflared manually, then re-run.");
+        }
+        await download(`${base}/cloudflared-windows-amd64.exe`, dest);
+    } else {
+        await download(`${base}/cloudflared-linux-${archToken()}`, dest);
+    }
     await chmod(dest, 0o755);
     return dest;
 };
@@ -83,16 +107,13 @@ export const ensureMutagen = async (): Promise<string> => {
     if (onPath("mutagen", ["version"])) {
         return "mutagen";
     }
-    const dest = join(binDir, "mutagen");
+    const dest = join(binDir, `mutagen${exe}`);
     const tarball = join(binDir, "mutagen.tar.gz");
     await download(
         `https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_${osToken()}_${archToken()}_v${MUTAGEN_VERSION}.tar.gz`,
         tarball,
     );
-    const extract = spawnSync("tar", ["-xzf", tarball, "-C", binDir], { stdio: "inherit" });
-    if (extract.status !== 0) {
-        throw new Error("failed to extract the mutagen release (is `tar` installed?)");
-    }
+    extractTarball(tarball);
     await chmod(dest, 0o755);
     return dest;
 };

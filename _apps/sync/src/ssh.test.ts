@@ -24,10 +24,21 @@ describe("sshConfigBlock", () => {
     it("routes through cloudflared and pins our key + known_hosts", () => {
         expect(block).toContain("Host intentic-sync-x");
         expect(block).toContain("HostName ssh-abc123.example.dev");
-        expect(block).toContain("ProxyCommand /home/u/.intentic/sync/bin/cloudflared access ssh --hostname %h");
-        expect(block).toContain("IdentityFile /home/u/.intentic/sync/id_ed25519");
+        expect(block).toContain('ProxyCommand "/home/u/.intentic/sync/bin/cloudflared" access ssh --hostname %h');
+        expect(block).toContain('IdentityFile "/home/u/.intentic/sync/id_ed25519"');
         expect(block).toContain("IdentitiesOnly yes");
-        expect(block).toContain("UserKnownHostsFile /home/u/.intentic/sync/known_hosts");
+        expect(block).toContain('UserKnownHostsFile "/home/u/.intentic/sync/known_hosts"');
+    });
+    it("quotes Windows paths with spaces", () => {
+        const win = sshConfigBlock({
+            alias: "intentic-sync-x",
+            hostname: "ssh-abc123.example.dev",
+            identityFile: "C:\\Users\\First Last\\.intentic\\sync\\id_ed25519",
+            knownHostsFile: "C:\\Users\\First Last\\.intentic\\sync\\known_hosts",
+            cloudflaredPath: "C:\\Users\\First Last\\.intentic\\sync\\bin\\cloudflared.exe",
+        });
+        expect(win).toContain('IdentityFile "C:\\Users\\First Last\\.intentic\\sync\\id_ed25519"');
+        expect(win).toContain('ProxyCommand "C:\\Users\\First Last\\.intentic\\sync\\bin\\cloudflared.exe" access ssh --hostname %h');
     });
 });
 

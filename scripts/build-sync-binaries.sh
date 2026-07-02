@@ -6,10 +6,12 @@ cd "$(dirname "$0")/.."
 
 out="_apps/sync/dist-bin"
 mkdir -p "$out"
-for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
     os="${target%-*}"
     arch="${target#*-}"
-    # Asset names use go-style arch (amd64) to match what sync.sh requests.
+    # Asset names use go-style arch (amd64) to match what sync.sh/sync.ps1 request.
     [ "$arch" = "x64" ] && arch=amd64
-    bun build --compile --target="bun-${target}" _apps/sync/dist/cli.js --outfile "${out}/intentic-sync-${os}-${arch}"
+    ext=""
+    [ "$os" = "windows" ] && ext=".exe"
+    bun build --compile --target="bun-${target}" _apps/sync/dist/cli.js --outfile "${out}/intentic-sync-${os}-${arch}${ext}"
 done

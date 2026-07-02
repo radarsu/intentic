@@ -2,9 +2,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildCommand, type CommandContext } from "@stricli/core";
-import { knownHostsPath, readConfig, type SyncConfig, sshConfigPath, sshKeyPath, writeConfig } from "./config.js";
+import { knownHostsPath, readConfig, type SyncConfig, sshKeyPath, writeConfig } from "./config.js";
 import { ensureCloudflared, ensureMutagen, mutagenCreateArgs, runMutagen, sessionName } from "./mutagen.js";
-import { ensureSshKey, sanitizeId, sshAlias, sshConfigBlock, writeManagedSshConfig } from "./ssh.js";
+import { ensureSshKey, INCLUDE_MARKER, sanitizeId, sshAlias, sshConfigBlock, writeManagedSshConfig } from "./ssh.js";
 
 // Enroll our SSH public key using the browser-minted pairing token (single-use). The daemon returns the tunnel's
 // SSH hostname — the one and only call the agent makes over HTTP; everything after is Mutagen over SSH.
@@ -122,7 +122,7 @@ const uninstall = buildCommand<Record<string, never>>({
         const current = await readFile(userConfig, "utf8").catch(() => "");
         const stripped = current
             .split("\n")
-            .filter((line) => line.trim() !== `Include ${sshConfigPath}`)
+            .filter((line) => line.trim() !== INCLUDE_MARKER)
             .join("\n");
         if (stripped !== current) {
             await writeFile(userConfig, stripped, { mode: 0o600 });
