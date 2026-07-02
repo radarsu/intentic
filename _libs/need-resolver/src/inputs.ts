@@ -56,29 +56,6 @@ export interface StripeInput {
     apiKey: SecretRef;
 }
 
-// A self-hosted Redmine instance the apps use. `url` is the instance base (a literal); the API key is a secret.
-// intentic validates the key against {url}/users/current.json during reconcile.
-export interface RedmineInput {
-    url: string;
-    apiKey: SecretRef;
-}
-
-// A self-hosted Outline wiki. `url` is the instance base (a literal); the API token is a secret. intentic
-// validates the token against {url}/api/auth.info during reconcile.
-export interface OutlineInput {
-    url: string;
-    apiKey: SecretRef;
-}
-
-// An email inbox reached over IMAP. host/username are literals; the password is a secret; port defaults to 993
-// (implicit TLS). intentic validates the credential with an IMAP LOGIN during reconcile.
-export interface ImapInput {
-    host: string;
-    port?: number;
-    username: string;
-    password: SecretRef;
-}
-
 // How long restic keeps snapshots before `forget --prune` drops them. Omitted fields fall back to the
 // provider's defaults (7 daily / 4 weekly / 6 monthly).
 export interface BackupRetention {

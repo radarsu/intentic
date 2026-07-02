@@ -1,9 +1,9 @@
 import { join } from "node:path";
-import type { AgentEvent, IntenticLine, WorkspaceTree } from "@intentic/sandbox-contract";
+import type { AgentEvent, IntenticLine, WorkspaceChange, WorkspaceTree } from "@intentic/sandbox-contract";
 import type { Logger } from "pino";
 import { type AgentRequest, runAgent } from "./agent/agent.js";
 import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/capabilities-store.js";
-import { createAuthorizer, createGoogleVerifier, fileOwnerStore } from "./auth/auth.js";
+import { createAuthorizer, createGoogleVerifier, fileMembersStore, fileOwnerStore, type MembersStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
 import type { Config } from "./env.config.js";
 import { type GitStatus, gitClone, gitCommitAll, gitInit, gitListFiles, gitPush, gitStatus } from "./git/git.js";
@@ -23,6 +23,7 @@ import {
     writeWorkspaceFile,
 } from "./workspace/workspace-files.js";
 import { walkWorkspaceTree } from "./workspace/workspace-tree.js";
+import { createWorkspaceWatch } from "./workspace/workspace-watch.js";
 
 // The daemon's collaborators, wired once at boot and handed to the route factories — the injection seam the
 // route tests build fakes against (the equivalent of the old createDaemon `deps` object). Stateful members
@@ -61,14 +62,25 @@ export interface Services {
         readonly copy: (fromAbs: string, toAbs: string) => Promise<void>;
     };
     readonly workspaceTree: (root: string) => Promise<WorkspaceTree>;
+    // Live /work change stream backing GET /workspace/watch — one shared chokidar watcher, one generator per subscriber.
+    readonly workspaceWatch: () => AsyncGenerator<WorkspaceChange>;
     readonly sessions: {
         readonly list: (dir: string) => Promise<SessionSummary[]>;
         readonly read: (dir: string, id: string) => Promise<SessionTranscriptMessage[]>;
     };
+    // Shared-access grants — the emails authorized besides the owner. Always present; the /members routes read
+    // and write it, and the authorizer consults it. The daemon is the enforcer; the platform only mirrors these.
+    readonly members: MembersStore;
     // When set, the daemon is exposed directly and verifies the owner's Google ID token on every route but
     // /health; CORS is emitted for `allowOrigin`. Undefined ⇒ loopback mode (tests / host-internal preview).
+    // authorizeOwner gates the owner-only member-management routes.
     readonly auth:
-        { readonly authorize: (bearer: string, firstBind: string | undefined) => Promise<void>; readonly allowOrigin?: string } | undefined;
+        | {
+              readonly authorize: (bearer: string, firstBind: string | undefined) => Promise<void>;
+              readonly authorizeOwner: (bearer: string) => Promise<void>;
+              readonly allowOrigin?: string;
+          }
+        | undefined;
 }
 
 // Build the production services from config (env). The agent/intentic/git/files/sessions/tree members are the
@@ -76,17 +88,23 @@ export interface Services {
 export const createServices = (config: Config, logger: Logger): Services => {
     const workspace = workspacePaths(config.workspaceRoot);
     const info = config.sandbox.name !== "" && config.sandbox.image !== "" ? { name: config.sandbox.name, image: config.sandbox.image } : undefined;
-    const auth =
+    const members = fileMembersStore(join(workspace.root, ".intentic", "members.json"));
+    const authorizer =
         config.google.clientId !== ""
-            ? {
-                  authorize: createAuthorizer({
-                      verify: createGoogleVerifier(config.google.clientId),
-                      owner: fileOwnerStore(join(workspace.root, ".intentic", "owner.json")),
-                      ...(config.connectToken !== "" ? { connectToken: config.connectToken } : {}),
-                  }).authorize,
-                  ...(config.webOrigin !== "" ? { allowOrigin: config.webOrigin } : {}),
-              }
+            ? createAuthorizer({
+                  verify: createGoogleVerifier([config.google.clientId, ...(config.google.syncClientId !== "" ? [config.google.syncClientId] : [])]),
+                  owner: fileOwnerStore(join(workspace.root, ".intentic", "owner.json")),
+                  members,
+                  ...(config.connectToken !== "" ? { connectToken: config.connectToken } : {}),
+              })
             : undefined;
+    const auth = authorizer
+        ? {
+              authorize: authorizer.authorize,
+              authorizeOwner: authorizer.authorizeOwner,
+              ...(config.webOrigin !== "" ? { allowOrigin: config.webOrigin } : {}),
+          }
+        : undefined;
 
     return {
         config,
@@ -111,7 +129,9 @@ export const createServices = (config: Config, logger: Logger): Services => {
             copy: copyWorkspacePath,
         },
         workspaceTree: walkWorkspaceTree,
+        workspaceWatch: createWorkspaceWatch(workspace.root, logger),
         sessions: { list: listWorkspaceSessions, read: readWorkspaceSession },
+        members,
         auth,
     };
 };

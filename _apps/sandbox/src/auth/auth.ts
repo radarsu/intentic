@@ -18,10 +18,13 @@ export interface VerifiedIdentity {
 // email verification fail. Implemented over Google's remote JWKS (jose caches the keys).
 export type IdTokenVerifier = (idToken: string) => Promise<VerifiedIdentity>;
 
-export const createGoogleVerifier = (audience: string): IdTokenVerifier => {
+// `audience` accepts more than one client id so a single owner can present tokens minted by different Google
+// OAuth clients — the browser's *web* client and the local sync agent's *desktop* client — against the same
+// sandbox. Ownership is still by verified email; only the accepted `aud` set widens.
+export const createGoogleVerifier = (audience: string | readonly string[]): IdTokenVerifier => {
     const jwks = createRemoteJWKSet(new URL(GOOGLE_JWKS_URL));
     return async (idToken) => {
-        const { payload } = await jwtVerify(idToken, jwks, { issuer: GOOGLE_ISSUERS, audience });
+        const { payload } = await jwtVerify(idToken, jwks, { issuer: GOOGLE_ISSUERS, audience: audience as string | string[] });
         const email = payload["email"];
         if (typeof email !== "string" || payload["email_verified"] !== true) {
             throw new Error("google id token has no verified email");
@@ -52,6 +55,41 @@ export const fileOwnerStore = (path: string): OwnerStore => ({
     },
 });
 
+// The additional authorized emails (shared access beyond the owner), stored as { emails: [...] } in the same
+// .intentic/ dir. The owner is NOT listed here — ownership stays in the owner store. The daemon is the real
+// enforcer of shared access; the platform only mirrors these grants so a member's browser can find the sandbox.
+export interface MembersStore {
+    list(): Promise<string[]>;
+    add(email: string): Promise<void>;
+    remove(email: string): Promise<void>;
+}
+
+const readEmails = async (path: string): Promise<string[]> => {
+    try {
+        const parsed = JSON.parse(await readFile(path, "utf8")) as { emails?: unknown };
+        return Array.isArray(parsed.emails) ? parsed.emails.filter((email): email is string => typeof email === "string") : [];
+    } catch {
+        return [];
+    }
+};
+
+export const fileMembersStore = (path: string): MembersStore => ({
+    list: () => readEmails(path),
+    add: async (email) => {
+        const emails = await readEmails(path);
+        if (emails.includes(email)) {
+            return;
+        }
+        await mkdir(dirname(path), { recursive: true });
+        await writeFile(path, JSON.stringify({ emails: [...emails, email] }), "utf8");
+    },
+    remove: async (email) => {
+        const emails = await readEmails(path);
+        await mkdir(dirname(path), { recursive: true });
+        await writeFile(path, JSON.stringify({ emails: emails.filter((member) => member !== email) }), "utf8");
+    },
+});
+
 export const tokenEquals = (a: string, b: string): boolean => {
     const ab = Buffer.from(a);
     const bb = Buffer.from(b);
@@ -59,16 +97,20 @@ export const tokenEquals = (a: string, b: string): boolean => {
 };
 
 export interface Authorizer {
-    // Verify a request's bearer Google ID token and enforce sandbox ownership. The FIRST authenticated request
-    // binds its email as the owner (TOFU); when a connectToken is configured, that first request must also
-    // carry it (the connection token only the operator holds — closes the first-bind race). Every later request
-    // must match the bound owner. Throws on any failure; the daemon maps a throw to 401.
+    // Verify a request's bearer Google ID token and enforce access. The FIRST authenticated request binds its
+    // email as the owner (TOFU); when a connectToken is configured, that first request must also carry it (the
+    // connection token only the operator holds — closes the first-bind race). Every later request must be the
+    // owner OR a granted member. Throws on any failure; the daemon maps a throw to 401.
     authorize(bearer: string, firstBind: string | undefined): Promise<void>;
+    // Verify the bearer AND assert the caller is the bound owner (not merely a member) — the gate for the
+    // owner-only member-management routes. Throws on any failure.
+    authorizeOwner(bearer: string): Promise<void>;
 }
 
 export const createAuthorizer = (deps: {
     readonly verify: IdTokenVerifier;
     readonly owner: OwnerStore;
+    readonly members: MembersStore;
     readonly connectToken?: string;
 }): Authorizer => ({
     authorize: async (bearer, firstBind) => {
@@ -84,7 +126,19 @@ export const createAuthorizer = (deps: {
             await deps.owner.write(email);
             return;
         }
-        if (email !== owner) {
+        if (email === owner) {
+            return;
+        }
+        if (!(await deps.members.list()).includes(email)) {
+            throw new Error("not authorized for this sandbox");
+        }
+    },
+    authorizeOwner: async (bearer) => {
+        if (bearer === "") {
+            throw new Error("missing bearer token");
+        }
+        const { email } = await deps.verify(bearer);
+        if (email !== (await deps.owner.read())) {
             throw new Error("not the sandbox owner");
         }
     },

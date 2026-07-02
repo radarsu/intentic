@@ -7,10 +7,7 @@ import type {
     ForgejoRole,
     GitHubInput,
     HostInput,
-    ImapInput,
     KomodoRole,
-    OutlineInput,
-    RedmineInput,
     ServiceInput,
     StripeInput,
     UserInput,
@@ -73,12 +70,6 @@ export type Discord = Ref<"discord">;
 // An external SaaS integration (i.have.stripe). A bare ref — the provider validates the API key during
 // reconcile; the key is injected into consuming apps as a $secret env, so nothing references an output off it.
 export type Stripe = Ref<"stripe">;
-
-// Self-hosted integrations (i.have.redmine / i.have.outline) and an IMAP inbox (i.have.imap). Bare refs like
-// Stripe — each provider validates its credential during reconcile; the secret is a $secret env, not an output.
-export type Redmine = Ref<"redmine">;
-export type Outline = Ref<"outline">;
-export type Imap = Ref<"imap">;
 
 // A team's members are User handles; its Komodo role applies to the deployments of the apps it manages.
 export interface WantTeamInput {
@@ -195,9 +186,6 @@ export interface Have {
     backup(id: string, input: BackupInput): Backup;
     discord(id: string, input: DiscordInput): Discord;
     stripe(id: string, input: StripeInput): Stripe;
-    redmine(id: string, input: RedmineInput): Redmine;
-    outline(id: string, input: OutlineInput): Outline;
-    imap(id: string, input: ImapInput): Imap;
 }
 
 export interface Want {

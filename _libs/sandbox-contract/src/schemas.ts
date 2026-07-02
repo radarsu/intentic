@@ -75,6 +75,9 @@ export const WorkspaceTreeEntrySchema = z.object({
     path: z.string(),
     type: z.enum(["file", "dir"]),
     size: z.number().optional(),
+    // Last-modified epoch millis (files only) — the local sync agent diffs it against its manifest on
+    // (re)connect to decide which files to pull without re-reading every byte.
+    mtime: z.number().optional(),
     get children() {
         return z.array(WorkspaceTreeEntrySchema).optional();
     },
@@ -87,6 +90,16 @@ export const WorkspaceTreeSchema = z.object({
     truncated: z.boolean(),
 });
 export type WorkspaceTree = z.infer<typeof WorkspaceTreeSchema>;
+// A single filesystem change under /work, streamed live over /workspace/watch (SSE). Mirrors chokidar's event
+// names so the sync agent maps each straight to a local write/delete. size+mtime ride along on add/change so
+// the agent's echo-guard can skip a pull when the bytes already match what it just wrote.
+export const WorkspaceChangeSchema = z.object({
+    kind: z.enum(["add", "change", "unlink", "addDir", "unlinkDir"]),
+    path: z.string(),
+    size: z.number().optional(),
+    mtime: z.number().optional(),
+});
+export type WorkspaceChange = z.infer<typeof WorkspaceChangeSchema>;
 export const WorkspaceFileQuerySchema = z.object({ path: z.string().min(1) });
 export const WorkspaceFileSchema = z.object({ path: z.string(), content: z.string() });
 // Direct file management over the /work tree (delete / new folder / rename+move / copy). Byte writes + the
@@ -106,7 +119,7 @@ export const AppScaffoldSchema = z.object({ cloneUrl: z.string().url().optional(
 // The daemon renders/parses these; the browser edits them through the inventory routes. Moved here from the
 // daemon's deploy-config.ts so the daemon and the browser validate against ONE schema (no cross-repo dupes).
 
-export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe", "redmine", "outline", "imap"]);
+export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe"]);
 export type InventoryProvider = z.infer<typeof InventoryProviderSchema>;
 export const ServiceKindSchema = z.enum(["signoz"]);
 export type ServiceKind = z.infer<typeof ServiceKindSchema>;
@@ -181,20 +194,22 @@ export const ServiceConfigSchema = z.object({
     on: z.string().min(1),
     expose: z.string().min(1),
 });
-// Per-provider integration config. Stripe carries only its provider tag (fixed API base, key from env);
-// the self-hosted ones carry the non-secret coordinates the user provides — the secret always comes from env.
-export const IntegrationConfigSchema = z.discriminatedUnion("provider", [
-    z.object({ provider: z.literal("stripe") }),
-    z.object({ provider: z.literal("redmine"), url: z.string().url() }),
-    z.object({ provider: z.literal("outline"), url: z.string().url() }),
-    z.object({ provider: z.literal("imap"), host: z.string().min(1), port: z.coerce.number(), username: z.string().min(1) }),
-]);
+// External-app credential injected into DEPLOYED apps (i.have.stripe → STRIPE_API_KEY from env). Agent-facing
+// connectors are `cli` capabilities instead (see below), not integrations.
+export const IntegrationConfigSchema = z.object({ provider: z.literal("stripe") });
 // Per-provider CLI-tool config. A `cli` capability gives the AGENT an authenticated command-line tool (not a
-// deployed-app credential like `integration`): the secret is stored here and injected into the agent's env each
-// turn (see cliEnvOf), and a .claude/skills/<id> cheatsheet teaches the agent to use it. Discriminated by
-// provider so each provider's credential fields are typed and future providers slot in.
+// deployed-app credential like `integration`): the secret + any non-secret URL are stored here and injected
+// into the agent's env each turn (see cliEnvOf), and a .claude/skills/<id> cheatsheet teaches the agent to use
+// it via curl. Discriminated by provider so each provider's fields are typed and future providers slot in.
 export const CliConfigSchema = z.discriminatedUnion("provider", [
     z.object({ provider: z.literal("discord"), botToken: z.string().min(1) }),
+    z.object({ provider: z.literal("github"), token: z.string().min(1) }),
+    z.object({ provider: z.literal("gitlab"), token: z.string().min(1), url: z.string().url() }),
+    z.object({ provider: z.literal("sentry"), token: z.string().min(1), url: z.string().url(), org: z.string().optional() }),
+    z.object({ provider: z.literal("redmine"), url: z.string().url(), apiKey: z.string().min(1) }),
+    z.object({ provider: z.literal("outline"), url: z.string().url(), apiKey: z.string().min(1) }),
+    z.object({ provider: z.literal("imap"), host: z.string().min(1), port: z.coerce.number(), username: z.string().min(1), password: z.string().min(1) }),
+    z.object({ provider: z.literal("signoz"), url: z.string().url(), apiKey: z.string().min(1) }),
 ]);
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;

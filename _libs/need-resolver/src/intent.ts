@@ -7,9 +7,6 @@ import type {
     EnvironmentInput,
     GitHubInput,
     HostInput,
-    ImapInput,
-    OutlineInput,
-    RedmineInput,
     ServiceInput,
     StripeInput,
     TeamInput,
@@ -52,24 +49,6 @@ export interface DiscordIntent {
 export interface StripeIntent {
     readonly id: string;
     readonly input: StripeInput;
-}
-
-// A self-hosted Redmine instance (i.have.redmine). A singleton, like stripe.
-export interface RedmineIntent {
-    readonly id: string;
-    readonly input: RedmineInput;
-}
-
-// A self-hosted Outline wiki (i.have.outline). A singleton, like stripe.
-export interface OutlineIntent {
-    readonly id: string;
-    readonly input: OutlineInput;
-}
-
-// An email inbox over IMAP (i.have.imap). A singleton, like stripe.
-export interface ImapIntent {
-    readonly id: string;
-    readonly input: ImapInput;
 }
 
 export interface UserIntent {
@@ -157,9 +136,6 @@ export interface IntentSet {
     readonly github?: GitHubIntent;
     readonly discord?: DiscordIntent;
     readonly stripe?: StripeIntent;
-    readonly redmine?: RedmineIntent;
-    readonly outline?: OutlineIntent;
-    readonly imap?: ImapIntent;
     readonly backup?: BackupIntent;
     readonly users: readonly UserIntent[];
     readonly teams: readonly TeamIntent[];

@@ -58,26 +58,6 @@ const REGISTRY: Record<InventoryProvider, ProviderSpec> = {
     stripe: {
         fields: [{ key: `apiKey`, source: `env`, envVar: `STRIPE_API_KEY` }],
     },
-    redmine: {
-        fields: [
-            { key: `url`, source: `string` },
-            { key: `apiKey`, source: `env`, envVar: `REDMINE_API_KEY` },
-        ],
-    },
-    outline: {
-        fields: [
-            { key: `url`, source: `string` },
-            { key: `apiKey`, source: `env`, envVar: `OUTLINE_API_KEY` },
-        ],
-    },
-    imap: {
-        fields: [
-            { key: `host`, source: `string` },
-            { key: `port`, source: `number` },
-            { key: `username`, source: `string` },
-            { key: `password`, source: `env`, envVar: `IMAP_PASSWORD` },
-        ],
-    },
 };
 
 // i.want.service field specs (beyond kind/on/expose, which are rendered structurally). SigNoz takes a domain.

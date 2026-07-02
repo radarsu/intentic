@@ -96,6 +96,7 @@ const services = (overrides: Partial<Services> = {}): Services => ({
     files: fakeFiles(),
     workspaceTree: async () => ({ root: "/work", tree: [], truncated: false }),
     sessions: { list: async () => [], read: async () => [] },
+    members: { list: async () => [], add: async () => {}, remove: async () => {} },
     auth: undefined,
     ...overrides,
 });
@@ -134,7 +135,7 @@ test("system.preview returns the dev server status", async () => {
 });
 
 test("POST /enroll rejects a wrong connect token and 412s until DevOps (when auth is enforced)", async () => {
-    const app = createApp(services({ auth: { authorize: async () => {} }, config: { ...baseConfig, connectToken: "ct" } }));
+    const app = createApp(services({ auth: { authorize: async () => {}, authorizeOwner: async () => {} }, config: { ...baseConfig, connectToken: "ct" } }));
     const enroll = (token: string) =>
         app.request("/enroll", {
             method: "POST",

@@ -33,15 +33,6 @@ import { createWorkspaceProvider } from "./host/workspace.js";
 import { createDiscordProvider } from "./integrations/discord.js";
 import type { DiscordApi } from "./integrations/discord-api.js";
 import { discordApi } from "./integrations/discord-api.js";
-import type { ImapChecker } from "./integrations/imap-check.js";
-import { imapLogin } from "./integrations/imap-check.js";
-import { createImapProvider } from "./integrations/imap.js";
-import type { OutlineApi } from "./integrations/outline-api.js";
-import { outlineApi } from "./integrations/outline-api.js";
-import { createOutlineProvider } from "./integrations/outline.js";
-import type { RedmineApi } from "./integrations/redmine-api.js";
-import { redmineApi } from "./integrations/redmine-api.js";
-import { createRedmineProvider } from "./integrations/redmine.js";
 import { createStripeProvider } from "./integrations/stripe.js";
 import type { StripeApi } from "./integrations/stripe-api.js";
 import { stripeApi } from "./integrations/stripe-api.js";
@@ -71,9 +62,6 @@ export interface ProviderDeps {
     readonly github?: GitHubApi;
     readonly discord?: DiscordApi;
     readonly stripe?: StripeApi;
-    readonly redmine?: RedmineApi;
-    readonly outline?: OutlineApi;
-    readonly imap?: ImapChecker;
     readonly authentik?: AuthentikApi;
     // The cf-route DNS-propagation wait; defaults to the real DoH probe. In-memory tests inject a no-op so
     // they never hit the network.
@@ -90,9 +78,6 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
     const github = deps.github ?? githubApi;
     const discord = deps.discord ?? discordApi;
     const stripe = deps.stripe ?? stripeApi;
-    const redmine = deps.redmine ?? redmineApi;
-    const outline = deps.outline ?? outlineApi;
-    const imap = deps.imap ?? imapLogin;
     return {
         host: createHostProvider(ssh),
         cloudflare: createCloudflareProvider(cloudflare),
@@ -128,9 +113,6 @@ export const createProviders = (deps: ProviderDeps = {}): Providers => {
         "gh-deployment": createGhDeploymentProvider(ssh),
         discord: createDiscordProvider(discord),
         stripe: createStripeProvider(stripe),
-        redmine: createRedmineProvider(redmine),
-        outline: createOutlineProvider(outline),
-        imap: createImapProvider(imap),
         workspace: createWorkspaceProvider(ssh),
     };
 };

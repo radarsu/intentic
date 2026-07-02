@@ -1,0 +1,35 @@
+{
+    "name": "@intentic/sync",
+    "version": "0.0.0",
+    "description": "Local background agent that keeps a directory bidirectionally in sync with a remote intentic sandbox over its HTTP API",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/radarsu/intentic.git",
+        "directory": "_apps/sync"
+    },
+    "bin": {
+        "intentic-sync": "./dist/cli.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --build --watch",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@intentic/sandbox-contract": "workspace:*",
+        "@stricli/core": "catalog:",
+        "chokidar": "catalog:",
+        "google-auth-library": "catalog:",
+        "tslib": "catalog:"
+    },
+    "devDependencies": {
+        "@intentic/tsconfig": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    }
+}

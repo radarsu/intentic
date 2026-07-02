@@ -7,6 +7,7 @@ import { readWorkspaceFile, removeWorkspacePath, writeWorkspaceFile } from "../.
 import type { CapabilityCtx } from "../capability.js";
 import { echoConfig } from "../capability.js";
 import { cliEnvOf } from "../cli-env.js";
+import { cliProviders } from "../cli/providers.js";
 import { cliHandler } from "./cli.js";
 
 // A ctx exposing only what cliHandler touches (files + workspace.root), over a fresh temp workspace.
@@ -58,6 +59,28 @@ test("cliEnvOf maps the stored token to the CLI's env var; ignores non-cli capab
     expect(cliEnvOf([mcp])).toEqual({});
 });
 
+test("cliEnvOf maps secret + non-secret URL for each provider", () => {
+    const github: Capability = { id: "github", kind: "cli", config: { provider: "github", token: "gh" } };
+    const gitlab: Capability = { id: "gitlab", kind: "cli", config: { provider: "gitlab", token: "gl", url: "https://gitlab.example.com" } };
+    const redmine: Capability = { id: "redmine", kind: "cli", config: { provider: "redmine", url: "https://r.example.com", apiKey: "rk" } };
+    const imap: Capability = { id: "imap", kind: "cli", config: { provider: "imap", host: "imap.example.com", port: 993, username: "u@e.com", password: "pw" } };
+    expect(cliEnvOf([github])).toEqual({ GITHUB_TOKEN: "gh" });
+    expect(cliEnvOf([gitlab])).toEqual({ GITLAB_TOKEN: "gl", GITLAB_URL: "https://gitlab.example.com" });
+    expect(cliEnvOf([redmine])).toEqual({ REDMINE_URL: "https://r.example.com", REDMINE_API_KEY: "rk" });
+    expect(cliEnvOf([imap])).toEqual({ IMAP_HOST: "imap.example.com", IMAP_PORT: "993", IMAP_USERNAME: "u@e.com", IMAP_PASSWORD: "pw" });
+    // Merges across multiple cli capabilities.
+    expect(cliEnvOf([github, redmine])).toEqual({ GITHUB_TOKEN: "gh", REDMINE_URL: "https://r.example.com", REDMINE_API_KEY: "rk" });
+});
+
+test("every provider has a non-empty skill with front-matter", () => {
+    for (const [name, provider] of Object.entries(cliProviders)) {
+        expect(provider.skill, name).toContain(`name: ${name}`);
+        expect(provider.skill.length).toBeGreaterThan(100);
+    }
+});
+
 test("echoConfig never leaks the token — only provider + hasToken", () => {
     expect(echoConfig(discord)).toEqual({ provider: "discord", hasToken: true });
+    const gitlab: Capability = { id: "gitlab", kind: "cli", config: { provider: "gitlab", token: "gl", url: "https://gitlab.com" } };
+    expect(echoConfig(gitlab)).toEqual({ provider: "gitlab", hasToken: true });
 });

@@ -1,7 +1,7 @@
 import { type EnrollHostInput, EnrollHostInputSchema } from "@intentic/sandbox-contract";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ORPCError } from "@orpc/server";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { tokenEquals } from "./auth/auth.js";
 import type { Services } from "./composition.js";
@@ -20,6 +20,9 @@ const logUnexpectedError = (services: Services, error: unknown): void => {
     }
     services.logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, "unhandled error");
 };
+
+// Extract the bearer token from an Authorization header (empty string when absent/malformed).
+const bearerFrom = (header: string | undefined): string => (header?.startsWith("Bearer ") ? header.slice(7) : "");
 
 // The HTTP API the browser drives DIRECTLY over the sandbox's own Cloudflare tunnel. When services.auth is set
 // the daemon verifies the owner's Google ID token on every route but /health (it owns its own auth). No auth
@@ -58,10 +61,8 @@ export const createApp = (services: Services): Hono => {
             if (c.req.path === "/health" || c.req.path === "/system/terminal" || c.req.path === "/enroll") {
                 return next();
             }
-            const header = c.req.header("authorization") ?? "";
-            const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
             try {
-                await authorize(bearer, c.req.header("x-intentic-connect") ?? undefined);
+                await authorize(bearerFrom(c.req.header("authorization")), c.req.header("x-intentic-connect") ?? undefined);
             } catch {
                 return c.json({ error: "unauthorized" }, 401);
             }
@@ -151,6 +152,54 @@ export const createApp = (services: Services): Hono => {
             throw error;
         }
         return c.json({ ok: true });
+    });
+
+    // Owner-only management of the sandbox's shared-access list — the emails the auth check above admits besides
+    // the owner. The owner's browser calls these when inviting/removing collaborators; the platform mirrors the
+    // grants for discovery, but THIS list is the enforced one. Loopback mode (no auth) skips the owner gate, like
+    // every other route. The bearer middleware already ran (caller is at least a member); the owner gate narrows it.
+    const ensureOwner = async (c: Context): Promise<boolean> => {
+        if (services.auth === undefined) {
+            return true;
+        }
+        try {
+            await services.auth.authorizeOwner(bearerFrom(c.req.header("authorization")));
+            return true;
+        } catch {
+            return false;
+        }
+    };
+    const memberEmail = async (c: Context): Promise<string | undefined> => {
+        const body = (await c.req.json().catch(() => undefined)) as { email?: unknown } | undefined;
+        return typeof body?.email === "string" ? body.email.toLowerCase() : undefined;
+    };
+    app.get("/members", async (c) => {
+        if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        return c.json({ emails: await services.members.list() });
+    });
+    app.post("/members", async (c) => {
+        if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        const email = await memberEmail(c);
+        if (email === undefined) {
+            return c.json({ error: "email required" }, 400);
+        }
+        await services.members.add(email);
+        return c.json({ emails: await services.members.list() });
+    });
+    app.delete("/members", async (c) => {
+        if (!(await ensureOwner(c))) {
+            return c.json({ error: "unauthorized" }, 401);
+        }
+        const email = await memberEmail(c);
+        if (email === undefined) {
+            return c.json({ error: "email required" }, 400);
+        }
+        await services.members.remove(email);
+        return c.json({ emails: await services.members.list() });
     });
 
     // Everything else flows through the oRPC OpenAPI handler, mounted at the root (its contract paths ARE the
