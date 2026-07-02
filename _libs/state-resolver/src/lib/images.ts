@@ -48,6 +48,19 @@ export const IMAGES = Object.freeze({
     signozOtelCollector: "signoz/signoz-otel-collector:v0.144.5@sha256:f9bf94d566055d06581f3befbf361cc26d670f31ad00cb31fda2ec380210c5ec",
     // The ClickHouse coordination ZooKeeper SigNoz's reference uses (a Bitnami-based image). renovate: datasource=docker depName=signoz/zookeeper
     signozZookeeper: "signoz/zookeeper:3.7.1@sha256:fcc4a3288154ccaa3bdb5ae6dc10180c084d29a8a6a26b62ac8e30a8940dc2e6",
+    // Paperless-ngx (i.want.service kind "paperless"): document scanning/indexing/archive. Runs on SQLite +
+    // the valkey broker below. renovate: datasource=docker depName=ghcr.io/paperless-ngx/paperless-ngx
+    paperless: "ghcr.io/paperless-ngx/paperless-ngx:2.20.15@sha256:6c86cad803970ea782683a8e80e7403444c5bf3cf70de63b4d3c8e87500db92f",
+    // OpenProject (i.want.service kind "openproject"): the plain all-in-one tag (NOT -slim) — it bundles
+    // postgres + memcached + web + worker under supervisord, so the stack is one container.
+    // renovate: datasource=docker depName=openproject/openproject
+    openproject: "openproject/openproject:17.5.1@sha256:0232048b00657f6b00369376c4f3f36766b288f0d6e16b953e3f04d5c7ee410a",
+    // Outline (i.want.service kind "outline"): team wiki. Runs on the postgres + valkey images above, with
+    // the Dex OIDC provider below for login. renovate: datasource=docker depName=outlinewiki/outline
+    outline: "outlinewiki/outline:1.8.2-0@sha256:b1bc8d1a30949fcbe96e6c802fd6a13f8538fce221e54b0d472e0329e740d160",
+    // The OIDC identity provider bundled into the Outline stack (Outline has no local password auth); one
+    // static intentic user. renovate: datasource=docker depName=ghcr.io/dexidp/dex
+    dex: "ghcr.io/dexidp/dex:v2.41.1@sha256:bc7cfce7c17f52864e2bb2a4dc1d2f86a41e3019f6d42e81d92a301fad0c8a1d",
     // The scheduled-backup container: alpine-based, carries restic + busybox crond. It has no docker CLI, so
     // the backup provider bind-mounts the host's docker binary (the forgejo-runner pattern) for the
     // app-consistent `docker exec` dumps. renovate: datasource=docker depName=restic/restic

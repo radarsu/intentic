@@ -63,10 +63,14 @@ export const emitGitHub = (intent: IntentSet, zone: string): ResolvedNode[] => {
     const ingressByHost = new Map<string, IngressPair[]>();
 
     // Validate app → service references.
-    const serviceIds = new Set(intent.services.map((service) => service.id));
+    const serviceById = new Map(intent.services.map((service) => [service.id, service]));
     for (const app of intent.apps) {
-        if (app.observe !== undefined && !serviceIds.has(app.observe)) {
+        if (app.observe !== undefined && !serviceById.has(app.observe)) {
             throw new Error(`app "${app.id}" observes unknown service "${app.observe}"; declare it with i.want.service`);
+        }
+        // Only signoz produces the otlpEndpoint output observe wires; any other kind would emit a dangling ref.
+        if (app.observe !== undefined && serviceById.get(app.observe)?.kind !== "signoz") {
+            throw new Error(`app "${app.id}" observes "${app.observe}", which is not a signoz service`);
         }
     }
 

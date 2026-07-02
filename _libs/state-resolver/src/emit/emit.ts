@@ -158,6 +158,10 @@ export const emit = (intent: IntentSet, assignment: Assignment, zone: string | u
             if (app.observe !== undefined && !serviceIds.has(app.observe)) {
                 throw new Error(`app "${app.id}" observes unknown service "${app.observe}"; declare it with i.want.service`);
             }
+            // Only signoz produces the otlpEndpoint output observe wires; any other kind would emit a dangling ref.
+            if (app.observe !== undefined && serviceById.get(app.observe)?.kind !== "signoz") {
+                throw new Error(`app "${app.id}" observes "${app.observe}", which is not a signoz service`);
+            }
             // Validate app -> backing references: the target must be a declared backing AND its capability must
             // match what the app recorded (guards a stale id reused across capabilities).
             for (const binding of app.use ?? []) {

@@ -8,10 +8,10 @@ import type { IngressPair } from "./route.js";
 import { exposeRoute } from "./route.js";
 
 // The service catalog: each authorable `kind` maps to the concrete resource type its provider deploys and
-// the dashboard port that provider publishes on the host (tunnel-routed to <domain>). Adding Outline /
-// Nextcloud / mail later is one entry here plus a provider — the authoring surface (i.want.service) is
-// unchanged. The OTLP ingest port a service exposes for app telemetry is the signoz provider's concern, not
-// the resolver's — apps reach it through the service's `otlpEndpoint` output, not a routed hostname.
+// the dashboard port that provider publishes on the host (tunnel-routed to <domain>). Adding a service is
+// one entry here plus a provider — the authoring surface (i.want.service) is unchanged. The OTLP ingest
+// port a service exposes for app telemetry is the signoz provider's concern, not the resolver's — apps
+// reach it through the service's `otlpEndpoint` output, not a routed hostname.
 interface ServiceSpec {
     readonly type: ResourceType;
     readonly port: number;
@@ -22,6 +22,13 @@ interface ServiceSpec {
     // `i.want.workspace({ tools: [...] })`: the path on the service's routed domain that speaks MCP, and the
     // intentic-generated secret key holding the scoped bearer token. Absent ⇒ the kind has no agent tool.
     readonly mcp?: { readonly path: string; readonly tokenSecret: string };
+    // Dashboard login when it is NOT the intentic@<zone> email convention (e.g. OpenProject's fixed "admin").
+    readonly adminLogin?: string;
+    // A second public hostname `auth.<domain>` routed to this host port, for services whose login flow needs
+    // a browser-reachable identity provider (Outline's bundled Dex).
+    readonly authPort?: number;
+    // readyWhen timeout override for slow first boots (OpenProject runs migrations before answering).
+    readonly readyTimeout?: string;
 }
 
 const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
@@ -35,6 +42,30 @@ const catalog: Readonly<Record<ServiceKind, ServiceSpec>> = {
             zookeeperImage: IMAGES.signozZookeeper,
         },
         mcp: { path: "/mcp", tokenSecret: "SIGNOZ_MCP_TOKEN" },
+    },
+    outline: {
+        type: "outline",
+        // 3000 is Forgejo's host port; Outline publishes its dashboard on 3210, its Dex on 5556.
+        port: 3210,
+        authPort: 5556,
+        images: {
+            outlineImage: IMAGES.outline,
+            postgresImage: IMAGES.postgres,
+            valkeyImage: IMAGES.valkey,
+            dexImage: IMAGES.dex,
+        },
+    },
+    paperless: {
+        type: "paperless",
+        port: 8000,
+        images: { paperlessImage: IMAGES.paperless, valkeyImage: IMAGES.valkey },
+    },
+    openproject: {
+        type: "openproject",
+        port: 8082,
+        adminLogin: "admin",
+        readyTimeout: "600s",
+        images: { openprojectImage: IMAGES.openproject },
     },
 };
 
@@ -59,6 +90,12 @@ export const resolveService = (
     const spec = catalog[intent.kind];
     const ssh = sshOf(host);
     const exposure = exposeRoute(intent.expose, intent.on, intent.domain, spec.port, apiToken);
+    // A bundled identity provider (Outline's Dex) must be browser-reachable, so it gets its own hostname.
+    const authDomain = spec.authPort === undefined ? undefined : `auth.${intent.domain}`;
+    const authExposure =
+        spec.authPort === undefined || authDomain === undefined
+            ? undefined
+            : exposeRoute(intent.expose, intent.on, authDomain, spec.authPort, apiToken);
     const nodes: ResolvedNode[] = [
         {
             id: intent.id,
@@ -68,14 +105,16 @@ export const resolveService = (
                 ...ssh,
                 internalIp: makeRef<string>(intent.on, "internalIp"),
                 domain: intent.domain,
-                adminUser: serviceAdminEmail(zone),
-                adminPassword: generated("SIGNOZ_ADMIN_PASSWORD"),
+                ...(authDomain === undefined ? {} : { authDomain }),
+                adminUser: spec.adminLogin ?? serviceAdminEmail(zone),
+                adminPassword: generated(`${intent.kind.toUpperCase()}_ADMIN_PASSWORD`),
                 ...spec.images,
             },
             explicitDependsOn: [],
-            readyWhen: httpOk(makeRef<string>(intent.id, "internalUrl"), { timeout: "180s" }),
+            readyWhen: httpOk(makeRef<string>(intent.id, "internalUrl"), { timeout: spec.readyTimeout ?? "180s" }),
         },
         exposure.route,
+        ...(authExposure === undefined ? [] : [authExposure.route]),
     ];
-    return { nodes, ingress: [exposure.ingress] };
+    return { nodes, ingress: [exposure.ingress, ...(authExposure === undefined ? [] : [authExposure.ingress])] };
 };

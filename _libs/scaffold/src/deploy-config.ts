@@ -60,9 +60,13 @@ const REGISTRY: Record<InventoryProvider, ProviderSpec> = {
     },
 };
 
-// i.want.service field specs (beyond kind/on/expose, which are rendered structurally). SigNoz takes a domain.
+// i.want.service field specs (beyond kind/on/expose, which are rendered structurally). Every catalog
+// service takes just a domain — ports/env are the provider's concern.
 const SERVICE_REGISTRY: Record<ServiceKind, ProviderSpec> = {
     signoz: { fields: [{ key: `domain`, source: `string` }] },
+    outline: { fields: [{ key: `domain`, source: `string` }] },
+    paperless: { fields: [{ key: `domain`, source: `string` }] },
+    openproject: { fields: [{ key: `domain`, source: `string` }] },
 };
 
 // The env var a host's SSH private key rides. `self` keeps HOST_SSH_KEY (legacy); any other host `<name>` reads

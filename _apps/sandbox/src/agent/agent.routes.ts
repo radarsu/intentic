@@ -11,7 +11,8 @@ import { resolvePlanDecision, resolveQuestionAnswer } from "./agent-requests.js"
 // Run one agent turn, streaming typed AgentEvents. The Claude token is the sandbox's own credential (resolved
 // + refreshed here), never held by the platform; undefined falls back to the container env. A turn with no
 // stored account and no container-env fallback surfaces an actionable error rather than an opaque CLI failure.
-async function* streamAgent(services: Services, input: AgentTurn, signal: AbortSignal | undefined): AsyncGenerator<AgentEvent> {
+// Exported because it IS "wake the agent" — the automations scheduler drives the same composition headlessly.
+export async function* streamAgent(services: Services, input: AgentTurn, signal: AbortSignal | undefined): AsyncGenerator<AgentEvent> {
     let oauthToken: string | undefined;
     try {
         oauthToken = await ensureFreshToken(services.claudeStore);

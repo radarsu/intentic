@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { serve, type WebSocketServerLike } from "@hono/node-server";
 import { WebSocketServer } from "ws";
 import { createApp } from "./app.js";
+import { createAutomationsScheduler } from "./automations/scheduler.js";
 import { createServices } from "./composition.js";
 import { loadConfig } from "./env.config.js";
 import { createLogger } from "./logger.js";
@@ -32,6 +33,10 @@ const main = async (): Promise<void> => {
     const server = serve({ fetch: app.fetch, port: config.sandbox.port, hostname: config.sandbox.host, websocket: { server: terminalSockets } });
     logger.info({ host: config.sandbox.host, port: config.sandbox.port, workspace: config.workspaceRoot }, "intentic sandbox daemon listening");
 
+    // Scheduled agent wake-ups: poll the automations manifest and fire whatever comes due.
+    const scheduler = createAutomationsScheduler(services);
+    scheduler.start();
+
     // Decentralized path: tell the platform where to reach this sandbox directly (best-effort, off the command
     // path). Needs the platform URL + connection token + this sandbox's public URL.
     if (config.platformUrl !== "" && config.connectToken !== "" && config.sandbox.publicUrl !== "") {
@@ -48,6 +53,7 @@ const main = async (): Promise<void> => {
 
     const shutdown = (): void => {
         logger.info("shutting down intentic sandbox daemon…");
+        scheduler.stop();
         services.devServer.stop();
         server.close();
         process.exit(0);

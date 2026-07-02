@@ -1,4 +1,5 @@
 import { createAgentRoutes } from "./agent/agent.routes.js";
+import { createAutomationsRoutes } from "./automations/automations.routes.js";
 import { createCapabilitiesRoutes } from "./capabilities/capabilities.routes.js";
 import { createClaudeRoutes } from "./claude/claude.routes.js";
 import type { Services } from "./composition.js";
@@ -14,6 +15,7 @@ import { createWorkspaceRoutes } from "./workspace/workspace.routes.js";
 // OpenAPIHandler in app.ts serves it.
 export const createRouter = (services: Services) => ({
     agent: createAgentRoutes(services),
+    automations: createAutomationsRoutes(services),
     capabilities: createCapabilitiesRoutes(services),
     claude: createClaudeRoutes(services),
     sessions: createSessionsRoutes(services),

@@ -108,7 +108,7 @@ export const AppScaffoldSchema = z.object({ cloneUrl: z.string().url().optional(
 
 export const InventoryProviderSchema = z.enum(["host", "cloudflare", "github", "stripe"]);
 export type InventoryProvider = z.infer<typeof InventoryProviderSchema>;
-export const ServiceKindSchema = z.enum(["signoz"]);
+export const ServiceKindSchema = z.enum(["signoz", "outline", "paperless", "openproject"]);
 export type ServiceKind = z.infer<typeof ServiceKindSchema>;
 // Non-secret option values the user provides; secret options (sshKey, apiToken, apiKey) are emitted as env()
 // references and never travel over the wire.
@@ -166,8 +166,9 @@ export type CapabilityKind = z.infer<typeof CapabilityKindSchema>;
 export const CapabilityStateSchema = z.enum(["active", "pending", "error", "inactive"]);
 export type CapabilityState = z.infer<typeof CapabilityStateSchema>;
 
-// The manifest id — also the `mcp__<id>__…` server name for mcp capabilities, so it's a safe identifier.
-const capabilityId = z
+// A manifest entry id (capabilities + automations) — also the `mcp__<id>__…` server name for mcp capabilities,
+// so it's a safe identifier.
+const entryId = z
     .string()
     .min(1)
     .max(60)
@@ -204,11 +205,11 @@ export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
 export type CliConfig = z.infer<typeof CliConfigSchema>;
 
 export const CapabilitySchema = z.discriminatedUnion("kind", [
-    z.object({ id: capabilityId, kind: z.literal("devops"), config: z.object({}) }),
-    z.object({ id: capabilityId, kind: z.literal("mcp"), config: McpConfigSchema }),
-    z.object({ id: capabilityId, kind: z.literal("service"), config: ServiceConfigSchema }),
-    z.object({ id: capabilityId, kind: z.literal("integration"), config: IntegrationConfigSchema }),
-    z.object({ id: capabilityId, kind: z.literal("cli"), config: CliConfigSchema }),
+    z.object({ id: entryId, kind: z.literal("devops"), config: z.object({}) }),
+    z.object({ id: entryId, kind: z.literal("mcp"), config: McpConfigSchema }),
+    z.object({ id: entryId, kind: z.literal("service"), config: ServiceConfigSchema }),
+    z.object({ id: entryId, kind: z.literal("integration"), config: IntegrationConfigSchema }),
+    z.object({ id: entryId, kind: z.literal("cli"), config: CliConfigSchema }),
 ]);
 export type Capability = z.infer<typeof CapabilitySchema>;
 
@@ -223,6 +224,41 @@ export const CapabilitySummarySchema = z.object({
 });
 export const CapabilitiesListSchema = z.object({ capabilities: z.array(CapabilitySummarySchema) });
 export const CapabilityIdParamSchema = z.object({ id: z.string() });
+
+// ---- automations: scheduled agent wake-ups (.intentic/automations.json) ----
+// An automation wakes the agent autonomously: the daemon's scheduler fires each enabled automation on its
+// trigger, runs the optional guard command (a shell command in the workspace; non-zero exit skips the wake),
+// then runs one agent turn with the prompt. The manifest is user config; run history is daemon-recorded.
+
+// Discriminated on `kind` so an `event` trigger (webhook) can slot in later without a wire break.
+export const TriggerSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("schedule"), cron: z.string().min(1) })]);
+export type Trigger = z.infer<typeof TriggerSchema>;
+
+export const AutomationSchema = z.object({
+    id: entryId,
+    trigger: TriggerSchema,
+    // Shell command run in the workspace root before waking; exit 0 ⇒ wake, non-zero ⇒ the run is "skipped".
+    guard: z.string().min(1).optional(),
+    prompt: z.string().min(1),
+    enabled: z.boolean(),
+});
+export type Automation = z.infer<typeof AutomationSchema>;
+
+export const AutomationRunSchema = z.object({
+    at: z.number(),
+    // skipped = the guard said no; error = the guard passed but the agent turn surfaced an error.
+    outcome: z.enum(["completed", "skipped", "error"]),
+    detail: z.string().optional(),
+});
+export type AutomationRun = z.infer<typeof AutomationRunSchema>;
+
+// The list row: the stored automation + its recent runs + the next scheduled fire (absent when disabled).
+export const AutomationSummarySchema = AutomationSchema.extend({
+    runs: z.array(AutomationRunSchema),
+    nextRun: z.number().optional(),
+});
+export const AutomationsListSchema = z.object({ automations: z.array(AutomationSummarySchema) });
+export const AutomationIdParamSchema = z.object({ id: z.string() });
 
 // ---- secrets: user-supplied env-var secrets the daemon writes to repositories/desired-state/.env ----
 // The web posts a Cloudflare token / GitHub PAT / another-host SSH key straight to the sandbox daemon (never

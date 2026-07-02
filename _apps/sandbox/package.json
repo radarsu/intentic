@@ -25,6 +25,7 @@
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",
         "@puristic/env": "catalog:",
+        "croner": "catalog:",
         "hono": "catalog:",
         "jose": "catalog:",
         "node-pty": "catalog:",

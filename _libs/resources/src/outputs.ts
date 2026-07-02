@@ -36,6 +36,11 @@ export const OUTPUTS: Readonly<Record<ResourceType, readonly string[]>> = Object
     "forgejo-notify": [],
     "komodo-notify": [],
     signoz: ["url", "internalUrl", "otlpEndpoint"],
+    // Self-hosted catalog services: one compose stack on the host + a Cloudflare route, like signoz but
+    // without an ingest endpoint apps ref — so just the two URL outputs.
+    outline: ["url", "internalUrl"],
+    paperless: ["url", "internalUrl"],
+    openproject: ["url", "internalUrl"],
     // The per-host workspace sandbox: its host-internal daemon url, the daemon's /health url for readiness,
     // and the `preview.<zone>` base its dev-server preview sits under.
     workspace: ["internalUrl", "healthUrl", "previewBase"],

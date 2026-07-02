@@ -80,8 +80,9 @@ export interface BackupInput {
 
 // An off-the-shelf shared service the host runs, named by `kind` from the service catalog. Unlike apps
 // (built from source through the platform), a service is deployed directly onto the host from a pinned
-// image and exposed at its own `domain`. Today's catalog: SignOz (observability).
-export type ServiceKind = "signoz";
+// image and exposed at its own `domain`. Catalog: SigNoz (observability), Outline (wiki), Paperless-ngx
+// (documents), OpenProject (project management).
+export type ServiceKind = "signoz" | "outline" | "paperless" | "openproject";
 
 export interface ServiceInput {
     kind: ServiceKind;

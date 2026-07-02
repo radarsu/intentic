@@ -1,4 +1,5 @@
 import { agentContract } from "./contracts/agent.contract.js";
+import { automationsContract } from "./contracts/automations.contract.js";
 import { capabilitiesContract } from "./contracts/capabilities.contract.js";
 import { claudeContract } from "./contracts/claude.contract.js";
 import { gitContract } from "./contracts/git.contract.js";
@@ -10,6 +11,7 @@ import { systemContract } from "./contracts/system.contract.js";
 import { workspaceContract } from "./contracts/workspace.contract.js";
 
 export { agentContract } from "./contracts/agent.contract.js";
+export { automationsContract } from "./contracts/automations.contract.js";
 export { capabilitiesContract } from "./contracts/capabilities.contract.js";
 export { claudeContract } from "./contracts/claude.contract.js";
 export { gitContract } from "./contracts/git.contract.js";
@@ -27,6 +29,7 @@ export * from "./schemas.js";
 // mounted at the sandbox root, so /health and /workspace/raw (plain Hono routes) sit alongside it.
 export const sandboxContract = {
     agent: agentContract,
+    automations: automationsContract,
     capabilities: capabilitiesContract,
     claude: claudeContract,
     sessions: sessionsContract,

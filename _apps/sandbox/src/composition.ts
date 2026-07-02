@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { AgentEvent, IntenticLine, WorkspaceTree } from "@intentic/sandbox-contract";
 import type { Logger } from "pino";
 import { type AgentRequest, runAgent } from "./agent/agent.js";
+import { type AutomationsStore, fileAutomationsStore } from "./automations/automations-store.js";
 import { type CapabilitiesStore, fileCapabilitiesStore } from "./capabilities/capabilities-store.js";
 import { createAuthorizer, createGoogleVerifier, fileMembersStore, fileOwnerStore, type MembersStore } from "./auth/auth.js";
 import { type ClaudeStore, fileClaudeStore } from "./claude/claude-credentials.js";
@@ -39,6 +40,8 @@ export interface Services {
     readonly tools: readonly AgentTool[];
     // The unified capability manifest (.intentic/capabilities.json) — DevOps/mcp/service/integration.
     readonly capabilities: CapabilitiesStore;
+    // Scheduled agent wake-ups (.intentic/automations.json) — the scheduler polls it; /automations edits it.
+    readonly automations: AutomationsStore;
     readonly claudeStore: ClaudeStore;
     readonly agent: (request: AgentRequest) => AsyncGenerator<AgentEvent>;
     readonly intentic: (run: IntenticRun) => AsyncGenerator<IntenticLine>;
@@ -111,6 +114,7 @@ export const createServices = (config: Config, logger: Logger): Services => {
         info,
         tools: internalTools(config.intenticAgentTools),
         capabilities: fileCapabilitiesStore(join(workspace.root, ".intentic", "capabilities.json")),
+        automations: fileAutomationsStore(join(workspace.root, ".intentic", "automations.json")),
         claudeStore: fileClaudeStore(join(workspace.root, ".intentic", "claude.json")),
         agent: runAgent,
         intentic: runIntentic,

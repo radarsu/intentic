@@ -85,10 +85,11 @@ export interface AppTeamGrant {
 
 // --- A shared off-the-shelf service (i.want.service); its output refs are inert, like inventory handles ---
 
-export interface Service extends Ref<"signoz"> {
+export interface Service extends Ref<"signoz" | "outline" | "paperless" | "openproject"> {
     readonly url: Ref<string>;
     readonly internalUrl: Ref<string>;
     // The host-internal OTLP endpoint apps send telemetry to; an app wires it via WantAppInput.observe.
+    // Only signoz produces it — the emit-time observe guard rejects observing any other kind.
     readonly otlpEndpoint: Ref<string>;
 }
 

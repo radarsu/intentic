@@ -1,0 +1,80 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { AgentEvent, Automation } from "@intentic/sandbox-contract";
+import { expect, test, vi } from "vitest";
+import type { Services } from "../composition.js";
+import { fileAutomationsStore } from "./automations-store.js";
+import { createAutomationsScheduler, type WakeFn } from "./scheduler.js";
+
+// The scheduler only touches automations/workspace/logger; a cast keeps the fake that small.
+const fakeServices = (root: string): Services =>
+    ({
+        automations: fileAutomationsStore(join(root, "automations.json")),
+        workspace: { root },
+        logger: { error: () => {} },
+    }) as unknown as Services;
+
+// A fake wake that records the prompts it was called with; `events` lets a test surface an agent error.
+const fakeWake = (prompts: string[], events: AgentEvent[] = [{ kind: "done" }]): WakeFn =>
+    async function* (_services, input) {
+        prompts.push(input.prompt);
+        yield* events;
+    };
+
+const automation = (id: string, extra: Partial<Automation> = {}): Automation => ({
+    id,
+    trigger: { kind: "schedule", cron: "* * * * *" },
+    prompt: `wake:${id}`,
+    enabled: true,
+    ...extra,
+});
+
+// Ticking 61s past construction guarantees an every-minute cron has exactly one occurrence in the window.
+const pastDue = (): number => Date.now() + 61_000;
+
+test("a due cron wakes the agent once and records a completed run", async () => {
+    const services = fakeServices(mkdtempSync(join(tmpdir(), "sched-")));
+    await services.automations.upsert(automation("inbox"));
+    const prompts: string[] = [];
+    const scheduler = createAutomationsScheduler(services, fakeWake(prompts));
+    await scheduler.tick(pastDue());
+    await vi.waitFor(async () => expect((await services.automations.get("inbox"))?.runs).toHaveLength(1));
+    expect(prompts).toEqual(["wake:inbox"]);
+    expect((await services.automations.get("inbox"))?.runs[0]?.outcome).toBe("completed");
+});
+
+test("a failing guard skips the wake and records why; a passing guard wakes", async () => {
+    const services = fakeServices(mkdtempSync(join(tmpdir(), "sched-")));
+    await services.automations.upsert(automation("guarded", { guard: "echo nothing new; exit 1" }));
+    const prompts: string[] = [];
+    const scheduler = createAutomationsScheduler(services, fakeWake(prompts));
+    await scheduler.tick(pastDue());
+    await vi.waitFor(async () => expect((await services.automations.get("guarded"))?.runs).toHaveLength(1));
+    const skipped = (await services.automations.get("guarded"))?.runs[0];
+    expect(skipped?.outcome).toBe("skipped");
+    expect(skipped?.detail).toBe("nothing new");
+    expect(prompts).toEqual([]);
+
+    // Editing the guard keeps the history; the next due tick now wakes and prepends a completed run.
+    await services.automations.upsert(automation("guarded", { guard: "true" }));
+    await scheduler.tick(pastDue() + 61_000);
+    await vi.waitFor(async () => expect((await services.automations.get("guarded"))?.runs).toHaveLength(2));
+    expect((await services.automations.get("guarded"))?.runs[0]?.outcome).toBe("completed");
+    expect(prompts).toEqual(["wake:guarded"]);
+});
+
+test("disabled automations and not-yet-due crons never fire; agent errors land as error runs", async () => {
+    const services = fakeServices(mkdtempSync(join(tmpdir(), "sched-")));
+    await services.automations.upsert(automation("off", { enabled: false }));
+    await services.automations.upsert(automation("later", { trigger: { kind: "schedule", cron: "0 0 1 1 *" } }));
+    await services.automations.upsert(automation("broken"));
+    const prompts: string[] = [];
+    const scheduler = createAutomationsScheduler(services, fakeWake(prompts, [{ kind: "error", message: "no credits" }, { kind: "done" }]));
+    await scheduler.tick(pastDue());
+    await vi.waitFor(async () => expect((await services.automations.get("broken"))?.runs).toHaveLength(1));
+    expect((await services.automations.get("broken"))?.runs[0]).toMatchObject({ outcome: "error", detail: "no credits" });
+    expect((await services.automations.get("off"))?.runs).toEqual([]);
+    expect((await services.automations.get("later"))?.runs).toEqual([]);
+    expect(prompts).toEqual(["wake:broken"]);
+});
