@@ -498,6 +498,14 @@ test("workspace.file reads any contained file, denies secrets, NOT_FOUNDs missin
     expect(await errorCode(client.workspace.file({ path: "../../etc/passwd" }))).toBe("BAD_REQUEST");
 });
 
+// The scan logic is covered against a real fs in workspace-search.test.ts; this checks the oRPC wiring — the
+// GET query-string input, and the min-length validation. /work doesn't exist here, so the walk yields nothing.
+test("workspace.search round-trips the query and rejects one under the min length", async () => {
+    const client = clientFor(createApp(services({})));
+    expect(await client.workspace.search({ query: "needle" })).toEqual({ files: [], truncated: false });
+    expect(await errorCode(client.workspace.search({ query: "x" }))).toBe("BAD_REQUEST");
+});
+
 test("GET /workspace/raw streams bytes with a content-type, denies secrets, 404s missing, 400s escape, 413s oversize", async () => {
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
     const app = createApp(
