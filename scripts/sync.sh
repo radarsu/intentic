@@ -52,8 +52,8 @@ if [ -z "$BIN" ]; then
         BIN="$dest"
     elif command -v npx >/dev/null 2>&1; then
         rm -f "$dest"
-        echo "Falling back to npx (@intentic/sync@stable)…" >&2
-        BIN="npx -y @intentic/sync@stable"
+        echo "Falling back to npx (@intentic/sync@latest)…" >&2
+        BIN="npx -y @intentic/sync@latest"
     else
         rm -f "$dest"
         echo "error: could not download the agent and no npx fallback (install Node.js, or see the docs)." >&2
@@ -63,6 +63,6 @@ fi
 
 set -- setup --url "$URL" --pair "$PAIR"
 [ -n "$DIR" ] && set -- "$@" --dir "$DIR"
-# BIN may be "npx -y @intentic/sync@stable" (intentional word-split); a real path runs directly.
+# BIN may be "npx -y @intentic/sync@latest" (intentional word-split); a real path runs directly.
 # shellcheck disable=SC2086
 exec $BIN "$@"

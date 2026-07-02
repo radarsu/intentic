@@ -32,4 +32,4 @@ if (-not $bin) {
 
 $syncArgs = @('setup', '--url', $url, '--pair', $pair)
 if (-not [string]::IsNullOrEmpty($dir)) { $syncArgs += @('--dir', $dir) }
-if ($bin -eq 'npx') { & npx -y '@intentic/sync@stable' @syncArgs } else { & $bin @syncArgs }
+if ($bin -eq 'npx') { & npx -y '@intentic/sync@latest' @syncArgs } else { & $bin @syncArgs }
